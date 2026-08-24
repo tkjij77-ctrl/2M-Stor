@@ -3379,7 +3379,7 @@
       const url = (document.getElementById('set-cloud-url').value || '').trim().replace(/\/+$/, '');
       const key = (document.getElementById('set-cloud-key').value || '').trim();
       if (!/^https:\/\/[a-z0-9]+\.supabase\.co$/i.test(url)) return toast('⚠️ الـ URL لازم يكون مثل https://xxxx.supabase.co');
-      if (!key.startsWith('eyJ')) return toast('⚠️ الـ anon key لازم تبدأ بـ eyJ');
+      if (!key.startsWith('eyJ') && !key.startsWith('sb_publishable_') && key.length < 20) return toast('⚠️ مفتاح الـ anon key غير صالح');
       cloudCfg = { url, key, on: true };
       localStorage.setItem('al_sayed_cloud', JSON.stringify(cloudCfg));
       initCloudClient();
