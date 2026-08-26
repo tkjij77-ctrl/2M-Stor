@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #0ca678; --primary-dark: #099268; --primary-light: #e0f5ee;
+  --accent: #fbbf24; --accent-soft: #fff6dd;
+  --bg-body: #f2f5f4; --bg-card: #ffffff; --bg-soft: #eef3f1; --bg-hover: #e4ebe8;
+  --border: #dde5e2; --border-light: #ecf1ef;
+  --text-main: #182420; --text-muted: #6c7f79;
+  --success: #0ca678; --danger: #e5484d; --danger-soft: #fdecec;
+  --shadow-sm: 0 1px 3px rgba(18,50,43,0.06); --shadow-md: 0 6px 24px rgba(18,50,43,0.09);
+  --shadow-lg: 0 14px 40px rgba(18,50,43,0.13);
+  --radius: 14px; --radius-sm: 10px; --radius-lg: 20px;
+  --toast-bg: #182420; --toast-text: #fff; --btn-bg: #097f57; --btn-fg: #ffffff;
+}
+[data-theme="dark"] {
+  --primary: #2dd4a0; --primary-dark: #24bd90; --primary-light: #0e332a;
+  --accent: #fbbf24; --accent-soft: #33290c;
+  --bg-body: #0c1210; --bg-card: #131b18; --bg-soft: #1a2420; --bg-hover: #202c27;
+  --border: #27332d; --border-light: #1e2925;
+  --text-main: #e9f1ed; --text-muted: #8fa39b;
+}
+* { font-family: 'Tajawal', sans-serif; }
+body { background: linear-gradient(135deg, var(--bg-body) 0%, var(--bg-card) 100%); color: var(--text-main); }
