@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v12 (تلقائي + تفاصيل المنتج + أداء)
-const CACHE = 'al-sayed-v12';
+// Service Worker — 2M-Stor v13 (إصلاح عطل renderCats)
+const CACHE = 'al-sayed-v13';
 const URLS = [
   'index.html',
   'manifest.json',

@@ -1327,6 +1327,8 @@
       searchDebounce = setTimeout(() => renderAll(), 250);
     }
     function loadMoreShop() { shopLimit += shopPageSize; renderShopView(false); }
+
+    function renderCats() {
         const bar = document.getElementById('catBar');
         if (!bar) return;
         let html = '<button class="cat-chip' + (currentCat === 'all' ? ' active' : '') + '" onclick="selectCat(\'all\')"><span class="cat-chip-name">📋 الكل</span><span class="cat-count">' + db.reduce((a, c) => a + c.items.length, 0) + '</span></button>';
