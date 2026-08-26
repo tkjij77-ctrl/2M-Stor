@@ -1044,6 +1044,8 @@
 
 <script>
     let db = JSON.parse(localStorage.getItem('al_sayed_db')) || getDefaultDB();
+    // بيانات المصنع (مؤقتة قبل أول مزامنة سحابية) — متُرفعش للسحابة عشان مانلوثش البيانات
+    let dbIsFactory = !localStorage.getItem('al_sayed_db');
     let invoices = JSON.parse(localStorage.getItem('al_sayed_invoices')) || [];
     let currentCat = 'all';
     let currentView = 'stock';
@@ -3304,6 +3306,7 @@
     // ── ترحيل البيانات المحلية لأول مرة ──
     function migrateIfNeeded() {
       if (!cloudReady()) return;
+      if (dbIsFactory) return; // بيانات المصنع مش دي المصدر — متُرفعش qs=0 للسحابة
       let n = 0;
       db.forEach((c, i) => {
         if (!c.cid) { queue({ t: 'cat-ins', lid: c.lid, so: i }); n++; }
@@ -3323,6 +3326,15 @@
         n += 5;
       }
       if (n > 0) toast('☁️ يتم ترحيل ' + n + ' عنصر إلى Supabase...');
+    }
+
+    // ── رفع المتجر للسحابة (يحدّث الكميات المعروضة على كل الأجهزة) ──
+    async function pushStoreToCloud() {
+      if (!cloudReady()) return loginErr('⚠️ الاتصال بالسحابة مش متاح');
+      if (!confirm('☁️ ده هيرفع بياناتك المحلية (الأقسام + الأصناف + الكميات المعروضة) للسحابة ويحدّثها على كل الأجهزة. متابعة؟')) return;
+      await cloudFullReplace();
+      toast('✅ تم رفع المتجر للسحابة — الكميات المعروضة هتظهر على التليفون دلوقتي');
+      openSettingsModal();
     }
 
     // ── استيراد كامل: يستبدل السحابة بالبيانات المحلية ──
@@ -3350,6 +3362,7 @@
     }
     async function onCloudSession(session) {
       if (!session) return;
+      setCloudStatus('connect'); // مربوط بالسحابة فوراً — مش أوفلاين
       cloudProfile = await fetchCloudProfile(session.user.id);
       if (!cloudProfile) cloudProfile = { id: session.user.id, username: session.user.email, display_name: session.user.email, role: 'customer' };
       sessionUser = cloudProfile.username;
@@ -3357,9 +3370,11 @@
       logAction('تسجيل دخول (سحابي)', sessionUser);
       ensureLids();
       afterLogin();
-      migrateIfNeeded();
+      // جهاز جديد/بيانات مصنع: السحابة هي المصدر الوحيد — متُرفعش بيانات وهمية qs=0
+      if (dbIsFactory) { db = []; }
+      else { migrateIfNeeded(); }
       flushOutbox();
-      pullAll().catch(() => {});
+      await pullAll(); // سحب فوري يظهر المتجر مباشرة
     }
     async function cloudDoLogin() {
       const email = (document.getElementById('cl-email').value || '').trim();
@@ -3520,6 +3535,7 @@
         '</div>' +
         '<div style="font-size:0.75rem;font-weight:700;color:var(--text-muted)">' + cloudStatusLabel() + (lastSync ? ' · آخر مزامنة: ' + new Date(lastSync).toLocaleTimeString('ar-EG') : '') + '</div>' +
         (cloudCfg.on ? '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem;margin-top:8px" onclick="manualSync()">🔄 مزامنة دلوقتي</button>' : '') +
+        (cloudCfg.on && (sessionRole === 'admin' || sessionRole === 'worker') ? '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem;margin-top:8px;color:#0984e3;border-color:#0984e3" onclick="pushStoreToCloud()">☁️ ارفع متجري للسحابة (يحدّث الكميات المعروضة)</button>' : '') +
         '</div>';
     }
     function saveCloudConfig() {
