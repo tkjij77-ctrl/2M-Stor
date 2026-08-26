@@ -9,6 +9,7 @@ create table if not exists public.profiles (
   username text unique not null,
   display_name text,
   role text not null default 'customer' check (role in ('admin','worker','customer')),
+  pin_hash text,
   created_at timestamptz not null default now()
 );
 
@@ -89,7 +90,10 @@ declare
   final_user text;
 begin
   select (count(*) = 0) into is_first from public.profiles;
-  req_role := coalesce(new.raw_user_meta_data->>'role', 'customer');
+  -- الأمان: أي تسجيل جديد = عميل دايماً.
+  -- منع تصعيد الصلاحيات: الـ anon key عام، فمينفعش نثق في role جاي من العميل.
+  -- الترقية لمدير/عامل تحصل من داخل التطبيق بواسطة مدير موجود (profiles_write policy).
+  req_role := 'customer';
   base_user := coalesce(nullif(new.raw_user_meta_data->>'username', ''), split_part(new.email, '@', 1));
   final_user := base_user;
   
@@ -103,7 +107,7 @@ begin
     new.id,
     final_user,
     coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)),
-    case when is_first then 'admin' else req_role end
+    case when is_first then 'admin' else 'customer' end
   )
   on conflict (id) do update set
     display_name = coalesce(excluded.display_name, public.profiles.display_name),
@@ -155,6 +159,9 @@ create policy "profiles_read" on public.profiles
 drop policy if exists "profiles_write" on public.profiles;
 create policy "profiles_write" on public.profiles
   for all using (public.my_role() = 'admin') with check (public.my_role() = 'admin');
+drop policy if exists "profiles_self_update" on public.profiles;
+create policy "profiles_self_update" on public.profiles
+  for update using (id = auth.uid()) with check (id = auth.uid());
 
 -- الأقسام: قراءة لكل مسجل الدخول، تعديل للعامل والمدير
 drop policy if exists "cats_read" on public.categories;

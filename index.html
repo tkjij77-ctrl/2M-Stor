@@ -827,8 +827,67 @@
             .shop-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .shop-img { height: 95px; }
             .modal-card { padding: 28px 20px; }
-            .view-tab { font-size: 0.95rem; padding: 11px; }
+        /* ===== PASSWORD TOGGLE & PIN NUMPAD & LOCK SCREEN ===== */
+        .pw-wrap { position: relative; display: flex; align-items: center; width: 100%; }
+        .pw-wrap input { width: 100%; padding-left: 44px !important; }
+        .pw-toggle {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; font-size: 1.15rem; cursor: pointer;
+            color: var(--text-muted); padding: 4px 6px; border-radius: 6px;
+            transition: color 0.15s; line-height: 1; user-select: none;
         }
+        .pw-toggle:hover { color: var(--text-main); }
+        .pw-strength { height: 4px; border-radius: 2px; background: var(--border); margin-top: 6px; overflow: hidden; transition: 0.3s; }
+        .pw-strength-fill { height: 100%; width: 0%; transition: width 0.3s, background-color 0.3s; }
+        .pw-strength-lbl { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); margin-top: 3px; }
+
+        .pin-container { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 8px 0; }
+        .pin-dots { display: flex; gap: 12px; justify-content: center; margin: 6px 0; }
+        .pin-dot {
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 2px solid var(--primary); background: transparent;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .pin-dot.filled { background: var(--primary); transform: scale(1.15); box-shadow: 0 0 10px rgba(12,166,120,0.5); }
+        .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 280px; margin: 0 auto; }
+        .pin-btn {
+            height: 54px; border-radius: 14px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text-main);
+            font-size: 1.35rem; font-weight: 800; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.12s ease; box-shadow: var(--shadow-sm); user-select: none; font-family: inherit;
+        }
+        .pin-btn:hover { background: var(--bg-hover); border-color: var(--primary); }
+        .pin-btn:active { transform: scale(0.92); background: var(--primary-light); color: var(--primary); }
+        .pin-btn.action { font-size: 1.1rem; background: var(--bg-soft); color: var(--text-muted); }
+        .pin-btn.action:hover { color: var(--text-main); }
+        [data-theme="dark"] .pin-btn { background: rgba(26,34,28,0.9); }
+
+        .lock-overlay {
+            position: fixed; inset: 0; z-index: 25000;
+            background: rgba(12,18,16,0.92); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            display: none; align-items: center; justify-content: center; padding: 20px;
+            animation: fadeIn 0.25s ease;
+        }
+        .lock-card {
+            background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.55); border-radius: 24px;
+            padding: 32px 24px; width: 100%; max-width: 360px;
+            text-align: center; box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+            animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        [data-theme="dark"] .lock-card { background: rgba(19,27,24,0.95); border-color: rgba(255,255,255,0.08); }
+        .lock-avatar {
+            width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 10px;
+            background: var(--btn-bg); color: var(--btn-fg);
+            display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
+            box-shadow: 0 6px 20px rgba(12,166,120,0.4);
+        }
+        .lock-user { font-size: 1.2rem; font-weight: 900; margin-bottom: 2px; }
+        .lock-role { font-size: 0.8rem; font-weight: 800; color: var(--primary); margin-bottom: 14px; }
+        .btn-loading { opacity: 0.7; pointer-events: none; position: relative; }
+        .login-switch-mode { font-size: 0.82rem; font-weight: 800; color: var(--primary); background: none; border: none; cursor: pointer; padding: 8px; margin-top: 10px; }
+        .login-switch-mode:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -838,6 +897,7 @@
         <h1>📦 2M-Stor</h1>
         <div class="header-actions">
             <span class="role-chip" id="roleChip"></span>
+            <button id="lockBtn" class="burger-btn" onclick="quickLock()" title="قفل الكاونتر السريع" aria-label="قفل الكاونتر" style="display:none">🔒</button>
             <button id="themeToggle" class="burger-btn" onclick="toggleDarkMode()" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي">🌙</button>
             <button id="burgerBtn" class="burger-btn" aria-label="القائمة">☰</button>
         </div>
@@ -872,7 +932,8 @@
     <div class="burger-divider"></div>
     <div class="burger-item" id="burger-settings" onclick="openSettingsModal()">⚙️ الإعدادات (المحل والضريبة)</div>
     <div class="burger-item" id="burger-users" onclick="toggleStaffPage()">👥 العاملين والعملاء</div>
-    <div class="burger-item" id="burger-pass" onclick="openPassModal()">🔒 تغيير كلمة المرور</div>
+    <div class="burger-item" id="burger-pass" onclick="openPassModal()">🔒 كلمة المرور والـ PIN</div>
+    <div class="burger-item" id="burger-quicklock" onclick="closeBurger();quickLock()">🔒 قفل الكاونتر مؤقتاً</div>
     <button class="burger-logout" id="burger-logout" onclick="logout()">🚪 تسجيل الخروج</button>
     <div class="side-footer">2M-Stor · نظام إدارة المحل · v3.3</div>
 </div>
@@ -949,6 +1010,22 @@
     🛒 <span class="cart-fab-total" id="cartFabTotal">السلة</span>
     <span class="cart-badge" id="cartBadge" style="display:none">0</span>
 </button>
+
+<!-- ===== QUICK LOCK OVERLAY ===== -->
+<div class="lock-overlay" id="lockOverlay">
+    <div class="lock-card" id="lockCard">
+        <div class="lock-avatar" id="lockAvatar">👤</div>
+        <div class="lock-user" id="lockUserName">المستخدم</div>
+        <div class="lock-role" id="lockUserRole">مدير النظام</div>
+        <p style="font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-bottom:10px">🔒 الكاونتر مقفل مؤقتاً — أدخل رمز PIN للمتابعة</p>
+        <div id="lockPinArea"></div>
+        <div class="login-error" id="lockError" style="display:none;margin-top:10px"></div>
+        <div style="display:flex;justify-content:center;gap:12px;margin-top:10px">
+            <button class="login-switch-mode" onclick="unlockWithPasswordPrompt()">🔑 الدخول بكلمة المرور</button>
+            <button class="login-switch-mode" style="color:var(--danger)" onclick="logoutFromLock()">🚪 تبديل المستخدم</button>
+        </div>
+    </div>
+</div>
 
 <!-- ===== LOGIN ===== -->
 <div class="login-overlay" id="loginOverlay">
@@ -3034,8 +3111,9 @@
         const it = findLocalItem(e.lid); if (!it || it.cid) return;
         const cat = findLocalCat(e.catLid);
         // لو القسم لسه في الطابور (لسه ما اتسند cid) → نرجّع الصنف لآخر الطابور ونستنا
+        // push (مش unshift) عشان ميدخلش حلقة لا نهائية في flushOutbox
         if (cat && !cat.cid && outbox.some(o => o.t === 'cat-ins' && o.lid === e.catLid)) {
-          outbox.unshift(e);
+          outbox.push(e);
           return;
         }
         if (it.img && !it.imgUrl) it.imgUrl = await uploadItemImage(it);
