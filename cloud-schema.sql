@@ -169,17 +169,17 @@ drop policy if exists "profiles_self_update" on public.profiles;
 create policy "profiles_self_update" on public.profiles
   for update using (id = auth.uid()) with check (id = auth.uid());
 
--- الأقسام: قراءة لكل مسجل الدخول، تعديل للعامل والمدير
+-- الأقسام: قراءة للجميع (حتى بدون تسجيل) لعرض المتجر، تعديل للعامل والمدير
 drop policy if exists "cats_read" on public.categories;
-create policy "cats_read" on public.categories for select using (auth.uid() is not null);
+create policy "cats_read" on public.categories for select using (true);
 drop policy if exists "cats_write" on public.categories;
 create policy "cats_write" on public.categories
   for all using (public.my_role() in ('admin','worker'))
   with check (public.my_role() in ('admin','worker'));
 
--- الأصناف: قراءة لكل مسجل الدخول، تعديل للعامل والمدير
+-- الأصناف: قراءة للجميع (حتى بدون تسجيل) لعرض المتجر، تعديل للعامل والمدير
 drop policy if exists "items_read" on public.items;
-create policy "items_read" on public.items for select using (auth.uid() is not null);
+create policy "items_read" on public.items for select using (true);
 drop policy if exists "items_write" on public.items;
 create policy "items_write" on public.items
   for all using (public.my_role() in ('admin','worker'))
