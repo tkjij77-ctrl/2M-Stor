@@ -122,7 +122,7 @@ create trigger on_auth_user_created
 
 -- ── Trigger: تحديث updated_at تلقائياً ─────────────────
 create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   return new;
@@ -148,9 +148,20 @@ alter table public.settings      enable row level security;
 alter table public.audit_log     enable row level security;
 
 create or replace function public.my_role()
-returns text language sql security definer stable as $$
+returns text language sql security definer stable set search_path = ''
+as $$
   select role from public.profiles where id = auth.uid()
 $$;
+
+-- ── تقوية: منع نادى الدوال الحساسة كـ RPC من بره ──────
+-- دالة التريغر مش لأحد ينادى عليها مباشرة
+revoke execute on function public.handle_new_user() from public;
+revoke execute on function public.handle_new_user() from anon;
+revoke execute on function public.handle_new_user() from authenticated;
+-- my_role(): المسجلين محتاجينها للـ RLS، والمجهول ممنوع
+revoke execute on function public.my_role() from public;
+revoke execute on function public.my_role() from anon;
+grant execute on function public.my_role() to authenticated;
 
 -- الحسابات: كل واحد يشوف نفسه، والعامل/المدير يشوفوا الباقي
 drop policy if exists "profiles_read" on public.profiles;
