@@ -80,23 +80,19 @@ create table if not exists public.audit_log (
 );
 create index if not exists idx_audit_time on public.audit_log(created_at);
 
--- ── Trigger: أول مستخدم يسجل يصبح مدير تلقائياً ──────
+-- ── Trigger: التسجيل الجديد = عميل دايماً ──────────────
+-- حساب المدير الحقيقي مُنشأ مسبقاً على السحابة (admin@2m-stor.app)
+-- ولا يوجد قانون "أول مستخدم يأخذ مدير" — الترقية فقط من داخل
+-- التطبيق بواسطة المدير القائم.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  is_first boolean;
-  req_role text;
   base_user text;
   final_user text;
 begin
-  select (count(*) = 0) into is_first from public.profiles;
-  -- الأمان: أي تسجيل جديد = عميل دايماً.
-  -- منع تصعيد الصلاحيات: الـ anon key عام، فمينفعش نثق في role جاي من العميل.
-  -- الترقية لمدير/عامل تحصل من داخل التطبيق بواسطة مدير موجود (profiles_write policy).
-  req_role := 'customer';
   base_user := coalesce(nullif(new.raw_user_meta_data->>'username', ''), split_part(new.email, '@', 1));
   final_user := base_user;
-  
+
   -- لو اسم المستخدم مكرر لمستخدم آخر، نضيف جزء من المعرّف
   if exists (select 1 from public.profiles where username = final_user and id <> new.id) then
     final_user := base_user || '_' || substring(new.id::text from 1 for 4);
@@ -107,11 +103,10 @@ begin
     new.id,
     final_user,
     coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)),
-    case when is_first then 'admin' else 'customer' end
+    'customer'
   )
   on conflict (id) do update set
-    display_name = coalesce(excluded.display_name, public.profiles.display_name),
-    role = case when public.profiles.role = 'admin' then 'admin' else excluded.role end;
+    display_name = coalesce(excluded.display_name, public.profiles.display_name);
   return new;
 end $$;
 

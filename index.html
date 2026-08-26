@@ -2904,7 +2904,7 @@
         body.innerHTML =
             '<h2>👥 إدارة <span class="accent">الحسابات</span> (' + (data || []).length + ')</h2>' +
             '<div class="user-list">' + (rows || '<div style="font-size:0.8rem;color:var(--text-muted);font-weight:700;padding:10px">مفيش حسابات</div>') + '</div>' +
-            '<p style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-top:10px">☁️ الحسابات على Supabase — أول حساب اتسجل هو المدير. الحذف يتم من لوحة Supabase.</p>' +
+            '<p style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-top:10px">☁️ الحسابات على Supabase — المدير حساب ثابت محمي. الحذف يتم من لوحة Supabase.</p>' +
             '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>';
     }
     function openUsersModal() {
@@ -3000,10 +3000,20 @@
     }
 
     // ═══════════════════════════════════════════════════════
-    // ☁️ CLOUD MODULE (Supabase)
-    // مفعّل فقط عند ضبط الإعدادات — وإلا التطبيق يبقى محلياً 100%
+    // ☁️ CLOUD MODULE (Supabase) — السحابة هي المصدر الأساسي
+    // الرابط والمفتاح الرسميين مثبّتين هنا — التطبيق يتصل تلقائياً
     // ═══════════════════════════════════════════════════════
-    let cloudCfg = JSON.parse(localStorage.getItem('al_sayed_cloud') || 'null') || { url: '', key: '', on: false };
+    const CANONICAL_CLOUD = {
+      url: 'https://uzzxhbotbshsgpdnbrmd.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6enhoYm90YnNoc2dwZG5icm1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzE3OTcsImV4cCI6MjEwMzE0Nzc5N30.SqaqCWSdU6wKRKHMEdqXD5NJ4UUfh0YAY-QEAldCllc'
+    };
+    let cloudCfg = (() => {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem('al_sayed_cloud') || 'null'); } catch (e) {}
+      // شفاء أي إعداد قديم غلط محفوظ على الجهاز — الرابط الرسمي دايماً يكسب
+      return { url: CANONICAL_CLOUD.url, key: CANONICAL_CLOUD.key, on: !(saved && saved.on === false) };
+    })();
+    localStorage.setItem('al_sayed_cloud', JSON.stringify(cloudCfg));
     let sb = null;
     let cloudProfile = null;
     let cloudStatus = 'off'; // off | on | offline | connect
@@ -3389,6 +3399,26 @@
       if (sb) { try { sb.auth.signOut(); } catch (e) {} }
       cloudProfile = null;
     }
+    // ── الدخول السريع: حساب زائر جاهز على السحابة بضغطة واحدة ──
+    async function cloudQuickLogin() {
+      if (!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش متاح دلوقتي');
+      const btn = document.getElementById('quickBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الدخول...'; }
+      try {
+        const { data, error } = await sb.auth.signInWithPassword({
+          email: 'guest@2m-stor.app',
+          password: '2M#Stor-Guest-2026'
+        });
+        if (error) {
+          if (btn) { btn.disabled = false; btn.textContent = '⚡ دخول سريع فوري (زائر)'; }
+          return loginErr('⚠️ ' + (error.message || 'خطأ في الدخول السريع'));
+        }
+        await onCloudSession(data.session);
+      } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = '⚡ دخول سريع فوري (زائر)'; }
+        loginErr('❌ ' + (e.message || 'فشل الاتصال — اتأكد من النت'));
+      }
+    }
 
     // ── واجهة شاشة الدخول (محلي / سحابي) ──
     function renderLogin() {
@@ -3404,6 +3434,7 @@
             '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" style="direction:ltr;text-align:left" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
             '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
             '<button class="btn btn-primary" style="width:100%" onclick="cloudDoLogin()">🔓 تسجيل الدخول</button>' +
+            '<button class="btn btn-outline" id="quickBtn" style="width:100%;margin-top:10px" onclick="cloudQuickLogin()">⚡ دخول سريع فوري (زائر)</button>' +
             '<div class="login-error" id="loginError"></div>' +
           '</div>' +
           '<div id="paneRegister" style="display:none">' +
@@ -3413,7 +3444,7 @@
             '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="reg-pass2" placeholder="••••••" onkeydown="if(event.key===\'Enter\')cloudDoRegister()"></div>' +
             '<button class="btn btn-primary" style="width:100%" onclick="cloudDoRegister()">✅ إنشاء الحساب والدخول</button>' +
           '</div>' +
-          '<p style="font-size:0.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">☁️ وضع سحابي — أول حساب يتسجل يبقى مدير تلقائياً</p>';
+          '<p style="font-size:0.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">☁️ وضع سحابي — بياناتك محفوظة ومتزامنة على كل الأجهزة · الحسابات الجديدة تكون عميل</p>';
       } else {
         inner.innerHTML =
           '<div class="login-tabs">' +
