@@ -888,6 +888,22 @@
         .btn-loading { opacity: 0.7; pointer-events: none; position: relative; }
         .login-switch-mode { font-size: 0.82rem; font-weight: 800; color: var(--primary); background: none; border: none; cursor: pointer; padding: 8px; margin-top: 10px; }
         .login-switch-mode:hover { text-decoration: underline; }
+        /* ===== PRODUCT DETAIL ===== */
+        .product-detail-overlay { position: fixed; inset: 0; z-index: 12000; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px; animation: fadeIn 0.2s ease; }
+        .product-detail-overlay.open { display: flex; }
+        .product-detail-card { background: var(--bg-card); border-radius: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: modalIn 0.25s ease; }
+        .product-detail-img { width: 100%; height: 240px; object-fit: cover; border-radius: 20px 20px 0 0; background: var(--bg-soft); display: flex; align-items: center; justify-content: center; font-size: 3rem; }
+        .product-detail-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 20px 20px 0 0; }
+        .product-detail-body { padding: 18px; }
+        .product-detail-name { font-size: 1.25rem; font-weight: 900; margin-bottom: 6px; }
+        .product-detail-cat { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; margin-bottom: 10px; }
+        .product-detail-price { font-size: 1.4rem; font-weight: 900; color: var(--primary); margin-bottom: 12px; }
+        .product-detail-avail { font-size: 0.85rem; font-weight: 800; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; display: inline-block; }
+        .product-detail-avail.ok { background: #e0f5ee; color: #0ca678; }
+        .product-detail-avail.no { background: var(--danger-soft); color: var(--danger); }
+        .product-detail-info { font-size: 0.82rem; color: var(--text-muted); font-weight: 700; line-height: 1.6; margin-bottom: 14px; }
+        .product-detail-actions { display: flex; gap: 10px; }
+        .product-detail-actions .btn { flex: 1; padding: 12px; font-size: 0.95rem; }
     </style>
 </head>
 <body>
@@ -946,7 +962,7 @@
     </div>
     <div class="top-bar">
         <div class="search-row" style="margin-bottom:0;flex:1">
-            <input type="text" id="searchInput" placeholder="🔍 ابحث عن صنف..." oninput="renderAll()">
+            <input type="text" id="searchInput" placeholder="🔍 ابحث عن صنف..." oninput="debouncedRenderAll()">
             <button class="icon-btn" onclick="document.getElementById('scanInput').click()" aria-label="مسح رمز من صورة">📷</button>
             <button class="icon-btn" onclick="startCameraScan()" aria-label="مسح بالكاميرا الحية">🎥</button>
         </div>
@@ -976,6 +992,11 @@
         <button onclick="closeCart()">✕ إغلاق</button>
     </div>
     <div class="cart-body" id="cartBody"></div>
+</div>
+
+<!-- ===== PRODUCT DETAIL ===== -->
+<div class="product-detail-overlay" id="productDetailOverlay" onclick="if(event.target===this)closeProductDetail()">
+    <div class="product-detail-card" id="productDetailCard"></div>
 </div>
 
 <!-- ===== STAFF PAGE ===== -->
@@ -1049,6 +1070,8 @@
     let invoices = JSON.parse(localStorage.getItem('al_sayed_invoices')) || [];
     let currentCat = 'all';
     let currentView = 'stock';
+    let shopPageSize = 40, shopLimit = 40;
+    let searchDebounce = null;
     let editingCat = -1, editingIdx = -1;
     let invoiceCart = [];
     let pendingInvoice = null;
@@ -1267,6 +1290,7 @@
 
     function selectCat(val) {
         currentCat = val;
+        shopLimit = shopPageSize;
         animateNextRender = true;
         renderAll();
         closeBurger();
@@ -1297,8 +1321,12 @@
         if (currentView === 'stock') renderStockView(anim);
         else renderShopView(anim);
     }
-
-    function renderCats() {
+    function debouncedRenderAll() {
+      if (searchDebounce) clearTimeout(searchDebounce);
+      shopLimit = shopPageSize;
+      searchDebounce = setTimeout(() => renderAll(), 250);
+    }
+    function loadMoreShop() { shopLimit += shopPageSize; renderShopView(false); }
         const bar = document.getElementById('catBar');
         if (!bar) return;
         let html = '<button class="cat-chip' + (currentCat === 'all' ? ' active' : '') + '" onclick="selectCat(\'all\')"><span class="cat-chip-name">📋 الكل</span><span class="cat-count">' + db.reduce((a, c) => a + c.items.length, 0) + '</span></button>';
@@ -1382,7 +1410,7 @@
             let price = itemPrice(item);
             let cls = q <= 0 ? 'danger' : (q <= 5 ? 'warn' : '');
             let thumb = item.img
-                ? '<img class="card-thumb" src="' + item.img + '" alt="">'
+                ? '<img class="card-thumb" src="' + item.img + '" alt="" loading="lazy" decoding="async">'
                 : '<div class="card-thumb card-thumb-fb">📦</div>';
             let bHtml = item.b ? '<span class="qr-badge">🔳 ' + esc(item.b) + '</span>' : '';
             html +=
@@ -1421,7 +1449,7 @@
         save();
     }
 
-    // ===== SHOP VIEW (العرض) =====
+    // ===== SHOP VIEW (العرض) — مع pagination وlazy وتلقائي السحابة =====
     function renderShopView(anim) {
         let search = document.getElementById('searchInput').value.trim();
         let items = getFilteredItems(search, currentCat);
@@ -1441,11 +1469,13 @@
             container.innerHTML = '<div class="empty-state"><div class="icon">📭</div>لا توجد نتائج</div>';
             return;
         }
+        let total = items.length;
+        let display = items.slice(0, shopLimit);
         let html = '<div class="shop-grid">';
-        items.forEach(({cat, ci, item, ii}, idx) => {
+        display.forEach(({cat, ci, item, ii}, idx) => {
             let delay = anim ? ' style="animation-delay:' + Math.min(idx * 35, 320) + 'ms"' : '';
             let qs = getQs(item);
-            let imgHtml = item.img ? '<img src="' + item.img + '" alt="">' : '<span>📦</span>';
+            let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="lazy" decoding="async">' : '<span>📦</span>';
             let avail = qs > 0
                 ? '<div class="shop-avail ok">متاح: ' + qs + '</div>'
                 : '<div class="shop-avail no">غير متوفر</div>';
@@ -1462,7 +1492,7 @@
                 cartBtn = '<button class="cart-add' + (qs <= 0 ? ' disabled' : '') + '" onclick="event.stopPropagation();addToCart(' + ci + ',' + ii + ')">🛒 + إضافة للسلة</button>';
             }
             html +=
-                '<div class="shop-card"' + delay + ' onclick="openModal(\'edit\',' + ci + ',' + ii + ')">' +
+                '<div class="shop-card"' + delay + ' onclick="openProductDetail(' + ci + ',' + ii + ')">' +
                     '<div class="shop-img">' + imgHtml + '</div>' +
                     '<div class="shop-body">' +
                         '<div class="shop-name">' + highlightName(item.n, search) + '</div>' +
@@ -1472,8 +1502,33 @@
                     cartBtn +
                 '</div>';
         });
-        container.innerHTML = html + '</div>';
+        html += '</div>';
+        if (total > shopLimit) html += '<div style="text-align:center;margin-top:16px"><button class="btn btn-outline" onclick="loadMoreShop()">عرض المزيد (' + shopLimit + '/' + total + ')</button></div>';
+        container.innerHTML = html;
     }
+
+    // ===== PRODUCT DETAIL =====
+    function openProductDetail(ci, ii) {
+      const cat = db[ci], item = cat && cat.items[ii];
+      if (!item) return;
+      let qs = getQs(item), q = getQ(item), price = itemPrice(item);
+      let avail = qs > 0 ? '<div class="product-detail-avail ok">\u2705 متاح: ' + qs + ' قطعة</div>' : '<div class="product-detail-avail no">\u274C غير متوفر</div>';
+      let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="lazy" decoding="async">' : '\uD83D\uDCE6';
+      let cartBtn = qs > 0 ? '<button class="btn btn-primary" onclick="addToCart(' + ci + ',' + ii + ');closeProductDetail()">\uD83D\uDED2 إضافة للسلة</button>' : '<button class="btn btn-outline" disabled>غير متوفر</button>';
+      let editBtn = can('del') ? '<button class="btn btn-outline" onclick="closeProductDetail();openModal(\'edit\',' + ci + ',' + ii + ')">\u270F\uFE0F تعديل</button>' : '';
+      document.getElementById('productDetailCard').innerHTML =
+        '<div class="product-detail-img">' + imgHtml + '</div>' +
+        '<div class="product-detail-body">' +
+          '<div class="product-detail-name">' + esc(item.n) + '</div>' +
+          '<div class="product-detail-cat">\uD83D\uDCC2 ' + esc(cat.name) + (item.b ? ' \u00B7 \uD83D\uDD33 ' + esc(item.b) : '') + '</div>' +
+          '<div class="product-detail-price">' + esc(item.p) + ' <small style="font-size:0.9rem">ج.م</small></div>' +
+          avail +
+          '<div class="product-detail-info">\uD83D\uDCE6 في المخزن: ' + q + ' \u00B7 \uD83C\uDFEA معروض: ' + qs + ' \u00B7 \u26A0\uFE0F تنبيه عند: ' + getMin(item) + '<br>\uD83D\uDCB0 قيمة المخزن: ' + fmt(q*price) + ' ج.م</div>' +
+          '<div class="product-detail-actions">' + cartBtn + editBtn + '<button class="btn btn-outline" onclick="closeProductDetail()">\u2715 إغلاق</button></div>' +
+        '</div>';
+      document.getElementById('productDetailOverlay').classList.add('open');
+    }
+    function closeProductDetail() { document.getElementById('productDetailOverlay').classList.remove('open'); }
 
     // ===== CART =====
     function addToCart(ci, ii) { incCart(ci, ii); }
@@ -3069,7 +3124,20 @@
     function schedulePush() {
       if (!cloudReady()) return;
       if (pushTimer) clearTimeout(pushTimer);
-      pushTimer = setTimeout(flushOutbox, 1500);
+      pushTimer = setTimeout(flushOutbox, 500);
+    }
+    // ── Realtime: أي تعديل من المدير يظهر فوراً على كل الأجهزة ──
+    let realtimeChan = null;
+    function subscribeRealtime() {
+      if (!sb || realtimeChan) return;
+      try {
+        realtimeChan = sb.channel('al-sayed-live')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => { pullAll(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => { pullAll(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => { pullAll(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => { pullAll(); })
+          .subscribe();
+      } catch (e) {}
     }
     function findLocalItem(lid) {
       for (const c of db) for (const it of c.items) if (it.lid === lid) return it;
@@ -3092,11 +3160,28 @@
       };
     }
 
-    // ── رفع صورة الصنف لـ Storage ──
+    // ── رفع صورة الصنف لـ Storage (مضغوطة 1024px 0.7) ──
+    async function compressImageDataUrl(dataUrl, maxW = 1024, quality = 0.7) {
+      return new Promise((resolve) => {
+        if (!dataUrl || !dataUrl.startsWith('data:image')) return resolve(dataUrl);
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          try { resolve(c.toDataURL('image/jpeg', quality)); } catch (e) { resolve(dataUrl); }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      });
+    }
     async function uploadItemImage(item) {
       if (!item.img) return null;
       try {
-        const blob = await (await fetch(item.img)).blob();
+        let dataUrl = item.img;
+        if (dataUrl.startsWith('data:image')) dataUrl = await compressImageDataUrl(dataUrl, 1024, 0.7);
+        const blob = await (await fetch(dataUrl)).blob();
         const path = item.lid + '.jpg';
         const { error } = await sb.storage.from('products').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
         if (error) return null;
@@ -3371,6 +3456,7 @@
       ensureLids();
       afterLogin();
       // جهاز جديد/بيانات مصنع: السحابة هي المصدر الوحيد — متُرفعش بيانات وهمية qs=0
+      subscribeRealtime();
       if (dbIsFactory) { db = []; }
       else { migrateIfNeeded(); }
       flushOutbox();
@@ -3403,6 +3489,8 @@
     async function cloudInit() {
       if (!initCloudClient()) { setCloudStatus('connect'); return; }
       setCloudStatus('on');
+      subscribeRealtime();
+      pullAll().catch(() => {});
       try {
         const { data } = await sb.auth.getSession();
         if (data && data.session) { await onCloudSession(data.session); return; }
@@ -3525,7 +3613,7 @@
       return { on: '✅ متصل بالسحابة', offline: '📡 أوفلاين — بيتزامن أول ما النت يرجع', connect: ' جاري الاتصال', off: '📱 تخزين محلي' }[cloudStatus] || cloudStatus;
     }
     function cloudSectionHtml() {
-      return '<div class="form-group"><label>☁️ الاتصال السحابي (Supabase)</label>' +
+      return '<div class="form-group"><label>☁️ الاتصال السحابي (Supabase) — تلقائي</label>' +
         '<input type="text" id="set-cloud-url" value="' + esc(cloudCfg.url || '') + '" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left;margin-bottom:8px">' +
         '<input type="password" id="set-cloud-key" value="' + esc(cloudCfg.key || '') + '" placeholder="anon public key (تبدأ بـ eyJ)" style="direction:ltr;text-align:left;margin-bottom:8px">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
@@ -3534,8 +3622,7 @@
           (cloudCfg.on ? '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem;color:#e17055;border-color:#e17055" onclick="disableCloud()">⏹ إيقاف (عود للمحلي)</button>' : '') +
         '</div>' +
         '<div style="font-size:0.75rem;font-weight:700;color:var(--text-muted)">' + cloudStatusLabel() + (lastSync ? ' · آخر مزامنة: ' + new Date(lastSync).toLocaleTimeString('ar-EG') : '') + '</div>' +
-        (cloudCfg.on ? '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem;margin-top:8px" onclick="manualSync()">🔄 مزامنة دلوقتي</button>' : '') +
-        (cloudCfg.on && (sessionRole === 'admin' || sessionRole === 'worker') ? '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem;margin-top:8px;color:#0984e3;border-color:#0984e3" onclick="pushStoreToCloud()">☁️ ارفع متجري للسحابة (يحدّث الكميات المعروضة)</button>' : '') +
+        '<div style="font-size:0.72rem;color:#00b894;font-weight:700;margin-top:6px">⚡ المزامنة تلقائية — أي تعديل من المدير يظهر فوراً على كل الأجهزة (Realtime)</div>' +
         '</div>';
     }
     function saveCloudConfig() {
