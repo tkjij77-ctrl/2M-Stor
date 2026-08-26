@@ -3419,6 +3419,43 @@
         loginErr('❌ ' + (e.message || 'فشل الاتصال — اتأكد من النت'));
       }
     }
+    // ── إنشاء حساب عشوائي: كل ضغطة = حساب جديد مستقل على السحابة ──
+    async function cloudCreateRandomAccount() {
+      if (!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش متاح دلوقتي');
+      const btn = document.getElementById('randomBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري إنشاء حساب...'; }
+      try {
+        const rnd = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const username = 'guest_' + rnd.slice(-8);
+        const email = username + '@2m-stor.app';
+        const password = 'Rnd#' + rnd.slice(-6) + Math.random().toString(36).slice(2, 4) + '!';
+        const display_name = 'زائر-' + rnd.slice(-4).toUpperCase();
+        const { data, error } = await sb.auth.signUp({
+          email, password,
+          options: { data: { username, display_name } }
+        });
+        if (error) {
+          if (btn) { btn.disabled = false; btn.textContent = '🎲 إنشاء حساب عشوائي'; }
+          return loginErr('⚠️ ' + (error.message || 'فشل إنشاء الحساب'));
+        }
+        if (data.session) {
+          await onCloudSession(data.session);
+          toast('✅ حسابك: ' + username, 4000);
+        } else if (data.user) {
+          // لو تأكيد الإيميل مطلوب — ندخل مباشرة
+          const { data: s2, error: e2 } = await sb.auth.signInWithPassword({ email, password });
+          if (e2) {
+            if (btn) { btn.disabled = false; btn.textContent = '🎲 إنشاء حساب عشوائي'; }
+            return loginErr('✅ تم إنشاء ' + username + ' — سجّل دخول به');
+          }
+          await onCloudSession(s2.session);
+        }
+      } catch (e) {
+        const b = document.getElementById('randomBtn');
+        if (b) { b.disabled = false; b.textContent = '🎲 إنشاء حساب عشوائي'; }
+        loginErr('❌ ' + (e.message || 'فشل الاتصال — اتأكد من النت'));
+      }
+    }
 
     // ── واجهة شاشة الدخول (محلي / سحابي) ──
     function renderLogin() {
@@ -3435,6 +3472,7 @@
             '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
             '<button class="btn btn-primary" style="width:100%" onclick="cloudDoLogin()">🔓 تسجيل الدخول</button>' +
             '<button class="btn btn-outline" id="quickBtn" style="width:100%;margin-top:10px" onclick="cloudQuickLogin()">⚡ دخول سريع فوري (زائر)</button>' +
+            '<button class="btn btn-outline" id="randomBtn" style="width:100%;margin-top:10px" onclick="cloudCreateRandomAccount()">🎲 إنشاء حساب عشوائي</button>' +
             '<div class="login-error" id="loginError"></div>' +
           '</div>' +
           '<div id="paneRegister" style="display:none">' +

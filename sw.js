@@ -1,7 +1,7 @@
-// Service Worker — 2M-Stor v9
+// Service Worker — 2M-Stor v10
 // ملفات التطبيق: "الشبكة الأول" (التحديثات توصل فوراً) + الكاش للأوفلاين
 // بقية الملفات (أيقونات/مكتبات/خطوط): الكاش الأول
-const CACHE = 'al-sayed-v9';
+const CACHE = 'al-sayed-v10';
 const URLS = [
   'index.html',
   'manifest.json',
