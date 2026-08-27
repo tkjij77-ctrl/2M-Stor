@@ -1471,6 +1471,7 @@
             container.innerHTML = '<div class="empty-state"><div class="icon">📭</div>لا توجد نتائج</div>';
             return;
         }
+        items.sort((a,b)=> getQs(b.item)-getQs(a.item));
         let total = items.length;
         let display = items.slice(0, shopLimit);
         let html = '<div class="shop-grid">';
@@ -3325,6 +3326,9 @@
       } catch (e) { setCloudStatus('offline'); }
     }
     function mergeCats(remote) {
+      const alive = new Set(remote.filter(r=>!r.deleted_at).map(r=>r.id));
+      // احذف محلياً الأقسام المحذوفة على السحابة (المكررة 455→229)
+      for(let i=db.length-1;i>=0;i--) if(db[i].cid && !alive.has(db[i].cid) && !pendingHas(db[i].lid)) db.splice(i,1);
       for (const rc of remote) {
         if (rc.deleted_at) continue;
         let lc = localCatByCid(rc.id);
@@ -3336,6 +3340,13 @@
       }
     }
     function mergeItems(remote) {
+      const alive = new Set(remote.filter(r=>!r.deleted_at).map(r=>r.id));
+      // احذف محلياً المنتجات المحذوفة (تكرار 455→229) — إصلاح فوري للصورة
+      for(const c of db) for(let i=c.items.length-1;i>=0;i--) if(c.items[i].cid && !alive.has(c.items[i].cid) && !pendingHas(c.items[i].lid)) c.items.splice(i,1);
+      // نظف التكرار المحلي بالاسم داخل نفس القسم (لو لسه 455)
+      for(const c of db){
+        const seen=new Set(); for(let i=c.items.length-1;i>=0;i--){ const k=c.items[i].n.trim(); if(seen.has(k)) c.items.splice(i,1); else seen.add(k); }
+      }
       for (const ri of remote) {
         if (ri.deleted_at) continue;
         let owner = null, local = null;
