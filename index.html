@@ -3968,10 +3968,19 @@
       if (!cloudReady()) return;
       if (!isOnline()) { setCloudStatus('offline'); return; }
       try {
+        let invoicesQuery = sb.from('invoices').select('*, invoice_items(*), profiles(username)');
+        if (sessionRole === 'customer' && sessionUser) {
+          // العميل يرى طلباته فقط (customer_name = اسم العميل)
+          invoicesQuery = invoicesQuery.eq('customer_name', sessionUser);
+        } else if (sessionRole === 'worker' && cloudProfile?.id) {
+          // العامل يرى طلباته فقط (seller_id)
+          invoicesQuery = invoicesQuery.eq('seller_id', cloudProfile.id);
+        }
+        // admin: يرى الكل (لا فلترة إضافية)
         const [catsR, itemsR, invsR, setsR] = await Promise.all([
           sb.from('categories').select('*'),
           sb.from('items').select('*'),
-          sb.from('invoices').select('*, invoice_items(*), profiles(username)'),
+          invoicesQuery,
           sb.from('settings').select('*')
         ]);
         if (catsR.error) throw catsR.error;
@@ -4508,6 +4517,8 @@
       if(window.supabase){
         initCloudClient();
         setCloudStatus(sb ? 'on' : 'connect');
+        // محاولة تفريغ الطلبات العالقة حتى بدون تسجيل سحابي (anon) — بعد إصلاح RLS
+        setTimeout(()=>{ if(cloudReady() && outbox.length) flushOutbox(); if(cloudReady()) pullAll().catch(()=>{}); }, 1200);
         showLogin();
         cloudInit();
       } else {
