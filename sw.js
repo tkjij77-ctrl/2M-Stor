@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v24 (حساب + جدول إدارة)
-const CACHE = 'al-sayed-v24';
+// Service Worker — 2M-Stor v25 (حالات الطلب: شحن/توصيل/رفض/إلغاء)
+const CACHE = 'al-sayed-v25';
 const URLS = [
   'index.html',
   'manifest.json',

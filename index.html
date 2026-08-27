@@ -1093,6 +1093,10 @@
         .order-card{border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;background:var(--bg-card)}
         .order-card .oc-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);font-weight:800}
         .status{padding:4px 12px;border-radius:50px;font-size:.78rem;font-weight:800;background:color-mix(in srgb,var(--gold) 22%,transparent);color:#8a6400}
+        .status.shipping{background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary)}
+        .status.done{background:color-mix(in srgb,var(--success) 18%,transparent);color:#067D62}
+        .status.rejected{background:color-mix(in srgb,var(--danger) 18%,transparent);color:var(--danger)}
+        .status.cancelled{background:var(--bg-soft);color:var(--text-muted);border:1px solid var(--border)}
         .oc-items{color:var(--text-muted);font-size:.88rem}
         .table-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;margin-top:16px}
         .table-wrap table{width:100%;border-collapse:collapse;min-width:600px}
@@ -1291,6 +1295,8 @@
     // بيانات المصنع (مؤقتة قبل أول مزامنة سحابية) — متُرفعش للسحابة عشان مانلوثش البيانات
     let dbIsFactory = !localStorage.getItem('al_sayed_db');
     let invoices = JSON.parse(localStorage.getItem('al_sayed_invoices')) || [];
+    // هجرة حالات الطلب القديمة (بدون status) → قيد المعالجة
+    invoices.forEach(inv=>{ if(!inv.status) inv.status='قيد المعالجة'; });
     let currentCat = 'all';
     let currentView = 'home';
     let shopPageSize = 40, shopLimit = 40;
@@ -1476,6 +1482,15 @@
         const fc=document.getElementById('favCountMobile');
         if(fc){ fc.textContent=favs.length; fc.style.display=favs.length?'inline-flex':'none'; }
     }
+    const ORDER_STATUSES=['قيد المعالجة','في الطريق','تم التوصيل','تم رفض الطلب','ملغي'];
+    function statusClass(s){
+        if(s==='في الطريق') return 'shipping';
+        if(s==='تم التوصيل') return 'done';
+        if(s==='تم رفض الطلب') return 'rejected';
+        if(s==='ملغي') return 'cancelled';
+        return '';
+    }
+    function canManageOrders(){ return sessionRole==='admin' || sessionRole==='worker'; }
 
     // ===== SETTINGS (بيانات المحل والإيصال) =====
     let settings = Object.assign(
@@ -1675,12 +1690,29 @@
                 +'<div class="ct-row"><span>السلة</span><span>'+cartCount()+' قطعة</span></div>'
                 +'</div>';
         } else if(accTab==='orders'){
-            if(!myOrders.length) content='<div class="empty-state"><div class="icon">📦</div>لا توجد طلبات بعد<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">🏪 تسوق الآن</button></div>';
-            else content=myOrders.slice().reverse().map(o=>{
+            const isMgr=canManageOrders();
+            const list=isMgr ? invoices : myOrders;
+            if(!list.length) content='<div class="empty-state"><div class="icon">📦</div>لا توجد طلبات بعد<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">🏪 تسوق الآن</button></div>';
+            else content=list.slice().reverse().map(o=>{
+                const idx=invoices.indexOf(o);
                 const d=new Date(o.date);
-                return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status">قيد المعالجة</span></div>'
+                const st=o.status||'قيد المعالجة';
+                const sc=statusClass(st);
+                const canCancel = (o.user===sessionUser || o.customer===sessionUser) && st!=='تم التوصيل' && st!=='تم رفض الطلب' && st!=='ملغي';
+                let actions='';
+                if(isMgr){
+                    actions='<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'
+                        +'<select onchange="updateOrderStatus('+idx+', this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);font-weight:700">'
+                        +ORDER_STATUSES.filter(s=>s!=='ملغي').map(s=>'<option value="'+s+'" '+(s===st?'selected':'')+'>'+s+'</option>').join('')
+                        +'</select>'
+                        +(st!=='ملغي'&&st!=='تم التوصيل'?'<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">إلغاء</button>':'')
+                        +'</div>';
+                } else if(canCancel){
+                    actions='<div style="margin-top:10px"><button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">❌ إلغاء الطلب</button></div>';
+                }
+                return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status '+sc+'">'+esc(st)+'</span></div>'
                     +'<div class="oc-items">'+o.items.map(i=>esc(i.name)+' ×'+i.qty).join(' • ')+'</div>'
-                    +'<div class="ct-row" style="margin-top:10px;font-weight:900"><span>'+d.toLocaleDateString('ar-EG')+'</span><span style="color:var(--primary)">'+fmt(o.total)+' ج.م</span></div></div>';
+                    +'<div class="ct-row" style="margin-top:10px;font-weight:900"><span>'+d.toLocaleDateString('ar-EG')+' · '+(isMgr?esc(o.user||o.customer):'')+'</span><span style="color:var(--primary)">'+fmt(o.total)+' ج.م</span></div>'+actions+'</div>';
             }).join('');
         } else if(accTab==='fav'){
             if(!favProducts.length) content='<div class="empty-state"><div class="icon">❤️</div>قائمة المفضلة فارغة<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">تصفح المنتجات</button></div>';
@@ -2149,7 +2181,7 @@
         const t = cartTotals();
         invCounter++;
         localStorage.setItem('al_sayed_invno', String(invCounter));
-        pendingInvoice = { id: Date.now(), date: new Date().toISOString(), customer: customer, items: items, total: t.total, subtotal: t.subtotal, discount: t.discount, tax: t.tax, user: sessionUser || '—', no: invCounter, lid: genLid() };
+        pendingInvoice = { id: Date.now(), date: new Date().toISOString(), customer: customer, items: items, total: t.total, subtotal: t.subtotal, discount: t.discount, tax: t.tax, user: sessionUser || '—', no: invCounter, lid: genLid(), status: 'قيد المعالجة' };
         showReceiptPreview(pendingInvoice, true);
     }
     function showReceiptPreview(inv, backToCart) {
@@ -2286,6 +2318,39 @@
         });
     }
 
+    function updateOrderStatus(idx, newStatus){
+        const inv=invoices[idx]; if(!inv) return;
+        if(!canManageOrders()) return toast('⚠️ فقط المدير/العامل يمكنه تغيير الحالة');
+        if(!ORDER_STATUSES.includes(newStatus)) return;
+        if(inv.status===newStatus) return;
+        inv.status=newStatus;
+        inv.updated_at=new Date().toISOString();
+        saveInvoices();
+        queue({ t:'inv-status', lid: inv.lid, cid: inv.cid, status: newStatus });
+        logAction('تحديث حالة طلب', '#'+String(inv.no).padStart(4,'0')+' → '+newStatus);
+        toast('✅ تم تحديث الطلب إلى: '+newStatus);
+        renderAccount();
+        try{ if(document.getElementById('dashOverlay').classList.contains('open')) renderDashboard(); }catch(e){}
+        if(cloudReady()) pullAll().catch(()=>{});
+    }
+    function cancelOrder(idx){
+        const inv=invoices[idx]; if(!inv) return;
+        const isOwner = inv.user===sessionUser || inv.customer===sessionUser || (cloudProfile && inv.user===cloudProfile.username);
+        const isManage = canManageOrders();
+        if(!isOwner && !isManage) return toast('⚠️ لا يمكنك إلغاء هذا الطلب');
+        if(inv.status==='تم التوصيل' || inv.status==='تم رفض الطلب' || inv.status==='ملغي'){
+            return toast('⚠️ لا يمكن إلغاء طلب '+inv.status);
+        }
+        if(!confirm('هل أنت متأكد من إلغاء الطلب #'+String(inv.no).padStart(4,'0')+'؟')) return;
+        inv.status='ملغي';
+        inv.updated_at=new Date().toISOString();
+        saveInvoices();
+        queue({ t:'inv-status', lid: inv.lid, cid: inv.cid, status: 'ملغي' });
+        logAction('إلغاء طلب', '#'+String(inv.no).padStart(4,'0'));
+        toast('✅ تم إلغاء الطلب');
+        renderAccount();
+        try{ if(document.getElementById('dashOverlay').classList.contains('open')) renderDashboard(); }catch(e){}
+    }
     // ===== PERSISTENCE =====
     function save() {
         try {
@@ -3700,7 +3765,7 @@
             invoice_no: invNo, customer_name: inv.customer,
             seller_id: cloudProfile ? cloudProfile.id : null,
             subtotal: inv.subtotal || 0, discount: inv.discount || 0,
-            tax: inv.tax || 0, total: inv.total
+            tax: inv.tax || 0, total: inv.total, status: inv.status || 'قيد المعالجة'
           }).select().single();
           if (!error) {
             inv.cid = data.id;
@@ -3726,6 +3791,13 @@
         if (!e.cid) return;
         const { error } = await sb.from('invoices').delete().eq('id', e.cid);
         if (error) throw error;
+      } else if (e.t === 'inv-status') {
+        if (!e.cid) return;
+        const { error } = await sb.from('invoices').update({ status: e.status, updated_at: new Date().toISOString() }).eq('id', e.cid);
+        if (error) {
+          if(/column.*status/i.test(error.message)) return;
+          throw error;
+        }
       } else if (e.t === 'set') {
         const { error } = await sb.from('settings').upsert({ key: e.key, value: e.value });
         if (error) throw error;
@@ -3831,12 +3903,20 @@
     }
     function mergeInvoices(remote) {
       for (const ri of remote) {
-        if (invoices.some(x => x.cid === ri.id)) continue;
+        const existing = invoices.find(x => x.cid === ri.id);
+        if (existing) {
+          if (ri.status && ri.status !== existing.status && !outbox.some(o=> o.t==='inv-status' && o.cid===ri.id)) {
+            existing.status = ri.status;
+          }
+          if (ri.updated_at && (!existing.updated_at || ri.updated_at > existing.updated_at)) existing.updated_at = ri.updated_at;
+          if (ri.status && !existing.status) existing.status = ri.status;
+          continue;
+        }
         invoices.push({
           id: ri.id, lid: genLid(), cid: ri.id, no: ri.invoice_no, date: ri.created_at,
           customer: ri.customer_name, user: (ri.profiles && ri.profiles.username) || '—',
           items: (ri.invoice_items || []).map(x => ({ name: x.item_name, cat: x.category_name, qty: x.qty, price: x.price })),
-          subtotal: ri.subtotal, discount: ri.discount, tax: ri.tax, total: ri.total
+          subtotal: ri.subtotal, discount: ri.discount, tax: ri.tax, total: ri.total, status: ri.status || 'قيد المعالجة', updated_at: ri.updated_at || ri.created_at
         });
       }
       const maxNo = remote.reduce((m, r) => Math.max(m, r.invoice_no || 0), 0);
