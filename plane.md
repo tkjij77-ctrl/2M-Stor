@@ -1,128 +1,193 @@
-# 2M-Stor — خطة الترقية الاحترافية (plane.md)
+# 2M-Stor — الخطة الاحترافية v2 (بحث 2026)
 
-> **الهدف:** تحويل التطبيق الحالي (ملف واحد `index.html:3721` + `sw.js` + `cloud-schema.sql:240`) من PWA بسيط على GitHub Pages إلى نظام احترافي قابل للصيانة والتوسع، مع الحفاظ على البيانات الحالية في Supabase `uzzxhbotbshsgpdnbrmd`.
+> **الهدف:** تحويل `index.html:3710` (214KB) + `sw.js v15` + `cloud-schema.sql:240` من PWA بسيط على GitHub Pages إلى نظام احترافي Next.js 15 + Supabase Realtime v3 + Offline-First IndexedDB، مع الحفاظ على 229 صنف و Supabase `uzzxhbotbshsgpdnbrmd` بدون فقدان بيانات.
 
-## الوضع الحالي (Baseline)
+## 0- نتائج البحث (2026)
 
-- **الواجهة:** ملف واحد `index.html:3721` (214KB) + CSS inline + JS vanilla، `manifest.json`، `sw.js:70` (v11 حالياً)، `icon-*.png`
-- **الخلفية:** Supabase (Auth + Postgres + Storage `products` + RLS). `cloud-schema.sql` يعمل idempotent لكن خارج `supabase/migrations/`
-- **المزامنة:** outbox محلي `localStorage al_sayed_db` → `flushOutbox:3187` كل 1.5s → `pullAll:3213` كل 30s (polling)، `itemPayload:3079` يحمل `display_qs`
-- **النشر:** GitHub Pages `tkjij77-ctrl/2M-Stor`، `CANONICAL_CLOUD` يحوي anon key مضمن، لا CI/CD، لا اختبارات
-- **المشاكل المثبتة:** تكرار بيانات المصنع `dbIsFactory:1047` → أوفلاين→سحابة، عرض `غير متوفر` بسبب `display_qs=0` على السحابة، مفاتيح ظاهرة في الشات
+### Next.js 15 + Supabase Realtime
+- **المصادر:** `noqta.tn 2026-02-16`, `stacknotice 2026-04-28`, `johal.in 2026-04-26`, `supabase/docs realtime-with-nextjs`
+- **الخلاصة:** 
+  - Next.js 15 يقلل كود الـ subscription من 42 → 12 سطر (-71%) عبر App Router + Server Components + Server Actions
+  - Supabase Realtime v3 يستخدم MQTT 5.0 → p99 latency 11ms (كان 87ms) على 100 مستخدم متزامن، Free Tier 200 اتصال متزامن (كان 100)
+  - **Dual clients إجباري:** `createBrowserClient` (client) + `createServerClient` مع `await cookies()` (server) عبر `@supabase/ssr` — لا تستخدم `supabase-js` مباشرة في App Router
+  - **Middleware** لتجديد الـ session تلقائياً على كل request
+  - **Realtime:** `sb.channel('db-changes').on('postgres_changes', {event:'*', schema:'public', table:'items'}, handler).subscribe()` + `return () => sb.removeChannel(channel)` + `eventsPerSecond:10` + `maxRetries` مع jitter و `on('system',{event:'disconnect'}, reconnect)`
+  - **RLS** هي الأمن الحقيقي — لا تمرر `service_role` للعميل
 
-## المبادئ
+### PWA Offline-First + IndexedDB
+- **المصادر:** `needlecode 2025-12-27`, `veduis 2025-12-28`, `bytejournal 2026-07-15`, `pixelfreestudio 2024-07-20`
+- **الخلاصة:**
+  - `localStorage` حد 5MB متزامن → `IndexedDB` غير متزامن + معاملات + فهارس + سعة كبيرة (idb/Dexie)
+  - **Pattern:** `Pending Sync Queue` + `Background Sync API` (عند عودة النت) + `Periodic Background Sync` (تحديث المخزون ليلاً) + `Navigation Preload` (إزالة تأخير بدء SW)
+  - **CRDTs** للدمج بدون كتابة فوق — أو ببساطة `updated_at` يربح + `pendingHas(lid)` له أولوية (موجود `index.html:3362`)
+  - **UI:** شارة Greyscale + `Sync Status` يوضح ما يُرفع
+  - **اختبار:** Lighthouse PWA + `offline` في Network tab
 
-1. **السحابة مصدر الحقيقة** للعملاء؛ الجهاز الجديد لا يرفع بيانات المصنع (`dbIsFactory` guard)
-2. **Idempotent migrations** + RLS هو الأمن الحقيقي، المفتاح العام بالتصميم
-3. لا كسر للبيانات الحالية — الترحيل يحافظ على `categories`/`items`/`invoices`
-
----
-
-## المرحلة 1 — الأساسيات (أسبوع 1) — High Priority
-
-### 1.1 تفكيك `index.html` → هيكلة احترافية
-- **Stack:** Next.js 15 (App Router) + TypeScript strict + Tailwind + shadcn/ui + Tajawal
-- **الهيكلة:**
-  ```
-  /app/(shop)/page.tsx       — واجهة المتجر `renderShopView:1423`
-  /app/(stock)/page.tsx      — المخزن `renderAll:1286` + `getFilteredItems`
-  /app/cart/page.tsx         — السلة `cart-overlay`
-  /app/dashboard/page.tsx    — لوحة التحكم `toggleDashboard`
-  /components/*              — product-card, shop-card, login, burger-menu, stat-row
-  /lib/supabase/*            — client, auth, sync (outbox/pullAll)
-  /lib/db/*                  — types, getDefaultDB, getQ/getQs/getMin
-  /lib/sync/*                — outbox, itemPayload, mergeItems/mergeCats
-  ```
-- **الخطوات:**
-  1. `npx create-next-app@latest 2m-stor --ts --tailwind --app`
-  2. نقل CSS من `<style>:17-868` إلى `app/globals.css` + متغيرات `:root`
-  3. فصل JS إلى modules: `lib/db.ts` (getDefaultDB), `lib/sync.ts` (queue/schedulePush/flushOutbox/pullAll/merge), `lib/auth.ts` (cloudDoLogin etc.)
-  4. استبدال `localStorage` المباشر بـ hook `useLocalDB()` + IndexedDB fallback
-- **معيار النجاح:** `npm run build` ينجح، Lighthouse >90، لا `index.html` مونوليث
-
-### 1.2 نقل قاعدة البيانات لـ `supabase/migrations`
-- `supabase init` + `supabase link --project-ref uzzxhbotbshsgpdnbrmd`
-- `supabase migration new baseline` — نقل `cloud-schema.sql` كاملاً (handle_new_user:87, touch_updated_at:119, RLS:137-235, Storage buckets:217)
-- إضافة `supabase/config.toml` + `.env.local` (لا `CANONICAL_CLOUD` مضمن)
-- تدوير المفاتيح: `supabase keys` جديدة + تحديث Vercel env
-- `supabase db push` + `supabase gen types typescript --local > lib/supabase/types.ts`
-- **معيار النجاح:** `supabase db lint` أخضر، `get_advisors: performance/security` = 1 تحذير مقصود (`my_role` authenticated)
-
-### 1.3 CI/CD + نشر احترافي + PWA أوتوماتيك
-- **.github/workflows/ci.yml:** `lint` + `typecheck` + `vitest` + `playwright` + `supabase db lint --linked`
-- **Vercel:** ربط `tkjij77-ctrl/2M-Stor`، env `NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`، Preview Deployments لكل PR
-- **PWA:** `next-pwa` يولد `sw.js` بـ hash بدل `CACHE='al-sayed-v11:4'` اليدوي
-- **معيار النجاح:** push → CI أخضر → Preview URL → merge → Production
+### Inventory PWA + Barcode
+- **المصدر:** `needlecode 2026-01-26` (Inventory Management PWA)
+- **الخلاصة:**
+  - **Shape Detection API** (ناتيف 2026) بدل `jsQR` الثقيل: `new BarcodeDetector({formats:['code_128','qr_code']})` → 60fps حتى في إضاءة ضعيفة
+  - **Bin Location:** مسح `bin barcode` ثم `product barcode` لتتبع الرف
+  - **Offline audit:** كل المخزون في IndexedDB → جرد كامل بدون شبكة + `Background Sync` عند العودة
+  - **توفير:** لا حاجة لـ handheld بـ $1500 — أي هاتف يكفي
 
 ---
 
-## المرحلة 2 — الموثوقية (أسبوع 2) — Medium Priority
+## 1- الوضع الحالي (مُحدّث بعد fحص 2026-08-27)
 
-### 2.1 مزامنة Realtime بدل polling
-- **حالي:** `schedulePush 1500ms:3070` + `pullAll 30s:3648` + `setInterval`
-- **جديد:** `sb.channel('db-changes').on('postgres_changes', {event:'*', schema:'public', table:'items'}, handleRealtime)` + `categories`/`invoices`
-- تقليل `1500ms → 500ms` + `30s → 5s` fallback + `isOnline()` مع `navigator.onLine` و exponential backoff
-- **Batch inserts:** `sb.from('items').insert(payloads).select()` بدل حلقة `await applyEntry` واحدة واحدة
-- **معيار النجاح:** تعديل على الكمبيوتر يظهر على الهاتف <1ث، لا تكرار `qs:0`
-
-### 2.2 IndexedDB + تحسين الصور
-- استبدال `localStorage al_sayed_db` (حد 5MB) بـ **IndexedDB** (`idb` أو `dexie`) — يحل مشكلة الحجم للصور base64 `item.img`
-- `uploadItemImage:3094`: ضغط قبل الرفع (`canvas.toBlob(0.7)`, max 1024px) + `image_url` بدل `img` base64
-- `Storage bucket products` يبقى public read، لكن تحويل لـ `supabase storage transform` للـ thumbnails
-- **معيار النجاح:** صورة 3MB → <200KB قبل الرفع، لا `localStorage quota exceeded`
-
-### 2.3 المراقبة
-- **Sentry** (أخطاء JS) + **PostHog** (أحداث: login, add_to_cart, checkout)
-- `logAction` الحالي → `audit_log:74` يبقى لكن يضاف `user_agent`, `ip`
-- **معيار النجاح:** خطأ في `applyEntry` يظهر في Sentry مع `outbox` snapshot
+- **الإنتاج:** `index.html:3826` (بعد إصلاح `renderCats:1331` و `v15`) + `sw.js:15` NetworkFirst للـ navigate — يعمل لكن مونوليث 3826 سطر (CSS 851 + JS 2771) بلا HMR
+- **السحابة:** `categories 5 / items 229 (77/49/45/45/13) / 26 متاح qs=12` بعد `dedupe 455→229` + `perf_indexes_v2` (pg_trgm + idx_items_category/display/updated) + `supabase_realtime` publication
+- **Scaffold الجديد:** `app/page.tsx:12` placeholder + `app/product/[id]/page.tsx:7` وحيدة مكتملة + `components/shop-card.tsx` مع `Link` + `lib/db/indexedDB.ts` جاهز لكن غير مُستخدم في legacy + `lib/sync/outbox.ts:63` `throw not yet`
+- **نقطة حرجة:** لا تحذف `index.html` قبل إكمال `useShop()` + `flushOutbox batch` + `dual clients` + `middleware`
 
 ---
 
-## المرحلة 3 — التوسع (أسبوع 3) — Medium Priority
+## 2- المبادئ (ثابتة)
 
-### 3.1 فصل المتجر / الإدارة
-- `/ (shop)` — للعميل: تصفح + سلة، RLS `cats_read/items_read: using (true)` (تم بالفعل `open_shop_for_anon`)
-- `/admin/*` — للمدير/العامل: `stock`, `add`, `del`, `dash`, `history` محمية بـ `my_role in ('admin','worker')` + middleware Next.js
-- `PERM_LABELS:3573` يبقى لكن يدار من `settings.role_perms` عبر UI
-- زر **"ارفع متجري للسحابة"** `pushStoreToCloud:3332` يبقى كـ admin action
-
-### 3.2 تقارير ومخزون ذكي
-- Dashboard: مبيعات يومية/شهرية (`invoices:44` + `invoice_items:57`)، أكثر مبيعاً، تنبيه `min_alert:34` و `stock_q/display_qs`
-- تصدير PDF/Excel للفواتير، طباعة حرارية 80mm
-- **معيار النجاح:** مدير يشوف "منتجات على وشك النفاد" < `min_alert` في `dash-card:445`
-
-### 3.3 الجودة
-- **اختبارات:** Vitest (unit: getQ/getQs/firstNum) + Playwright (E2E: login → add item → sync → phone shows)
-- **أمان:** تدوير المفاتيح، `my_role` revoke/grant:156-159 يبقى، CSP headers في `next.config.js`
-- **أداء:** `product-grid:271` و `shop-grid:347` مع virtualization لو >500 صنف
+1. **السحابة مصدر الحقيقة** — `dbIsFactory:1070` guard + `onCloudSession:3474 if(dbIsFactory) db=[]`
+2. **Idempotent + RLS** — `cloud-schema.sql:135` هو الأمن، `cats_read/items_read using(true)` يبقى
+3. لا كسر بيانات — كل migration `if not exists`
 
 ---
 
-## خطة التنفيذ المتوازي
+## 3- المرحلة 1 — الأساسيات (3 أيام) — High
 
-| المسار | المسؤول | الملفات | يعتمد على |
-|-------|---------|---------|-----------|
-| A — هيكلة الواجهة | FE | `app/*`, `components/*`, `lib/*` | — |
-| B — Supabase migrations | BE | `supabase/migrations/*`, `supabase/config.toml`, `.env` | — |
-| C — CI/CD + PWA | DevOps | `.github/workflows/*`, `next-pwa`, `vercel.json` | A |
-| D — Realtime + IndexedDB | FE/BE | `lib/sync/*`, `lib/db/indexedDB.ts` | A,B |
-| E — Store/Admin فصل | FE | `app/(shop)`, `app/admin`, `middleware.ts` | A |
-| F — مراقبة وتقارير | Full | `lib/sentry.ts`, `app/dashboard/*` | A,B |
+### 1.1 تفكيك index.html → Next.js 15 (يوم 1)
+**كيف:**
+1. `lib/supabase/client.ts` (browser) — `createBrowserClient(URL, KEY)` من `@supabase/ssr`
+2. `lib/supabase/server.ts` (server) — `createServerClient(URL, KEY, {cookies:{getAll:()=>cookieStore.getAll(), setAll:(c)=>cookieStore.setAll(c)}})` — نحتاج `npm i @supabase/ssr`
+3. `middleware.ts` — `createServerClient` + `await supabase.auth.getUser()` + `NextResponse.next({request})` لتجديد session (من `noqta.tn`)
+4. `app/layout.tsx` يبقى `html lang ar dir rtl` + `app/globals.css` ينقل `:root` من `index.html:18-53`
+5. `lib/db/types.ts` + `lid.ts` (getQ/qs/min/firstNum/genLid) + `defaultDB.ts` (يستورد `seed.json`)
+6. `components/*` — `shop-card.tsx` (مع `loading=lazy` + `Link /product/[id]`) + `product-card.tsx` + `stat-row.tsx` + `cat-bar.tsx`
+7. `app/(shop)/page.tsx` — Server Component يسحب `supabase.from('items').select('*').eq('deleted_at',null).limit(40)` + Client `ShopGrid` مع `useShop()` hook
 
-كل المسارات تنطلق متوازية بعد تثبيت `plane.md`، مع مزامنة يومية (merge).
+**معيار النجاح:** `npm run build` أخضر، `app/page.tsx` يعرض 40 صنف من السحابة بدون `index.html`
 
-## المخاطر والتخفيف
+### 1.2 Supabase migrations مسيّرة (يوم 1)
+**كيف:**
+- `supabase link --project-ref uzzxhbotbshsgpdnbrmd`
+- `supabase migration list` → يجب 6: `secure_handle_new_user`, `harden_functions`, `remove_first_user_admin`, `open_shop_for_anon`, `dedupe_455_229`, `perf_indexes_v2`
+- نقل `CACHE v15` لا يمس DB
+- `.env.local` → `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (ليس `ANON_KEY` القديم) + `SUPABASE_SERVICE_ROLE_KEY` للـ server فقط
+- `supabase gen types typescript --linked > lib/supabase/database.types.ts` (موجود `296 سطر`)
 
-- **فقدان بيانات المصنع:** `dbIsFactory` guard موجود؛ `cloudFullReplace:3332` يحذف السحابة — يُستخدم فقط من جهاز المدير الأساسي بعد تأكيد
-- **RLS يكسر القراءة:** `cats_read/items_read using (true)` تم اختباره anon يقرأ — لا رجعة لـ `auth.uid() is not null`
-- **حجم الصور:** حد 2MB + ضغط يمنع `localStorage quota`
+**معيار النجاح:** `supabase db lint --linked` أخضر (تحذير واحد `my_role` مقصود)
 
-## التسليم
+### 1.3 CI/CD + PWA أوتوماتيك (يوم 2)
+**كيف:**
+- `.github/workflows/ci.yml` موجود — أضف `supabase db lint` يحتاج `SUPABASE_ACCESS_TOKEN` + `SUPABASE_DB_PASSWORD` في Secrets
+- `vercel.json` موجود — اربط `tkjij77-ctrl/2M-Stor` في Vercel، ضع `NEXT_PUBLIC_*` في Project Env، `git push` → Preview
+- `next.config.js` `next-pwa` → `dest:public, register:true, skipWaiting:true, runtimeCaching:[{urlPattern:/supabase\.co\/rest\/v1\/.*/, handler:'NetworkFirst', options:{cacheName:'supabase-cache', expiration:{maxEntries:64, maxAgeSeconds:300}}}]` (من البحث)
+- احذف `sw.js` اليدوي بعد تفعيل `next-pwa` (يولد hash)
 
-- `main` محمي، PRs + CI أخضر
-- Supabase project `uzzxhbotbshsgpdnbrmd` على migrations مسيّرة
-- Vercel Production: `2m-stor.vercel.app` (أو نفس دومين GitHub Pages مع redirect)
-- وثائق: `README.md` + `docs/sync.md` + `docs/rls.md`
+**معيار النجاح:** push → CI أخضر → Vercel Preview → Production
 
 ---
-*تم إنشاؤه: 2026-08-26 — بناءً على تحليل مباشر لـ `index.html:3721` و `cloud-schema.sql:240` و `sw.js:70`*
+
+## 4- المرحلة 2 — الموثوقية (4 أيام) — High
+
+### 2.1 Realtime بدل polling (يوم 3)
+**كيف (من johal.in + supabase/docs):**
+```ts
+// lib/supabase/realtime.ts
+export function subscribeShop(onChange:()=>void){
+  const ch = supabase.channel('al-sayed-live', {config:{broadcast:{self:false}}})
+    .on('postgres_changes',{event:'*', schema:'public', table:'categories'}, onChange)
+    .on('postgres_changes',{event:'*', schema:'public', table:'items'}, onChange)
+    .on('postgres_changes',{event:'*', schema:'public', table:'settings'}, onChange)
+    .on('system',{event:'disconnect'}, ()=> setTimeout(()=>subscribeShop(onChange), 1000+Math.random()*2000))
+    .subscribe((s)=>{ if(s==='SUBSCRIBED') console.log('realtime ok') });
+  return ()=> supabase.removeChannel(ch);
+}
+```
+- في `index.html:3135 subscribeRealtime()` موجود لكن ناقص `removeChannel` + `eventsPerSecond:10` + `on disconnect`
+- في Next.js: `useEffect(()=>{ const unsub=subscribeShop(()=>queryClient.invalidateQueries(['items'])); return unsub; },[])`
+- قلل `schedulePush 500ms` موجود، و `pullAll 30s:3835` → `5s` fallback فقط عند `!realtime`
+- **لا** تسحب الكل على كل حدث — استخدم `payload.new` لتحديث صف واحد بدل `pullAll()` الكامل (تحسين لاحق)
+
+**معيار النجاح:** تعديل سعر على الكمبيوتر يظهر على الهاتف <1ث، لا `Network` 4 requests كل مرة
+
+### 2.2 IndexedDB + صور (يوم 4)
+**كيف (من needlecode + veduis):**
+- `lib/db/indexedDB.ts` موجود `idb` ثلاث stores `db/invoices/outbox` — فعّله في `index.html`: استبدل `localStorage.setItem('al_sayed_db')` بـ `await setIDB('db', db)` مع fallback
+- `lib/sync/image.ts` + `index.html:3168 compressImageDataUrl` → `canvas 1024px 0.7` قبل `sb.storage.from('products').upload(path, blob, {upsert:true})` — موجود لكن لم يُعمم على كل `item-ins/item-upd`
+- `supabase storage transform` للـ thumbnails: `sb.storage.from('products').getPublicUrl(path, {transform:{width:200, height:200}})`
+- `lib/sync/outbox.ts:63` أكمل `applyEntry` بالـ batch: `const payloads = outbox.filter(o=>o.t==='item-ins').map(...); await sb.from('items').insert(payloads).select()`
+
+**معيار النجاح:** صورة 3MB → <200KB، لا `quota exceeded`، جرد 229 صنف يعمل أوفلاين
+
+### 2.3 مراقبة (يوم 5)
+**كيف:** `lib/sentry.ts:3` موجود `tracesSampleRate 0.2` — أضف `Sentry.init({dsn: process.env.NEXT_PUBLIC_SENTRY_DSN})` في `app/layout.tsx`
+- `PostHog` لأحداث `add_to_cart`, `checkout`, `stock_low`
+- `audit_log` يبقى لكن أضف `user_agent`
+
+**معيار النجاح:** خطأ `applyEntry` يظهر في Sentry مع `outbox` snapshot
+
+---
+
+## 5- المرحلة 3 — التوسع (5 أيام) — Medium
+
+### 3.1 فصل المتجر/الإدارة (يوم 6)
+**كيف:**
+- `app/(shop)/layout.tsx` — `cats_read/items_read using(true)` بدون `middleware`
+- `app/admin/*` — `middleware.ts:6` يفحص `sb-access-token` + `my_role in ('admin','worker')` → redirect `/login` لو `customer`
+- `PERM_LABELS:2727` يدار من `settings.role_perms` عبر UI `app/admin/perms/page.tsx`
+
+### 3.2 باركود + مواقع (يوم 7) — من needlecode 2026-01-26
+**كيف:**
+```ts
+// lib/barcode/detector.ts
+let detector: any = null;
+try{ detector = new (window as any).BarcodeDetector({formats:['code_128','qr_code','ean_13']}); } catch{}
+export async function scanNative(video: HTMLVideoElement){
+  if(detector) return detector.detect(video);
+  return window.jsQR ? [window.jsQR(...)] : [];
+}
+```
+- استبدل `jsQR@1.4.0` الثقيل بـ `BarcodeDetector` الناتيف (60fps) مع fallback
+- `Bin Location` — جدول `bins(id, barcode, location)` + عند المسح: أولاً `bin barcode` ثم `product barcode`
+
+### 3.3 تقارير ومخزون ذكي (يوم 8)
+**كيف:**
+- `app/admin/dashboard/page.tsx` — `supabase.from('invoices').select('created_at,total').gte('created_at', startOfDay)` → مبيعات يوم/شهر
+- `supabase.from('invoice_items').select('item_name, qty').order('qty',{ascending:false}).limit(5)` → الأكثر مبيعاً
+- `supabase.from('items').select('*').lte('stock_q', supabase.raw('min_alert')).eq('deleted_at',null)` → على وشك النفاد
+- تصدير `PDF` عبر `jsPDF` + طباعة حرارية `80mm` عبر `window.print()` مع `@media print`
+
+**معيار النجاح:** مدير يرى "5 منتجات على وشك النفاد" في `dash-card`
+
+---
+
+## 6- خطة التنفيذ المتوازي (مُحدّثة)
+
+| المسار | الملفات | يعتمد | مدة |
+|-------|---------|-------|-----|
+| A — dual clients + middleware | `lib/supabase/client.ts`, `server.ts`, `middleware.ts` | — | 0.5ي |
+| B — تفكيك shop | `app/(shop)/page.tsx`, `components/shop-card.tsx`, `useShop.ts` | A | 1ي |
+| C — Realtime v3 | `lib/supabase/realtime.ts`, `index.html:3135` | A,B | 0.5ي |
+| D — IndexedDB | `lib/db/indexedDB.ts`, `lib/sync/*` | A | 1ي |
+| E — barcode native | `lib/barcode/*` | D | 0.5ي |
+| F — admin/reports | `app/admin/*`, `middleware.ts` | A | 1ي |
+
+كل المسارات تنطلق بعد `plane.md v2`، مزامنة يومية.
+
+---
+
+## 7- المخاطر والتخفيف (مُحدّث)
+
+- **Realtime يقطع:** استخدم `on('system','disconnect')` + `removeChannel` + `maxRetries` — لا `retry` على `RLS denied`
+- **IndexedDB quota:** نظف `deleted_at` كل `pullAll` (موجود `alive Set:3328`) + `Periodic Background Sync` ليلاً
+- **BarcodeDetector غير مدعوم:** fallback `jsQR` موجود `index.html:9`
+- **PWA cache قديم:** `next-pwa` hash بدل `CACHE v15` اليدوي
+
+---
+
+## 8- التسليم
+
+- `main` محمي + CI أخضر + `supabase db lint` + `tests/e2e/shop.spec.ts`
+- Vercel `2m-stor.vercel.app` + GitHub Pages redirect
+- وثائق `docs/sync.md` (outbox→Realtime→BackgroundSync) + `docs/rls.md` (anon read, worker write)
+
+---
+*تم التحديث: 2026-08-27 — بعد فحص `index.html:3826` + `supabase` + `Next.js scaffold` + بحث ويب 2026 (Next.js 15, Supabase Realtime v3, PWA Offline-First, BarcodeDetector)*

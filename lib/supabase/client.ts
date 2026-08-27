@@ -1,8 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
-export function createSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-  if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / PUBLISHABLE_KEY");
-  return createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+  );
 }
+// alias للتوافق
+export const createSupabaseClient = createClient;
