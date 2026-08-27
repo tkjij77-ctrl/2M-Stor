@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v18 (إصلاح تداخل أمازون عند النزول)
-const CACHE = 'al-sayed-v18';
+// Service Worker — 2M-Stor v19 (استجابة لكل الشاشات + أداء: content-visibility/lazy/عزل سكرول)
+const CACHE = 'al-sayed-v19';
 const URLS = [
   'index.html',
   'manifest.json',
@@ -38,6 +38,13 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   let url;
   try { url = new URL(e.request.url); } catch (err) { return; }
+  const isSupaImg = url.hostname.includes('supabase.co') && url.pathname.includes('/storage/');
+  if (isSupaImg) {
+    e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request).then(res => { const cp=res.clone(); caches.open(CACHE).then(c=>c.put(e.request, cp)); return res; }).catch(()=> r))
+    );
+    return;
+  }
   const isFont = url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com');
   const isLib = url.hostname.includes('cdn.jsdelivr.net');
   if (isFont || isLib) {
