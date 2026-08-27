@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v17 (حذف زر الدخول السريع)
-const CACHE = 'al-sayed-v17';
+// Service Worker — 2M-Stor v18 (إصلاح تداخل أمازون عند النزول)
+const CACHE = 'al-sayed-v18';
 const URLS = [
   'index.html',
   'manifest.json',

@@ -912,11 +912,11 @@
         .product-detail-overlay { position: fixed; inset: 0; z-index: 12000; background: var(--bg-body); display: none; overflow-y: auto; animation: fadeIn 0.2s ease; }
         .product-detail-overlay.open { display: block; }
         .product-detail-card { background: var(--bg-card); width: 100%; min-height: 100vh; max-width: 1200px; margin: 0 auto; border-radius: 0; box-shadow: none; animation: modalIn 0.25s ease; }
-        .amz-layout{ display:grid; grid-template-columns: 380px 1fr 280px; gap:24px; padding:22px 18px; }
-        .amz-gallery{ position: sticky; top: 18px; }
+        .amz-layout{ display:grid; grid-template-columns: 380px 1fr 280px; gap:24px; padding:22px 18px; align-items:start; }
+        .amz-gallery{ position: relative; }
         .amz-main-img{ width:100%; height:380px; background: var(--bg-soft); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:4rem; overflow:hidden; border:1px solid var(--border); }
         .amz-main-img img{ width:100%; height:100%; object-fit:contain; background:#fff; }
-        .amz-thumbs{ display:flex; gap:8px; margin-top:10px; overflow-x:auto; scrollbar-width:none; }
+        .amz-thumbs{ display:flex; gap:8px; margin-top:10px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px; }
         .amz-thumb{ width:60px; height:60px; border-radius:10px; border:2px solid var(--border); overflow:hidden; flex-shrink:0; cursor:pointer; background:var(--bg-soft); display:flex; align-items:center; justify-content:center; }
         .amz-thumb.active{ border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
         .amz-title{ font-size:1.55rem; font-weight:900; line-height:1.35; margin-bottom:8px; }
@@ -927,7 +927,7 @@
         .amz-price small{ font-size:0.85rem; color:var(--text-muted); font-weight:700; }
         .amz-bullets{ font-size:0.88rem; line-height:1.9; color:var(--text-main); margin:12px 0 14px; padding-right:18px; }
         .amz-bullets li{ margin-bottom:4px; }
-        .amz-buybox{ border:1px solid var(--border); border-radius:14px; padding:16px; background: var(--bg-card); position: sticky; top: 18px; box-shadow: var(--shadow); }
+        .amz-buybox{ border:1px solid var(--border); border-radius:14px; padding:16px; background: var(--bg-card); position: relative; box-shadow: var(--shadow); }
         .amz-buy-price{ font-size:1.6rem; font-weight:900; color: var(--primary); }
         .amz-buy-avail{ font-size:0.85rem; font-weight:800; margin:8px 0 10px; }
         .amz-buy-avail.ok{ color:#067D62; } .amz-buy-avail.no{ color:var(--danger); }
