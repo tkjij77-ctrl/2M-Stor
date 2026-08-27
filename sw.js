@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v23 (سلة شحن+كوبون + تفاصيل breadcrumb)
-const CACHE = 'al-sayed-v23';
+// Service Worker — 2M-Stor v24 (حساب + جدول إدارة)
+const CACHE = 'al-sayed-v24';
 const URLS = [
   'index.html',
   'manifest.json',

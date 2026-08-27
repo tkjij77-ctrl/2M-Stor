@@ -1083,6 +1083,24 @@
           .footer-grid{grid-template-columns:1fr}
         }
         @media(prefers-reduced-motion:reduce){.blob,.float-card,.loader-book{animation:none!important}}
+        /* ===== ACCOUNT v3.1 ===== */
+        .account-grid{display:grid;grid-template-columns:240px 1fr;gap:30px;align-items:start;max-width:1100px;margin:0 auto}
+        .account-nav{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;position:sticky;top:100px}
+        .account-nav button{width:100%;text-align:right;padding:13px 16px;border:none;background:none;color:var(--text-main);font-family:inherit;font-weight:700;font-size:.95rem;border-radius:12px;cursor:pointer;display:flex;gap:10px;align-items:center;transition:all .2s}
+        .account-nav button.active,.account-nav button:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+        .profile-head{display:flex;align-items:center;gap:18px;margin-bottom:22px}
+        .big-avatar{width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--primary-dark));display:grid;place-items:center;color:#fff;font-size:1.8rem;font-weight:900}
+        .order-card{border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;background:var(--bg-card)}
+        .order-card .oc-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);font-weight:800}
+        .status{padding:4px 12px;border-radius:50px;font-size:.78rem;font-weight:800;background:color-mix(in srgb,var(--gold) 22%,transparent);color:#8a6400}
+        .oc-items{color:var(--text-muted);font-size:.88rem}
+        .table-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;margin-top:16px}
+        .table-wrap table{width:100%;border-collapse:collapse;min-width:600px}
+        .table-wrap th,.table-wrap td{padding:12px 14px;text-align:right;border-bottom:1px solid var(--border);font-size:.88rem}
+        .table-wrap th{background:color-mix(in srgb,var(--primary) 6%,transparent);font-weight:800}
+        .mini-actions{display:flex;gap:8px}
+        .mini-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg-soft);cursor:pointer}
+        @media(max-width:900px){.account-grid{grid-template-columns:1fr}.account-nav{position:static;display:flex;overflow:auto;gap:8px}.account-nav button{white-space:nowrap}}
     </style>
 </head>
 <body>
@@ -1096,6 +1114,7 @@
             <a onclick="setView('shop')" data-route="shop">المتجر</a>
             <a onclick="document.getElementById('landing-features')&&document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</a>
             <a onclick="document.getElementById('landing-footer')&&document.getElementById('landing-footer').scrollIntoView({behavior:'smooth'})">تواصل</a>
+            <a onclick="setView('account')" data-route="account">حسابي</a>
         </nav>
         <div class="header-actions">
             <span class="role-chip" id="roleChip"></span>
@@ -1128,6 +1147,7 @@
     <div class="burger-item" id="burger-home" onclick="setView('home')">🏠 الرئيسية</div>
     <div class="burger-item" id="burger-stock" onclick="setView('stock')">📦 صفحة المخزن</div>
     <div class="burger-item" id="burger-shop" onclick="setView('shop')">🏪 صفحة العرض</div>
+    <div class="burger-item" id="burger-account" onclick="setView('account')">👤 حسابي</div>
     <div class="burger-divider">⚙️ الأدوات</div>
     <div class="burger-item" id="burger-dash" onclick="toggleDashboard()">📊 لوحة التحكم</div>
     <div class="burger-item" id="burger-invoices" onclick="closeBurger();showInvoiceHistory()">🧾 الفواتير</div>
@@ -1143,6 +1163,7 @@
 </div>
 
 <div id="homeView" style="display:none"></div>
+<div id="accountView" style="display:none; padding:20px; max-width:1200px; margin:0 auto;"></div>
 <div class="content" id="appContent">
     <!-- ===== VIEW TABS ===== -->
     <div class="view-tabs" id="viewTabs">
@@ -1275,6 +1296,7 @@
     let shopPageSize = 40, shopLimit = 40;
     let shopSort = 'default';
     let shopFavOnly = false;
+    let accTab='profile';
     let favs = JSON.parse(localStorage.getItem('al_sayed_fav')||'[]');
     let searchDebounce = null;
     let editingCat = -1, editingIdx = -1;
@@ -1486,7 +1508,7 @@
         } catch (e) { /* مساحة التخزين مش كفاية — يتجاهل */ }
     }
 
-    // ===== VIEWS (مع home لاندنج) =====
+    // ===== VIEWS (مع home لاندنج + account) =====
     function setView(v) {
         currentView = v;
         animateNextRender = true;
@@ -1494,12 +1516,14 @@
         const bs=document.getElementById('burger-stock'); if(bs) bs.classList.toggle('active', v === 'stock');
         const bh=document.getElementById('burger-shop'); if(bh) bh.classList.toggle('active', v === 'shop');
         const bhm=document.getElementById('burger-home'); if(bhm) bhm.classList.toggle('active', v === 'home');
+        const bacc=document.getElementById('burger-account'); if(bacc) bacc.classList.toggle('active', v === 'account');
         document.querySelectorAll('.nav-links-desktop a').forEach(a=>a.classList.toggle('active', a.dataset.route===v));
         document.body.classList.toggle('shop-mode', v === 'shop');
-        const hv=document.getElementById('homeView'), ac=document.getElementById('appContent');
-        if(hv&&ac){
-            if(v==='home'){ hv.style.display='block'; ac.style.display='none'; renderHome(); }
-            else { hv.style.display='none'; ac.style.display='block'; renderFilterRow(); renderAll(); }
+        const hv=document.getElementById('homeView'), ac=document.getElementById('appContent'), av=document.getElementById('accountView');
+        if(hv&&ac&&av){
+            if(v==='home'){ hv.style.display='block'; ac.style.display='none'; av.style.display='none'; renderHome(); }
+            else if(v==='account'){ hv.style.display='none'; ac.style.display='none'; av.style.display='block'; renderAccount(); }
+            else { hv.style.display='none'; av.style.display='none'; ac.style.display='block'; renderFilterRow(); renderAll(); }
         } else { renderFilterRow(); renderAll(); }
         closeBurger();
         window.scrollTo({top:0,behavior:'smooth'});
@@ -1548,6 +1572,7 @@
         updateStats();
         renderCats();
         if(currentView==='home'){ renderHome(); return; }
+        if(currentView==='account'){ renderAccount(); return; }
         const anim = animateNextRender;
         animateNextRender = false;
         if (anim) {
@@ -1629,6 +1654,50 @@
         </section>`;
         // عدادات متحركة
         hv.querySelectorAll('[data-count]').forEach(el=>{const t=+el.dataset.count;let c=0;const step=Math.ceil(t/60)||1;const tick=()=>{c+=step;if(c>=t) el.textContent=t.toLocaleString('ar-EG')+'+'; else{el.textContent=c.toLocaleString('ar-EG'); requestAnimationFrame(tick);}}; requestAnimationFrame(tick);});
+    }
+    function renderAccount(){
+        const av=document.getElementById('accountView'); if(!av) return;
+        if(!sessionUser){
+            av.innerHTML='<div class="empty-state"><div class="icon">🔒</div>سجّل دخولك لعرض حسابك<br><button class="btn btn-primary" style="margin-top:14px" onclick="showLogin()">🔓 تسجيل الدخول</button></div>';
+            return;
+        }
+        const me=currentUser() || cloudProfile || {u:sessionUser, name:sessionUser, role:sessionRole};
+        const roleNames={admin:'🛡️ مدير', worker:'👷 عامل', customer:'👤 عميل'};
+        const myOrders=invoices.filter(o=> (o.user===sessionUser) || (o.email===sessionUser) || (o.customer===sessionUser));
+        const favProducts=[]; favs.forEach(k=>{ const [ci,ii]=k.split(':').map(Number); const cat=db[ci]; const it=cat&&cat.items[ii]; if(it) favProducts.push({ci,ii,cat,it}); });
+        let content='';
+        if(accTab==='profile'){
+            content='<div class="card-box" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow-sm)">'
+                +'<div class="profile-head"><div class="big-avatar">'+esc((me.display_name||me.name||me.u||sessionUser).slice(0,2))+'</div><div><h2>'+esc(me.display_name||me.name||me.u||sessionUser)+'</h2><p style="color:var(--text-muted);font-weight:700">'+esc(me.username||me.u||sessionUser)+' · '+(roleNames[sessionRole]||sessionRole)+'</p></div></div>'
+                +'<div class="ct-row"><span>نوع الحساب</span><span>'+(roleNames[sessionRole]||sessionRole)+'</span></div>'
+                +'<div class="ct-row"><span>عدد الطلبات</span><span>'+myOrders.length+'</span></div>'
+                +'<div class="ct-row"><span>المفضلة</span><span>'+favProducts.length+' منتج</span></div>'
+                +'<div class="ct-row"><span>السلة</span><span>'+cartCount()+' قطعة</span></div>'
+                +'</div>';
+        } else if(accTab==='orders'){
+            if(!myOrders.length) content='<div class="empty-state"><div class="icon">📦</div>لا توجد طلبات بعد<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">🏪 تسوق الآن</button></div>';
+            else content=myOrders.slice().reverse().map(o=>{
+                const d=new Date(o.date);
+                return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status">قيد المعالجة</span></div>'
+                    +'<div class="oc-items">'+o.items.map(i=>esc(i.name)+' ×'+i.qty).join(' • ')+'</div>'
+                    +'<div class="ct-row" style="margin-top:10px;font-weight:900"><span>'+d.toLocaleDateString('ar-EG')+'</span><span style="color:var(--primary)">'+fmt(o.total)+' ج.م</span></div></div>';
+            }).join('');
+        } else if(accTab==='fav'){
+            if(!favProducts.length) content='<div class="empty-state"><div class="icon">❤️</div>قائمة المفضلة فارغة<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">تصفح المنتجات</button></div>';
+            else {
+                content='<div class="shop-grid">'+favProducts.map(({cat,ci,it,ii})=>{
+                    let img=it.img?'<img src="'+it.img+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'📦';
+                    return '<div class="shop-card" onclick="openProductDetail('+ci+','+ii+')"><div class="shop-img" style="height:130px;position:relative"><button style="position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:1" onclick="event.stopPropagation();toggleFav('+ci+','+ii+');renderAccount()">❤️</button>'+img+'</div><div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div class="shop-price">'+esc(it.p)+' ج.م</div></div></div>';
+                }).join('')+'</div>';
+            }
+        }
+        av.innerHTML='<div class="landing-head" style="margin-bottom:24px"><span class="tag">حسابي</span><h2>مرحباً '+esc(me.display_name||me.name||me.u||sessionUser)+'</h2></div>'
+            +'<div class="account-grid"><div class="account-nav">'
+            +'<button class="'+(accTab==='profile'?'active':'')+'" onclick="accTab=\'profile\';renderAccount()">👤 ملفي</button>'
+            +'<button class="'+(accTab==='orders'?'active':'')+'" onclick="accTab=\'orders\';renderAccount()">📦 طلباتي ('+myOrders.length+')</button>'
+            +'<button class="'+(accTab==='fav'?'active':'')+'" onclick="accTab=\'fav\';renderAccount()">❤️ المفضلة ('+favProducts.length+')</button>'
+            +'<button onclick="logout()">🚪 خروج</button>'
+            +'</div><div>'+content+'</div></div>';
     }
 
     function renderCats() {
@@ -2969,6 +3038,8 @@
                 '<div class="dash-stat"><div class="num">' + invoices.length + '</div><div class="lbl"> إجمالي الفواتير</div></div>' +
                 '<div class="dash-stat"><div class="num">' + fmt(totalRevenue) + '</div><div class="lbl">🏦 إجمالي الدخل (ج.م)</div></div>' +
             '</div>' +
+            '<div class="table-wrap"><table><thead><tr><th>المنتج</th><th>القسم</th><th>السعر</th><th>المخزون</th><th>إجراءات</th></tr></thead><tbody>'
+            + db.flatMap((cat,ci)=>cat.items.slice(0,12).map((it,ii)=>'<tr><td>'+esc(it.n)+'</td><td>'+esc(cat.name)+'</td><td>'+fmt(itemPrice(it))+' ج.م</td><td>'+getQ(it)+(getQ(it)<=getMin(it)?' ⚠️':'')+'</td><td><div class="mini-actions"><button class="mini-btn" onclick="toggleDashboard();setTimeout(()=>openModal(\'edit\','+ci+','+ii+'),200)">✏️</button></div></td></tr>')).join('') + '</tbody></table></div>' +
             '<div class="dash-card"><h3>📑 التقارير والتصدير</h3>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
                     '<button class="btn btn-primary" style="padding:10px 16px;font-size:0.85rem" onclick="dailyReport()">🖨️ تقرير نهاية اليوم</button>' +
