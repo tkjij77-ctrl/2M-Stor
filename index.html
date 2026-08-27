@@ -1014,13 +1014,82 @@
         .related-card-name{ font-size:0.82rem; font-weight:800; line-height:1.3; min-height:2.4em; }
         .related-card-price{ font-size:0.95rem; font-weight:900; color:var(--primary); margin-top:4px; }
         @media (max-width: 980px){ .amz-layout{ grid-template-columns: 1fr; } .amz-gallery, .amz-buybox{ position: static; } }
+        /* ===== LANDING v3: hero + blob + features (من المرجعية) ===== */
+        #loader{position:fixed;inset:0;z-index:9999;background:var(--bg-body);display:grid;place-items:center;transition:opacity .5s,visibility .5s}
+        #loader.hide{opacity:0;visibility:hidden;pointer-events:none}
+        .loader-book{width:70px;height:70px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--primary-dark));display:grid;place-items:center;font-size:2.2rem;animation:loaderPulse 1.2s ease-in-out infinite}
+        @keyframes loaderPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.85);opacity:.6}}
+        .to-top{position:fixed;bottom:26px;left:26px;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:1.3rem;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:all .3s;z-index:900}
+        .to-top.show{opacity:1;pointer-events:auto}
+        .hero{position:relative;padding:40px 0 60px;overflow:hidden}
+        .hero::before{content:'';position:absolute;inset:0;z-index:-1;background:radial-gradient(600px circle at 85% 15%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 45%),radial-gradient(500px circle at 10% 80%,color-mix(in srgb,var(--primary) 12%,transparent),transparent 45%)}
+        .hero-grid{display:grid;grid-template-columns:1.1fr .9fr;align-items:center;gap:50px;max-width:1200px;margin:0 auto;padding:0 20px}
+        .badge-hero{display:inline-flex;align-items:center;gap:8px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--primary-dark);padding:8px 18px;border-radius:50px;font-weight:800;font-size:.88rem;margin-bottom:18px;border:1px solid color-mix(in srgb,var(--accent) 30%,transparent)}
+        .hero h1{font-size:3rem;font-weight:900;line-height:1.25;margin-bottom:16px}
+        .hero h1 .grad{background:linear-gradient(120deg,var(--accent),var(--primary-dark));-webkit-background-clip:text;background-clip:text;color:transparent}
+        .hero p{font-size:1.08rem;color:var(--text-muted);margin-bottom:24px;max-width:520px}
+        .hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+        .hero-stats{display:flex;gap:32px;flex-wrap:wrap}
+        .hero-stats .stat h3{font-size:1.7rem;color:var(--accent);font-weight:900}
+        .hero-stats .stat span{color:var(--text-muted);font-size:.85rem;font-weight:700}
+        .hero-visual{position:relative;display:grid;place-items:center;min-height:380px}
+        .blob{width:340px;height:340px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));border-radius:42% 58% 63% 37%/41% 44% 56% 59%;display:grid;place-items:center;font-size:8rem;box-shadow:var(--shadow-lg);animation:morph 8s ease-in-out infinite;will-change:transform}
+        @keyframes morph{0%,100%{border-radius:42% 58% 63% 37%/41% 44% 56% 59%}50%{border-radius:58% 42% 37% 63%/56% 59% 41% 44%}}
+        .float-card{position:absolute;background:var(--bg-card);padding:12px 16px;border-radius:16px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;font-weight:800;border:1px solid var(--border);animation:floaty 4s ease-in-out infinite;font-size:.88rem}
+        .float-card .ic{font-size:1.4rem}.float-card small{color:var(--text-muted);font-weight:700;display:block;font-size:.78rem}
+        .fc1{top:20px;right:-6px}.fc2{bottom:40px;left:-10px;animation-delay:1.5s}
+        @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+        .landing-section{padding:50px 0}
+        .landing-head{text-align:center;max-width:640px;margin:0 auto 36px}
+        .landing-head .tag{color:var(--accent);font-weight:800;letter-spacing:1px;font-size:.85rem}
+        .landing-head h2{font-size:2.2rem;font-weight:900;margin:8px 0 10px}
+        .landing-head p{color:var(--text-muted);font-size:1rem}
+        .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;max-width:1200px;margin:0 auto;padding:0 20px}
+        .feature{background:var(--bg-card);padding:28px 22px;border-radius:var(--radius);border:1px solid var(--border);transition:transform .35s,box-shadow .35s}
+        .feature:hover{transform:translateY(-6px);box-shadow:var(--shadow-lg)}
+        .feature .icon{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 20%,transparent),color-mix(in srgb,var(--primary-dark) 20%,transparent));display:grid;place-items:center;font-size:1.6rem;margin-bottom:14px}
+        .feature h3{font-size:1.1rem;margin-bottom:6px}.feature p{color:var(--text-muted);font-size:.9rem}
+        .testimonials{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:1200px;margin:0 auto;padding:0 20px}
+        .testimonial{background:var(--bg-card);padding:24px;border-radius:var(--radius);border:1px solid var(--border)}
+        .testimonial .quote{font-size:2.5rem;color:var(--accent);opacity:.25;line-height:1;font-family:Georgia,serif}
+        .testimonial p{color:var(--text-muted);margin:6px 0 14px;font-size:.92rem}
+        .testimonial .who{display:flex;align-items:center;gap:12px}
+        .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--primary-dark));display:grid;place-items:center;color:#fff;font-weight:800}
+        .landing-footer{background:var(--primary);color:#cfe3ea;padding:50px 0 18px;margin-top:40px}
+        [data-theme="dark"] .landing-footer{background:#081019}
+        .footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:28px;max-width:1200px;margin:0 auto;padding:0 20px 28px}
+        .footer-grid h4{color:#fff;margin-bottom:12px;font-size:1rem}
+        .footer-grid a,.footer-grid p{display:block;margin-bottom:8px;opacity:.85;transition:opacity .2s;cursor:pointer}
+        .footer-grid a:hover{opacity:1;color:var(--accent-2)}
+        .footer-bottom{text-align:center;border-top:1px solid rgba(255,255,255,.12);padding-top:16px;font-size:.85rem;opacity:.8;max-width:1200px;margin:0 auto;padding-left:20px;padding-right:20px}
+        .nav-links-desktop{display:none;gap:18px;align-items:center}
+        .nav-links-desktop a{font-weight:700;color:var(--text-main);opacity:.85;transition:color .2s}
+        .nav-links-desktop a:hover,.nav-links-desktop a.active{color:var(--primary)}
+        @media(min-width:769px){.nav-links-desktop{display:flex}}
+        @media(max-width:900px){
+          .hero-grid{grid-template-columns:1fr;gap:30px}
+          .hero-visual{order:-1;min-height:280px}.blob{width:240px;height:240px;font-size:5.5rem}
+          .footer-grid{grid-template-columns:1fr 1fr}
+        }
+        @media(max-width:768px){
+          .hero h1{font-size:2rem}.landing-head h2{font-size:1.6rem}
+          .footer-grid{grid-template-columns:1fr}
+        }
+        @media(prefers-reduced-motion:reduce){.blob,.float-card,.loader-book{animation:none!important}}
     </style>
 </head>
 <body>
 
+<div id="loader"><div class="loader-book">📚</div></div>
 <header id="appHeader">
     <div class="header-top">
         <h1>📦 2M-Stor</h1>
+        <nav class="nav-links-desktop" id="navLinksDesktop">
+            <a onclick="setView('home')" data-route="home" class="active">الرئيسية</a>
+            <a onclick="setView('shop')" data-route="shop">المتجر</a>
+            <a onclick="document.getElementById('landing-features')&&document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</a>
+            <a onclick="document.getElementById('landing-footer')&&document.getElementById('landing-footer').scrollIntoView({behavior:'smooth'})">تواصل</a>
+        </nav>
         <div class="header-actions">
             <span class="role-chip" id="roleChip"></span>
             <button id="lockBtn" class="burger-btn" onclick="quickLock()" title="قفل الكاونتر السريع" aria-label="قفل الكاونتر" style="display:none">🔒</button>
@@ -1048,6 +1117,7 @@
         <span class="cloud-chip" id="cloudChip" style="display:none"></span>
     </div>
     <div class="burger-divider">🔀 الصفحات</div>
+    <div class="burger-item" id="burger-home" onclick="setView('home')">🏠 الرئيسية</div>
     <div class="burger-item" id="burger-stock" onclick="setView('stock')">📦 صفحة المخزن</div>
     <div class="burger-item" id="burger-shop" onclick="setView('shop')">🏪 صفحة العرض</div>
     <div class="burger-divider">⚙️ الأدوات</div>
@@ -1064,6 +1134,7 @@
     <div class="side-footer">2M-Stor · نظام إدارة المحل · v3.3</div>
 </div>
 
+<div id="homeView" style="display:none"></div>
 <div class="content" id="appContent">
     <!-- ===== VIEW TABS ===== -->
     <div class="view-tabs" id="viewTabs">
@@ -1090,7 +1161,20 @@
 
     <input type="file" id="scanInput" accept="image/*" style="display:none">
 </div>
-
+<footer class="landing-footer" id="landing-footer">
+  <div class="footer-grid">
+    <div>
+      <div style="font-weight:900;font-size:1.3rem;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--primary-dark));border-radius:10px;display:grid;place-items:center">2M</span>2M<b style="color:var(--accent-2)">-Stor</b></div>
+      <p style="opacity:.85">منصتك المتكاملة للكتب والقرطاسية والأدوات المكتبية بأعلى جودة وأفضل الأسعار.</p>
+      <div style="display:flex;gap:10px;margin-top:12px"><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">f</a><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">◎</a><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">𝕏</a><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">✆</a></div>
+    </div>
+    <div><h4>روابط</h4><a onclick="setView('home')">الرئيسية</a><a onclick="setView('shop')">المتجر</a><a onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</a><a onclick="document.getElementById('landing-footer').scrollIntoView({behavior:'smooth'})">تواصل</a></div>
+    <div><h4>حسابي</h4><a onclick="can('history')&&showInvoiceHistory()">طلباتي</a><a onclick="openCart()">السلة</a><a onclick="toggleDashboard()">لوحة التحكم</a><a onclick="openSettingsModal()">الإعدادات</a></div>
+    <div><h4>تواصل معنا</h4><p>📞 0500000000</p><p>✉️ info@2m-stor.com</p><p>📍 الرياض، السعودية</p></div>
+  </div>
+  <div class="footer-bottom">© 2025 2M-Stor. جميع الحقوق محفوظة.</div>
+</footer>
+<button class="to-top" id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 <div class="toast-container" id="toastContainer"></div>
 <button class="install-btn" id="installBtn">📲 تثبيت التطبيق</button>
 <input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
@@ -1179,7 +1263,7 @@
     let dbIsFactory = !localStorage.getItem('al_sayed_db');
     let invoices = JSON.parse(localStorage.getItem('al_sayed_invoices')) || [];
     let currentCat = 'all';
-    let currentView = 'stock';
+    let currentView = 'home';
     let shopPageSize = 40, shopLimit = 40;
     let searchDebounce = null;
     let editingCat = -1, editingIdx = -1;
@@ -1374,16 +1458,23 @@
         } catch (e) { /* مساحة التخزين مش كفاية — يتجاهل */ }
     }
 
-    // ===== VIEWS =====
+    // ===== VIEWS (مع home لاندنج) =====
     function setView(v) {
         currentView = v;
         animateNextRender = true;
         document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
-        document.getElementById('burger-stock').classList.toggle('active', v === 'stock');
-        document.getElementById('burger-shop').classList.toggle('active', v === 'shop');
+        const bs=document.getElementById('burger-stock'); if(bs) bs.classList.toggle('active', v === 'stock');
+        const bh=document.getElementById('burger-shop'); if(bh) bh.classList.toggle('active', v === 'shop');
+        const bhm=document.getElementById('burger-home'); if(bhm) bhm.classList.toggle('active', v === 'home');
+        document.querySelectorAll('.nav-links-desktop a').forEach(a=>a.classList.toggle('active', a.dataset.route===v));
         document.body.classList.toggle('shop-mode', v === 'shop');
-        renderFilterRow();
-        renderAll();
+        const hv=document.getElementById('homeView'), ac=document.getElementById('appContent');
+        if(hv&&ac){
+            if(v==='home'){ hv.style.display='block'; ac.style.display='none'; renderHome(); }
+            else { hv.style.display='none'; ac.style.display='block'; renderFilterRow(); renderAll(); }
+        } else { renderFilterRow(); renderAll(); }
+        closeBurger();
+        window.scrollTo({top:0,behavior:'smooth'});
     }
     function renderFilterRow() {
         const row = document.getElementById('filterRow');
@@ -1422,6 +1513,7 @@
     function renderAll() {
         updateStats();
         renderCats();
+        if(currentView==='home'){ renderHome(); return; }
         const anim = animateNextRender;
         animateNextRender = false;
         if (anim) {
@@ -1437,6 +1529,73 @@
       searchDebounce = setTimeout(() => renderAll(), 250);
     }
     function loadMoreShop() { shopLimit += shopPageSize; renderShopView(false); }
+    function renderHome(){
+        const hv=document.getElementById('homeView'); if(!hv) return;
+        // إحصائيات حية من المخزن
+        let totalProducts=db.reduce((a,c)=>a+c.items.length,0);
+        let totalCats=db.length;
+        let avail=db.reduce((a,c)=>a+c.items.filter(it=>getQs(it)>0).length,0);
+        // منتجات مميزة: أعلى qs أو عشوائي
+        let allItems=[]; db.forEach((cat,ci)=>cat.items.forEach((it,ii)=>allItems.push({cat,ci,it,ii})));
+        allItems.sort((a,b)=>getQs(b.it)-getQs(a.it));
+        let featured=allItems.slice(0,4);
+        let featHtml=featured.length?featured.map(({cat,ci,it,ii})=>{
+            let img=it.img?'<img src="'+it.img+'" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'<span style="font-size:2.2rem">📦</span>';
+            let qs=getQs(it);
+            return '<div class="shop-card" style="cursor:pointer" onclick="setView(\'shop\'); setTimeout(()=>openProductDetail('+ci+','+ii+'),120)">'
+                +'<div class="shop-img" style="height:150px">'+img+'</div>'
+                +'<div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div style="font-size:.82rem;color:var(--text-muted)">'+esc(cat.name)+'</div><div class="shop-price">'+esc(it.p)+' <span>ج.م</span></div>'+(qs>0?'<div class="shop-avail ok">متاح: '+qs+'</div>':'<div class="shop-avail no">غير متوفر</div>')+'</div>'
+                +'<button class="cart-add" onclick="event.stopPropagation();addToCart('+ci+','+ii+');toast(\'✅ أُضيف للسلة\')">🛒 أضف</button></div>';
+        }).join(''):'<div class="empty-state"><div class="icon">📭</div>لا توجد منتجات بعد</div>';
+        hv.innerHTML=`
+        <section class="hero">
+          <div class="hero-grid">
+            <div>
+              <span class="badge-hero">⭐ المنصة الأولى في خدمة عملائها</span>
+              <h1>منصة <span class="grad">2M-Stor</span><br>كل ما تحتاجه في مكان واحد</h1>
+              <p>كتب، قرطاسية، وأدوات مكتبية بأعلى جودة وأفضل الأسعار. تصفّح، اطلب، وتابع طلبك بسهولة — مع مزامنة فورية على كل أجهزتك.</p>
+              <div class="hero-actions">
+                <button class="btn" onclick="setView('shop')">تصفّح المتجر ←</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</button>
+              </div>
+              <div class="hero-stats">
+                <div class="stat"><h3 data-count="${totalProducts}">0</h3><span>منتج</span></div>
+                <div class="stat"><h3 data-count="${totalCats}">0</h3><span>قسم</span></div>
+                <div class="stat"><h3 data-count="${avail}">0</h3><span>متاح الآن</span></div>
+              </div>
+            </div>
+            <div class="hero-visual">
+              <div class="blob">📚</div>
+              <div class="float-card fc1"><span class="ic">🚚</span><div><b>توصيل سريع</b><small>خلال 24 ساعة</small></div></div>
+              <div class="float-card fc2"><span class="ic">⭐</span><div><b>4.9 تقييم</b><small>+5000 عميل</small></div></div>
+            </div>
+          </div>
+        </section>
+        <section class="landing-section" id="landing-features">
+          <div class="landing-head"><span class="tag">لماذا نحن</span><h2>ما يميز 2M-Stor</h2><p>تجربة تسوّق سلسة من البداية حتى وصول طلبك</p></div>
+          <div class="features">
+            <div class="feature"><div class="icon">🚚</div><h3>توصيل سريع</h3><p>نوصل طلبك خلال 24 ساعة في جميع المناطق.</p></div>
+            <div class="feature"><div class="icon">💰</div><h3>أسعار منافسة</h3><p>أفضل الأسعار مع عروض وخصومات مستمرة.</p></div>
+            <div class="feature"><div class="icon">✅</div><h3>جودة مضمونة</h3><p>منتجات أصلية 100% من علامات موثوقة.</p></div>
+            <div class="feature"><div class="icon">🔄</div><h3>إرجاع سهل</h3><p>سياسة إرجاع مرنة خلال 14 يوماً.</p></div>
+          </div>
+        </section>
+        <section class="landing-section" style="padding-top:0">
+          <div class="landing-head"><span class="tag">تشكيلتنا</span><h2>منتجات مميزة</h2><p>لمحة من أفضل منتجاتنا المتاحة الآن</p></div>
+          <div class="shop-grid" style="max-width:1200px;margin:0 auto;padding:0 20px">${featHtml}</div>
+          <div style="text-align:center;margin-top:28px"><button class="btn" onclick="setView('shop')">عرض كل المنتجات ←</button></div>
+        </section>
+        <section class="landing-section" style="padding-top:0">
+          <div class="landing-head"><span class="tag">آراء العملاء</span><h2>ماذا يقولون عنا</h2></div>
+          <div class="testimonials">
+            <div class="testimonial"><div class="quote">"</div><p>خدمة رائعة وتوصيل سريع. المنتجات وصلت بحالة ممتازة وأسعارها منافسة.</p><div class="who"><div class="avatar">أح</div><div><b>أحمد العتيبي</b><span>عميل دائم</span></div></div></div>
+            <div class="testimonial"><div class="quote">"</div><p>تشكيلة الكتب مذهلة ووجدت كل ما أبحث عنه. فريق الدعم متعاون جداً.</p><div class="who"><div class="avatar">سا</div><div><b>سارة القحطاني</b><span>معلمة</span></div></div></div>
+            <div class="testimonial"><div class="quote">"</div><p>أطلب كل مستلزمات مكتبي من هنا. الجودة ممتازة والتوصيل دائماً في الموعد.</p><div class="who"><div class="avatar">خا</div><div><b>خالد المطيري</b><span>صاحب شركة</span></div></div></div>
+          </div>
+        </section>`;
+        // عدادات متحركة
+        hv.querySelectorAll('[data-count]').forEach(el=>{const t=+el.dataset.count;let c=0;const step=Math.ceil(t/60)||1;const tick=()=>{c+=step;if(c>=t) el.textContent=t.toLocaleString('ar-EG')+'+'; else{el.textContent=c.toLocaleString('ar-EG'); requestAnimationFrame(tick);}}; requestAnimationFrame(tick);});
+    }
 
     function renderCats() {
         const bar = document.getElementById('catBar');
@@ -2613,6 +2772,14 @@
             const openOverlay = document.querySelector('.cart-overlay.open, .product-detail-overlay.open, .dash-overlay.open, .lock-overlay[style*="flex"], .modal-overlay[style*="flex"]');
             if (openOverlay && !openOverlay.contains(e.target)) { /* allow */ }
         }, { passive: true });
+        // هيدر يتحول عند السكرول + زر العودة للأعلى + loader
+        (function(){
+            const hdr=document.getElementById('appHeader'), tt=document.getElementById('toTop');
+            window.addEventListener('scroll', ()=>{ const y=window.scrollY||0; if(hdr) hdr.classList.toggle('scrolled', y>40); if(tt) tt.classList.toggle('show', y>500); }, {passive:true});
+            window.addEventListener('load', ()=> setTimeout(()=>{ const l=document.getElementById('loader'); if(l) l.classList.add('hide'); }, 600));
+            // hide loader حتى لو load تأخر (fallback)
+            setTimeout(()=>{ const l=document.getElementById('loader'); if(l) l.classList.add('hide'); }, 2500);
+        })();
 
     // ===== EXPORT / IMPORT =====
     function exportData() {
