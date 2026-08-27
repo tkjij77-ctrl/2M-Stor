@@ -908,22 +908,32 @@
         .btn-loading { opacity: 0.7; pointer-events: none; position: relative; }
         .login-switch-mode { font-size: 0.82rem; font-weight: 800; color: var(--primary); background: none; border: none; cursor: pointer; padding: 8px; margin-top: 10px; }
         .login-switch-mode:hover { text-decoration: underline; }
-        /* ===== PRODUCT DETAIL ===== */
-        .product-detail-overlay { position: fixed; inset: 0; z-index: 12000; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px; animation: fadeIn 0.2s ease; }
-        .product-detail-overlay.open { display: flex; }
-        .product-detail-card { background: var(--bg-card); border-radius: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: modalIn 0.25s ease; }
-        .product-detail-img { width: 100%; height: 240px; object-fit: cover; border-radius: 20px 20px 0 0; background: var(--bg-soft); display: flex; align-items: center; justify-content: center; font-size: 3rem; }
-        .product-detail-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 20px 20px 0 0; }
-        .product-detail-body { padding: 18px; }
-        .product-detail-name { font-size: 1.25rem; font-weight: 900; margin-bottom: 6px; }
-        .product-detail-cat { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; margin-bottom: 10px; }
-        .product-detail-price { font-size: 1.4rem; font-weight: 900; color: var(--primary); margin-bottom: 12px; }
-        .product-detail-avail { font-size: 0.85rem; font-weight: 800; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; display: inline-block; }
-        .product-detail-avail.ok { background: #e0f5ee; color: #0ca678; }
+        /* ===== PRODUCT DETAIL — يملأ الصفحة + منتجات مشابهة ===== */
+        .product-detail-overlay { position: fixed; inset: 0; z-index: 12000; background: var(--bg-body); display: none; overflow-y: auto; animation: fadeIn 0.2s ease; }
+        .product-detail-overlay.open { display: block; }
+        .product-detail-card { background: var(--bg-card); width: 100%; min-height: 100vh; max-width: 860px; margin: 0 auto; border-radius: 0; box-shadow: none; animation: modalIn 0.25s ease; }
+        .product-detail-img { width: 100%; height: 360px; object-fit: cover; background: var(--bg-soft); display: flex; align-items: center; justify-content: center; font-size: 4rem; position: relative; }
+        .product-detail-img img { width: 100%; height: 100%; object-fit: cover; }
+        .product-detail-back{ position:absolute; top:16px; right:16px; background: rgba(0,0,0,0.55); color:#fff; border:none; width:42px; height:42px; border-radius:50%; font-size:1.3rem; cursor:pointer; backdrop-filter: blur(6px); display:flex; align-items:center; justify-content:center; }
+        .product-detail-body { padding: 22px 18px 100px; }
+        .product-detail-name { font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; line-height:1.3; }
+        .product-detail-cat { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-bottom: 12px; }
+        .product-detail-price { font-size: 1.8rem; font-weight: 900; color: var(--primary); margin-bottom: 14px; }
+        .product-detail-avail { font-size: 0.9rem; font-weight: 800; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px; display: inline-block; }
+        .product-detail-avail.ok { background: #e0f7f4; color: #0d4f6c; border:1px solid #00c9a7; }
         .product-detail-avail.no { background: var(--danger-soft); color: var(--danger); }
-        .product-detail-info { font-size: 0.82rem; color: var(--text-muted); font-weight: 700; line-height: 1.6; margin-bottom: 14px; }
-        .product-detail-actions { display: flex; gap: 10px; }
-        .product-detail-actions .btn { flex: 1; padding: 12px; font-size: 0.95rem; }
+        .product-detail-info { font-size: 0.88rem; color: var(--text-muted); font-weight: 700; line-height: 1.8; margin-bottom: 18px; background: var(--bg-soft); padding:14px; border-radius:14px; }
+        .product-detail-actions { display: flex; gap: 10px; flex-wrap:wrap; margin-bottom: 22px; }
+        .product-detail-actions .btn { flex: 1; min-width:140px; padding: 14px; font-size: 1rem; justify-content:center; }
+        .product-related-title{ font-size:1.1rem; font-weight:900; margin: 18px 0 12px; display:flex; align-items:center; gap:8px; }
+        .product-related{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap:12px; }
+        .related-card{ background: var(--bg-card); border:1px solid var(--border); border-radius:14px; overflow:hidden; cursor:pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .related-card:hover{ transform: translateY(-3px); box-shadow: var(--shadow); }
+        .related-card-img{ height:110px; background: var(--bg-soft); display:flex; align-items:center; justify-content:center; font-size:1.8rem; overflow:hidden; }
+        .related-card-img img{ width:100%; height:100%; object-fit:cover; }
+        .related-card-body{ padding:10px; }
+        .related-card-name{ font-size:0.82rem; font-weight:800; line-height:1.3; min-height:2.4em; }
+        .related-card-price{ font-size:0.95rem; font-weight:900; color:var(--primary); margin-top:4px; }
     </style>
 </head>
 <body>
@@ -1530,26 +1540,36 @@
         container.innerHTML = html;
     }
 
-    // ===== PRODUCT DETAIL =====
+    // ===== PRODUCT DETAIL — يملأ الصفحة + منتجات من نفس الصنف =====
     function openProductDetail(ci, ii) {
       const cat = db[ci], item = cat && cat.items[ii];
       if (!item) return;
       let qs = getQs(item), q = getQ(item), price = itemPrice(item);
       let avail = qs > 0 ? '<div class="product-detail-avail ok">\u2705 متاح: ' + qs + ' قطعة</div>' : '<div class="product-detail-avail no">\u274C غير متوفر</div>';
-      let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="lazy" decoding="async">' : '\uD83D\uDCE6';
+      let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="eager" decoding="async">' : '\uD83D\uDCE6';
       let cartBtn = qs > 0 ? '<button class="btn btn-primary" onclick="addToCart(' + ci + ',' + ii + ');closeProductDetail()">\uD83D\uDED2 إضافة للسلة</button>' : '<button class="btn btn-outline" disabled>غير متوفر</button>';
       let editBtn = can('del') ? '<button class="btn btn-outline" onclick="closeProductDetail();openModal(\'edit\',' + ci + ',' + ii + ')">\u270F\uFE0F تعديل</button>' : '';
+      // منتجات من نفس الصنف
+      let related = cat.items.filter((_,idx)=> idx!==ii).slice(0,6);
+      let relatedHtml = related.length ? '<div class="product-related-title">\uD83D\uDCE6 منتجات من نفس الصنف — ' + esc(cat.name) + '</div><div class="product-related">' + related.map(r=>{
+        let rIdx = cat.items.indexOf(r);
+        let rImg = r.img ? '<img src="'+r.img+'" alt="" loading="lazy">' : '\uD83D\uDCE6';
+        let rQs = getQs(r);
+        return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+(rQs>0?'\u2705 متاح '+rQs:'\u274C غير متوفر')+'</div></div></div>';
+      }).join('') + '</div>' : '<p style="color:var(--text-muted);font-size:0.85rem;margin-top:12px">لا توجد منتجات أخرى في هذا الصنف</p>';
       document.getElementById('productDetailCard').innerHTML =
-        '<div class="product-detail-img">' + imgHtml + '</div>' +
+        '<div class="product-detail-img"><button class="product-detail-back" onclick="closeProductDetail()" aria-label="رجوع">\u2190</button>' + imgHtml + '</div>' +
         '<div class="product-detail-body">' +
           '<div class="product-detail-name">' + esc(item.n) + '</div>' +
-          '<div class="product-detail-cat">\uD83D\uDCC2 ' + esc(cat.name) + (item.b ? ' \u00B7 \uD83D\uDD33 ' + esc(item.b) : '') + '</div>' +
-          '<div class="product-detail-price">' + esc(item.p) + ' <small style="font-size:0.9rem">ج.م</small></div>' +
+          '<div class="product-detail-cat">\uD83D\uDCC2 ' + esc(cat.name) + (item.b ? ' \u00B7 \uD83D\uDD33 ' + esc(item.b) : '') + ' \u00B7 \uD83D\uDD22 #' + (item.cid||'—') + '</div>' +
+          '<div class="product-detail-price">' + esc(item.p) + ' <small style="font-size:0.9rem">ج.م</small> <small style="font-size:0.8rem;color:var(--text-muted)">/ رقمي ' + price + '</small></div>' +
           avail +
-          '<div class="product-detail-info">\uD83D\uDCE6 في المخزن: ' + q + ' \u00B7 \uD83C\uDFEA معروض: ' + qs + ' \u00B7 \u26A0\uFE0F تنبيه عند: ' + getMin(item) + '<br>\uD83D\uDCB0 قيمة المخزن: ' + fmt(q*price) + ' ج.م</div>' +
-          '<div class="product-detail-actions">' + cartBtn + editBtn + '<button class="btn btn-outline" onclick="closeProductDetail()">\u2715 إغلاق</button></div>' +
+          '<div class="product-detail-info">\uD83D\uDCE6 في المخزن: <b>' + q + '</b> \u00B7 \uD83C\uDFEA معروض للبيع: <b>' + qs + '</b> \u00B7 \u26A0\uFE0F تنبيه عند: <b>' + getMin(item) + '</b><br>\uD83D\uDCB0 قيمة المخزن: <b>' + fmt(q*price) + ' ج.م</b> \u00B7 قيمة المعروض: <b>' + fmt(qs*price) + ' ج.م</b>' + (item.b ? '<br>\uD83D\uDD33 باركود: ' + esc(item.b) : '') + '</div>' +
+          '<div class="product-detail-actions">' + cartBtn + editBtn + '<button class="btn btn-outline" onclick="closeProductDetail()">\u2715 إغلاق</button><button class="btn btn-ghost" onclick="if(navigator.share) navigator.share({title: \''+esc(item.n).replace(/'/g,"\\'")+'\', text: \''+esc(item.p).replace(/'/g,"\\'")+' ج.م\'}).catch(()=>{})">\uD83D\uDD17 مشاركة</button></div>' +
+          relatedHtml +
         '</div>';
       document.getElementById('productDetailOverlay').classList.add('open');
+      window.scrollTo(0,0);
     }
     function closeProductDetail() { document.getElementById('productDetailOverlay').classList.remove('open'); }
 
