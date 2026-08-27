@@ -2424,15 +2424,13 @@
                         '<button class="btn-scan" onclick="startCameraScan()">🎥</button>' +
                     '</div>' +
                 '</div>' +
-                '<div class="form-group"><label>📷 صورة الصنف (اختياري)</label>' +
-                    '<div class="img-row">' +
-                        '<div class="img-preview" id="img-preview">' + imgPrev + '</div>' +
-                        '<div style="display:flex;flex-direction:column;gap:8px">' +
-                            '<button class="btn-scan" onclick="document.getElementById(\'modal-image\').click()">📷 رفع صورة</button>' +
-                            '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem" onclick="clearImage()">🗑 إزالة الصورة</button>' +
-                        '</div>' +
+                '<div class="form-group"><label>📷 صورة الصنف — اسحب أو التقط (اختياري)</label>' +
+                    '<div class="img-drop" id="img-drop" onclick="document.getElementById(\'modal-image\').click()" ondragover="event.preventDefault(); this.style.borderColor=\'var(--primary)\'; this.style.background=\'var(--primary-light)\'" ondragleave="this.style.borderColor=\'var(--border)\'; this.style.background=\'var(--bg-soft)\'" ondrop="handleDrop(event)" style="border:2px dashed var(--border);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;background:var(--bg-soft);transition:.2s">' +
+                        '<div class="img-preview" id="img-preview" style="width:92px;height:92px;border-radius:12px;border:none;background:var(--bg-card);box-shadow:var(--shadow-sm);flex-shrink:0">' + imgPrev + '</div>' +
+                        '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.9rem">اسحب الصورة هنا أو اضغط للاختيار</div><div style="font-size:.75rem;color:var(--text-muted);font-weight:700;margin-top:2px">JPG/PNG — تُضغط تلقائياً • الصق (Ctrl+V) أو التقط بالكاميرا</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();document.getElementById(\'modal-image\').click()">🖼️ اختر</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();captureProductPhoto()">📷 التقط</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();clearImage()">🗑 إزالة</button></div></div>' +
                     '</div>' +
                     '<input type="file" id="modal-image" accept="image/*" style="display:none" onchange="handleImageFile(event)">' +
+                    '<input type="text" id="modal-image-url" placeholder="أو الصق رابط صورة https://..." style="margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;width:100%;background:var(--bg-card);color:var(--text-main);font-size:.85rem" onkeydown="if(event.key===\'Enter\'){event.preventDefault();loadImageFromUrl(this.value)}" onblur="if(this.value.trim()) loadImageFromUrl(this.value.trim())">' +
                 '</div>' +
                 '<div class="modal-section">💰 الأسعار</div>' +
                 '<div class="form-grid-2">' +
@@ -2475,15 +2473,13 @@
                         '<button class="btn-scan" onclick="startCameraScan()">🎥</button>' +
                     '</div>' +
                 '</div>' +
-                '<div class="form-group"><label>📷 صورة الصنف (اختياري)</label>' +
-                    '<div class="img-row">' +
-                        '<div class="img-preview" id="img-preview">' + imgPrev + '</div>' +
-                        '<div style="display:flex;flex-direction:column;gap:8px">' +
-                            '<button class="btn-scan" onclick="document.getElementById(\'modal-image\').click()">📷 تغيير الصورة</button>' +
-                            '<button class="btn btn-outline" style="padding:8px 14px;font-size:0.8rem" onclick="clearImage()">🗑 إزالة الصورة</button>' +
-                        '</div>' +
+                '<div class="form-group"><label>📷 صورة الصنف — اسحب أو التقط (اختياري)</label>' +
+                    '<div class="img-drop" id="img-drop" onclick="document.getElementById(\'modal-image\').click()" ondragover="event.preventDefault(); this.style.borderColor=\'var(--primary)\'; this.style.background=\'var(--primary-light)\'" ondragleave="this.style.borderColor=\'var(--border)\'; this.style.background=\'var(--bg-soft)\'" ondrop="handleDrop(event)" style="border:2px dashed var(--border);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;background:var(--bg-soft);transition:.2s">' +
+                        '<div class="img-preview" id="img-preview" style="width:92px;height:92px;border-radius:12px;border:none;background:var(--bg-card);box-shadow:var(--shadow-sm);flex-shrink:0">' + imgPrev + '</div>' +
+                        '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.9rem">اسحب الصورة هنا أو اضغط للاختيار</div><div style="font-size:.75rem;color:var(--text-muted);font-weight:700;margin-top:2px">JPG/PNG — تُضغط تلقائياً • الصق (Ctrl+V) أو التقط بالكاميرا</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();document.getElementById(\'modal-image\').click()">🖼️ اختر</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();captureProductPhoto()">📷 التقط</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();clearImage()">🗑 إزالة</button></div></div>' +
                     '</div>' +
                     '<input type="file" id="modal-image" accept="image/*" style="display:none" onchange="handleImageFile(event)">' +
+                    '<input type="text" id="modal-image-url" placeholder="أو الصق رابط صورة https://..." style="margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;width:100%;background:var(--bg-card);color:var(--text-main);font-size:.85rem" onkeydown="if(event.key===\'Enter\'){event.preventDefault();loadImageFromUrl(this.value)}" onblur="if(this.value.trim()) loadImageFromUrl(this.value.trim())">' +
                 '</div>' +
                 '<div class="modal-section">💰 الأسعار</div>' +
                 '<div class="form-grid-2">' +
@@ -2525,14 +2521,15 @@
         reader.onload = function (ev) {
             const img = new Image();
             img.onload = function () {
-                const max = 320;
+                const max = 720;
                 const scale = Math.min(max / img.width, max / img.height, 1);
                 const c = document.createElement('canvas');
                 c.width = Math.max(1, Math.round(img.width * scale));
                 c.height = Math.max(1, Math.round(img.height * scale));
                 c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-                imgState = { val: c.toDataURL('image/jpeg', 0.7), dirty: true };
+                imgState = { val: c.toDataURL('image/jpeg', 0.75), dirty: true };
                 renderImagePreview();
+                toast('✅ تم تجهيز الصورة — جاهزة للحفظ');
             };
             img.onerror = function () { toast('⚠️ تعذر قراءة الصورة'); };
             img.src = ev.target.result;
@@ -2549,6 +2546,66 @@
         if (!el) return;
         el.innerHTML = imgState.val ? '<img src="' + imgState.val + '" alt="">' : '<span>📷</span>';
     }
+    function handleDrop(e){
+        e.preventDefault();
+        try{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-soft)'; }catch{}
+        const file=e.dataTransfer && e.dataTransfer.files[0];
+        if(file) handleImageFile({target:{files:[file], value:''}});
+    }
+    async function loadImageFromUrl(url){
+        url=(url||'').trim(); if(!url) return;
+        if(!/^https?:\/\//i.test(url)) return toast('⚠️ الرابط يجب أن يبدأ بـ https://');
+        toast('⏳ جاري تحميل الصورة...');
+        try{
+            const img=new Image(); img.crossOrigin='anonymous';
+            img.onload=()=>{
+                const max=720; const scale=Math.min(max/img.width, max/img.height, 1);
+                const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.width*scale)); c.height=Math.max(1,Math.round(img.height*scale));
+                c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+                try{ imgState={val:c.toDataURL('image/jpeg',0.75), dirty:true}; renderImagePreview(); toast('✅ تم تحميل الصورة'); }catch{ toast('⚠️ تعذر ضغط الصورة'); }
+            };
+            img.onerror=()=> toast('❌ تعذر تحميل الرابط — تأكد أنه رابط صورة مباشر');
+            img.src=url;
+        }catch{ toast('❌ رابط غير صالح'); }
+    }
+    async function captureProductPhoto(){
+        if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('⚠️ الكاميرا غير مدعومة');
+        const box=document.createElement('div'); box.className='cam-box'; box.id='photoBox';
+        box.innerHTML='<video id="photoVideo" autoplay playsinline muted style="width:100%;max-width:420px;border-radius:16px"></video><div class="cam-hint">ضع المنتج في المنتصف ثم اضغط التقاط</div><div style="display:flex;gap:10px"><button class="btn btn-primary" id="snapBtn">📷 التقاط</button><button class="btn btn-outline cam-close" onclick="closePhotoBox()">✕ إلغاء</button></div>';
+        document.body.appendChild(box);
+        let stream=null;
+        try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }catch{ box.remove(); return toast('⚠️ تعذر فتح الكاميرا'); }
+        const video=document.getElementById('photoVideo'); video.srcObject=stream; try{ await video.play(); }catch{}
+        const snapBtn=document.getElementById('snapBtn');
+        const closePhotoBox=()=>{ if(stream) stream.getTracks().forEach(t=>t.stop()); const b=document.getElementById('photoBox'); if(b) b.remove(); };
+        window.closePhotoBox=closePhotoBox;
+        snapBtn.onclick=()=>{
+            const c=document.createElement('canvas'); c.width=video.videoWidth; c.height=video.videoHeight;
+            c.getContext('2d').drawImage(video,0,0);
+            // قص مربع وسط
+            const max=720; const scale=Math.min(max/c.width, max/c.height, 1);
+            const cc=document.createElement('canvas'); cc.width=Math.max(1,Math.round(c.width*scale)); cc.height=Math.max(1,Math.round(c.height*scale));
+            cc.getContext('2d').drawImage(c,0,0,cc.width,cc.height);
+            try{ imgState={val:cc.toDataURL('image/jpeg',0.78), dirty:true}; renderImagePreview(); toast('✅ تم التقاط الصورة — اضغط حفظ'); }catch{ toast('⚠️ تعذر حفظ الصورة'); }
+            closePhotoBox();
+        };
+    }
+    // لصق من الحافظة (Ctrl+V) داخل المودال
+    document.addEventListener('paste', (e)=>{
+        const modal=document.getElementById('modal');
+        if(!modal || modal.style.display==='none') return;
+        const items=e.clipboardData && e.clipboardData.items;
+        if(!items) return;
+        for(const it of items){
+            if(it.type && it.type.startsWith('image/')){
+                const file=it.getAsFile();
+                if(file){ e.preventDefault(); handleImageFile({target:{files:[file], value:''}}); toast('✅ تم لصق الصورة'); return; }
+            }
+            if(it.type==='text/plain'){
+                it.getAsString(txt=>{ if(/^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(txt.trim())) loadImageFromUrl(txt.trim()); });
+            }
+        }
+    });
 
     // ===== CATEGORIES =====
     function addCategory() {

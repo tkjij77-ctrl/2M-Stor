@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v26 (BarcodeDetector ناتيف + IndexedDB fallback)
-const CACHE = 'al-sayed-v26';
+// Service Worker — 2M-Stor v27 (رفع صور سهل: سحب/لصق/التقاط/رابط)
+const CACHE = 'al-sayed-v27';
 const URLS = [
   'index.html',
   'manifest.json',
