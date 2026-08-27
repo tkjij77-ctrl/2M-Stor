@@ -14,6 +14,8 @@
     <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js">
     <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon-192.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1459,6 +1461,8 @@
     function firstNum(s) { const m = String(s).match(/\d+([.,]\d+)?/); return m ? parseFloat(m[0].replace(',', '.')) : 0; }
     function itemPrice(item) { return item.pn !== undefined ? item.pn : firstNum(item.p); }
     function fmt(n) { return (Math.round(n * 100) / 100).toLocaleString('en-EG'); }
+    function fmtDateTime(iso){ try{ return new Date(iso).toLocaleString('ar-EG', {weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit'}); }catch{ return new Date(iso).toLocaleString('ar-EG'); } }
+    function fmtTime(iso){ try{ return new Date(iso).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}); }catch{ return ''; } }
     function cssVar(name, fb) {
         const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         return v || fb;
@@ -1497,6 +1501,12 @@
         return '';
     }
     function canManageOrders(){ return sessionRole==='admin' || sessionRole==='worker'; }
+    const wording={
+      admin:{ orders:'📦 الطلبات (الكل)', ordersEmpty:'لا توجد طلبات حتى الآن', account:'👑 لوحة المدير', fav:'المفضلة (الكل)', profile:'ملف المدير'},
+      worker:{ orders:'📋 طلبات اليوم', ordersEmpty:'لا توجد طلبات اليوم', account:'👷 حساب العامل', fav:'المفضلة', profile:'ملفي'},
+      customer:{ orders:'📦 طلباتي', ordersEmpty:'لم تطلب بعد', account:'👤 حسابي', fav:'مفضلتي', profile:'ملفي'}
+    };
+    function w(key){ return (wording[sessionRole]||wording.customer)[key] || key; }
 
     // ===== SETTINGS (بيانات المحل والإيصال) =====
     let settings = Object.assign(
@@ -1698,7 +1708,7 @@
         } else if(accTab==='orders'){
             const isMgr=canManageOrders();
             const list=isMgr ? invoices : myOrders;
-            if(!list.length) content='<div class="empty-state"><div class="icon">📦</div>لا توجد طلبات بعد<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">🏪 تسوق الآن</button></div>';
+            if(!list.length) content='<div class="empty-state"><div class="icon">📦</div>'+w('ordersEmpty')+'<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">🏪 تسوق الآن</button></div>';
             else content=list.slice().reverse().map(o=>{
                 const idx=invoices.indexOf(o);
                 const d=new Date(o.date);
@@ -1729,11 +1739,11 @@
                 }).join('')+'</div>';
             }
         }
-        av.innerHTML='<div class="landing-head" style="margin-bottom:24px"><span class="tag">حسابي</span><h2>مرحباً '+esc(me.display_name||me.name||me.u||sessionUser)+'</h2></div>'
+        av.innerHTML='<div class="landing-head" style="margin-bottom:24px"><span class="tag">'+w('account')+'</span><h2>مرحباً '+esc(me.display_name||me.name||me.u||sessionUser)+'</h2></div>'
             +'<div class="account-grid"><div class="account-nav">'
-            +'<button class="'+(accTab==='profile'?'active':'')+'" onclick="accTab=\'profile\';renderAccount()">👤 ملفي</button>'
-            +'<button class="'+(accTab==='orders'?'active':'')+'" onclick="accTab=\'orders\';renderAccount()">📦 طلباتي ('+myOrders.length+')</button>'
-            +'<button class="'+(accTab==='fav'?'active':'')+'" onclick="accTab=\'fav\';renderAccount()">❤️ المفضلة ('+favProducts.length+')</button>'
+            +'<button class="'+(accTab==='profile'?'active':'')+'" onclick="accTab=\'profile\';renderAccount()">👤 '+w('profile')+'</button>'
+            +'<button class="'+(accTab==='orders'?'active':'')+'" onclick="accTab=\'orders\';renderAccount()">'+w('orders')+' ('+(canManageOrders()?invoices.length:myOrders.length)+')</button>'
+            +'<button class="'+(accTab==='fav'?'active':'')+'" onclick="accTab=\'fav\';renderAccount()">'+w('fav')+' ('+favProducts.length+')</button>'
             +'<button onclick="logout()">🚪 خروج</button>'
             +'</div><div>'+content+'</div></div>';
     }
@@ -2194,7 +2204,6 @@
     }
     function showReceiptPreview(inv, backToCart) {
         const body = document.getElementById('modalBody');
-        const d = new Date(inv.date);
         const rows = inv.items.map(it =>
             '<tr><td>' + esc(it.name) + '</td><td style="text-align:center">' + it.qty + '</td><td>' + fmt(it.price) + '</td><td style="font-weight:800;color:var(--primary);text-align:left">' + fmt(it.qty * it.price) + '</td></tr>'
         ).join('');
@@ -2204,36 +2213,44 @@
         const saveBtn = backToCart ? '<button class="btn btn-primary" onclick="confirmSaveInvoice()">💾 حفظ</button>' : '';
         const invNo = inv.no ? '#' + String(inv.no).padStart(4, '0') : '';
         const subTotal = inv.subtotal !== undefined ? inv.subtotal : inv.total;
+        const qrData = JSON.stringify({no:inv.no||inv.id, total:inv.total, date:inv.date, customer:inv.customer, seller:inv.user, count:inv.items.length});
+        const dtFull = fmtDateTime(inv.date);
+        const receiptCore = (copyLabel)=>
+                '<div class="receipt-copy" style="padding:10px 0">' +
+                    '<div style="text-align:center;margin-bottom:10px"><div style="font-size:1.6rem;margin-bottom:2px">🧾</div><h2 style="font-size:1.3rem;margin:0">' + esc(settings.store) + '</h2>' +
+                    (settings.address ? '<div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px">' + esc(settings.address) + '</div>' : '') +
+                    (settings.phone ? '<div style="color:var(--text-muted);font-size:0.75rem;margin-top:1px">📞 ' + esc(settings.phone) + '</div>' : '') +
+                    '<div style="color:var(--text-muted);font-size:.78rem;margin-top:6px"><b>'+copyLabel+'</b> • فاتورة ' + invNo + '</div>' +
+                    '<div style="color:var(--text-muted);font-size:.75rem;margin-top:2px" title="'+esc(inv.date)+'">📅 ' + esc(dtFull) + ' • 👤 ' + esc(inv.customer) + '</div>' +
+                    '<div style="color:var(--text-muted);font-size:.72rem;margin-top:1px">البائع: ' + esc(inv.user || '—') + ' • ' + esc(inv.status||'قيد المعالجة') + '</div></div>' +
+                    '<table><tr><th>الصنف</th><th style="text-align:center">الكمية</th><th>السعر</th><th style="text-align:left">الإجمالي</th></tr>' + rows + '</table>' +
+                    '<div class="receipt-totals"><div class="rt-row"><span>الإجمالي الفرعي (' + inv.items.length + ' صنف)</span><span>' + fmt(subTotal) + '</span></div>' + (inv.discount > 0 ? '<div class="rt-row"><span>الخصم</span><span>−' + fmt(inv.discount) + '</span></div>' : '') + (inv.tax > 0 ? '<div class="rt-row"><span>الضريبة</span><span>' + fmt(inv.tax) + '</span></div>' : '') + '<div class="rt-row rt-grand"><span>الإجمالي</span><span>' + fmt(inv.total) + ' ج.م</span></div></div>' +
+                    '<div style="text-align:center;margin-top:12px"><div id="qrcode-'+esc(String(inv.no||'0'))+'" style="display:inline-block;padding:8px;background:#fff;border:1px solid var(--border);border-radius:12px"></div><div style="font-size:.68rem;color:var(--text-muted);margin-top:4px">امسح للتحقق • '+invNo+' • '+esc(dtFull)+'</div></div>' +
+                    (settings.footer ? '<div style="text-align:center;color:var(--text-muted);font-size:.75rem;margin-top:8px;font-weight:700">' + esc(settings.footer) + '</div>' : '') +
+                '</div>';
         body.innerHTML =
             '<div class="receipt" style="padding:10px 0">' +
-                '<div style="text-align:center;margin-bottom:14px">' +
-                    '<div style="font-size:2rem;margin-bottom:4px">🧾</div>' +
-                    '<h2 style="font-size:1.4rem;margin:0">' + esc(settings.store) + '</h2>' +
-                    (settings.address ? '<div style="color:var(--text-muted);font-size:0.78rem;margin-top:2px">' + esc(settings.address) + '</div>' : '') +
-                    (settings.phone ? '<div style="color:var(--text-muted);font-size:0.78rem;margin-top:1px">📞 ' + esc(settings.phone) + '</div>' : '') +
-                    '<div style="color:var(--text-muted);font-size:0.8rem;margin-top:6px">فاتورة بيع ' + invNo + ' · ' + d.toLocaleDateString('ar-EG') + ' ' + d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) + ' · ' + esc(inv.customer) + '</div>' +
-                    '<div style="color:var(--text-muted);font-size:0.75rem;margin-top:1px">البائع: ' + esc(inv.user || '—') + '</div>' +
-                '</div>' +
-                '<table>' +
-                    '<tr><th>الصنف</th><th style="text-align:center">الكمية</th><th>السعر</th><th style="text-align:left">الإجمالي</th></tr>' +
-                    rows +
-                '</table>' +
-                '<div class="receipt-totals">' +
-                    '<div class="rt-row"><span>الإجمالي الفرعي (' + inv.items.length + ' صنف)</span><span>' + fmt(subTotal) + '</span></div>' +
-                    (inv.discount > 0 ? '<div class="rt-row"><span>الخصم</span><span>−' + fmt(inv.discount) + '</span></div>' : '') +
-                    (inv.tax > 0 ? '<div class="rt-row"><span>الضريبة</span><span>' + fmt(inv.tax) + '</span></div>' : '') +
-                    '<div class="rt-row rt-grand"><span>الإجمالي</span><span>' + fmt(inv.total) + ' ج.م</span></div>' +
-                '</div>' +
-                (settings.footer ? '<div style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:10px;font-weight:700">' + esc(settings.footer) + '</div>' : '') +
-                '<div class="modal-actions" style="margin-top:24px">' +
-                    backBtn +
-                    '<div style="display:flex;gap:8px">' +
-                        '<button class="btn btn-outline" onclick="printReceipt()">🖨️ طباعة</button>' +
-                        saveBtn +
-                    '</div>' +
-                '</div>' +
+                receiptCore('نسخة العميل') +
+                '<div style="border-top:2px dashed var(--border);margin:18px 0;position:relative"><span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--bg-card);padding:0 10px;font-size:.7rem;color:var(--text-muted)">✂️ قص</span></div>' +
+                receiptCore('نسخة المحل — '+esc(settings.store)) +
+                '<div class="modal-actions no-print" style="margin-top:22px">' + backBtn + '<div style="display:flex;gap:8px"><button class="btn btn-outline" onclick="printReceipt()">🖨️ طباعة نسختين</button><button class="btn btn-outline" onclick="if(navigator.share) navigator.share({title:\'فاتورة '+invNo+'\', text:qrData}).catch(()=>{})">📤 مشاركة</button>' + saveBtn + '</div></div>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
+        setTimeout(()=>{
+            try{
+                const el=document.getElementById('qrcode-'+String(inv.no||'0'));
+                const el2=document.querySelectorAll('[id^=\"qrcode-\"]')[1];
+                [el, el2].forEach(e=>{
+                    if(e && window.QRCode){
+                        e.innerHTML='';
+                        new QRCode(e, {text:qrData, width:110, height:110, correctLevel:QRCode.CorrectLevel.H});
+                    } else if(e){
+                        // fallback: صورة من qrserver
+                        e.innerHTML='<img src=\"https://api.qrserver.com/v1/create-qr-code/?size=110x110&data='+encodeURIComponent(qrData)+'\" width=\"110\" height=\"110\" style=\"display:block\">';
+                    }
+                });
+            }catch{}
+        }, 120);
     }
     function confirmSaveInvoice() {
         if (!pendingInvoice) return;
@@ -2274,13 +2291,13 @@
             let html = '<h2>📋 سجل <span class="accent">الفواتير</span> (' + invoices.length + ')</h2><div class="inv-history">';
             let sorted = [...invoices].reverse();
             sorted.forEach((inv, i) => {
-                let d = new Date(inv.date);
-                let dateStr = d.toLocaleDateString('ar-EG');
+                let dateStr = fmtDateTime(inv.date);
                 const invNo = inv.no ? '#' + String(inv.no).padStart(4, '0') : '#' + String(invoices.length - i).padStart(4, '0');
+                const st=inv.status||'قيد المعالجة';
                 html +=
                     '<div class="inv-hist-item" onclick="toggleInvoiceDetail(this)">' +
                         '<div class="inv-hi-top">' +
-                            '<span><strong>' + invNo + '</strong> · ' + dateStr + ' · ' + esc(inv.customer) + (inv.user ? ' · 👷 ' + esc(inv.user) : '') + '</span>' +
+                            '<span><strong>' + invNo + '</strong> · <span title="'+esc(inv.date)+'">'+esc(dateStr)+'</span> · ' + esc(inv.customer) + (inv.user ? ' · 👷 ' + esc(inv.user) : '') + ' <span class="status '+statusClass(st)+'" style="font-size:.68rem;padding:2px 8px">'+esc(st)+'</span></span>' +
                             '<span style="font-weight:800;color:var(--primary)">' + fmt(inv.total) + ' ج.م</span>' +
                         '</div>' +
                         '<div class="inv-hi-items" style="display:none">' +
@@ -3205,6 +3222,7 @@
                 '</div></div>' +
             '<div class="dash-card"><h3>📊 توزيع المخزون حسب الأقسام</h3><canvas id="chartStock"></canvas></div>' +
             '<div class="dash-card"><h3>📈 مبيعات آخر 7 أيام</h3><canvas id="chartSales"></canvas></div>' +
+            '<div class="dash-card"><h3>📊 حالة الطلبات</h3><canvas id="chartStatus"></canvas></div>' +
             (topSellers.length > 0 ?
             '<div class="dash-card"><h3>👷 مبيعات البائعين</h3><div class="dash-top-list">' +
                 topSellers.map(([name, s], i) =>
@@ -3230,6 +3248,7 @@
             '</div></div>';
         drawStockChart(catData);
         drawSalesChart();
+        drawStatusChart();
     }
     function drawStockChart(catData) {
         let canvas = document.getElementById('chartStock');
@@ -3313,6 +3332,26 @@
                 ctx.font = '10px Tajawal';
             }
         });
+    }
+    function drawStatusChart(){
+        const c=document.getElementById('chartStatus'); if(!c) return;
+        if(window.Chart){
+            try{
+                const counts={}; ORDER_STATUSES.forEach(s=>counts[s]=0); invoices.forEach(inv=>{ const s=inv.status||'قيد المعالجة'; counts[s]=(counts[s]||0)+1; });
+                const labels=Object.keys(counts).filter(k=>counts[k]>0); const data=labels.map(k=>counts[k]);
+                if(!labels.length){ const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.fillStyle='#9fb3bd'; ctx.textAlign='center'; ctx.font='14px Tajawal'; ctx.fillText('لا توجد طلبات بعد', c.width/2, 90); return; }
+                const colors={'قيد المعالجة':'#f5b62c','في الطريق':'#1a7fa0','تم التوصيل':'#00c9a7','تم رفض الطلب':'#e5484d','ملغي':'#9fb3bd'};
+                if(c._chart) try{c._chart.destroy();}catch{}
+                c._chart=new Chart(c, {type:'doughnut', data:{labels, datasets:[{data, backgroundColor:labels.map(l=>colors[l]||'#63757f'), borderWidth:2, borderColor:'#fff'}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{font:{family:'Tajawal'}, padding:12, usePointStyle:true}}}}});
+                c.style.height='200px';
+                return;
+            }catch(e){}
+        }
+        // fallback: نص بسيط
+        const ctx=c.getContext('2d'); const w=c.width=c.parentElement.clientWidth-40, h=c.height=120; ctx.clearRect(0,0,w,h);
+        const counts={}; ORDER_STATUSES.forEach(s=>counts[s]=0); invoices.forEach(inv=>{ counts[inv.status||'قيد المعالجة']++; });
+        ctx.fillStyle='#63757f'; ctx.textAlign='center'; ctx.font='12px Tajawal';
+        let x=20; Object.entries(counts).filter(([,v])=>v>0).forEach(([k,v])=>{ ctx.fillText(k+':'+v, x, 60); x+=90; });
     }
 
     // ===== هجرة البيانات من الإصدار القديم =====
@@ -3539,6 +3578,8 @@
         setItemDisplay('burger-import', p.exp ? 'flex' : 'none');
         setItemDisplay('burger-settings', p.dash ? 'flex' : 'none');
         setItemDisplay('burger-users', p.users ? 'flex' : 'none');
+        const bacc=document.getElementById('burger-account'); if(bacc) bacc.textContent = (sessionRole==='admin'?'📦 الطلبات': sessionRole==='worker'?'📋 طلبات اليوم':'👤 حسابي');
+        const navAcc=document.querySelector('.nav-links-desktop a[data-route="account"]'); if(navAcc) navAcc.textContent = (sessionRole==='admin'?'الطلبات': sessionRole==='worker'?'طلبات اليوم':'حسابي');
         setCloudStatus(cloudStatus);
         measureHeader();
         setView(currentView);

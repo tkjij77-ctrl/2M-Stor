@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v28 (إصلاح إزالة الصورة)
-const CACHE = 'al-sayed-v28';
+// Service Worker — 2M-Stor v29 (وقت مفصل + فاتورة QR نسختين + رسم حالة + لغة دور)
+const CACHE = 'al-sayed-v29';
 const URLS = [
   'index.html',
   'manifest.json',
