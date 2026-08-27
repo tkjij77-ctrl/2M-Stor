@@ -682,7 +682,14 @@
             padding: 8px 16px; border-radius: 10px; font-weight: 700;
             cursor: pointer; font-size: 1rem; font-family: inherit;
         }
-        .cart-body { padding: 16px 20px 40px; max-width: 700px; margin: 0 auto; width: 100%; }
+        .cart-body { padding: 16px 20px 40px; max-width: 1100px; margin: 0 auto; width: 100%; }
+        .cart-layout{ display:grid; grid-template-columns:1fr 360px; gap:30px; align-items:start; }
+        .cart-lines{ display:flex; flex-direction:column; gap:14px; }
+        .summary{ background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; position:sticky; top:100px; box-shadow:var(--shadow-sm); }
+        .summary h3{ font-size:1.1rem; font-weight:900; margin-bottom:16px; }
+        .coupon{ display:flex; gap:8px; margin:14px 0; }
+        .coupon input{ flex:1; padding:11px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-soft); color:var(--text-main); font-family:inherit; font-weight:600; }
+        @media(max-width:900px){ .cart-layout{ grid-template-columns:1fr; } .summary{ position:static; } }
         .cart-item {
             display: flex; align-items: center; gap: 10px;
             background: var(--bg-card); border: 1px solid var(--border-light);
@@ -1846,9 +1853,10 @@
        let relatedHtml = related.length ? '<div class="product-related-title">📦 منتجات من نفس الصنف — '+esc(cat.name)+'</div><div class="product-related">'+related.map(r=>{ let rIdx=cat.items.indexOf(r); let rImg=r.img?'<img src="'+r.img+'" loading="lazy" decoding="async">':'📦'; let rQs=getQs(r); return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+(rQs>0?'✅ متاح '+rQs:'❌ غير متوفر')+'</div></div></div>'; }).join('')+'</div>' : '';
       document.getElementById('productDetailCard').innerHTML =
         '<div style="padding:12px 18px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-card); z-index:2"><button onclick="closeProductDetail()" style="background:var(--bg-soft); border:1px solid var(--border); width:40px; height:40px; border-radius:50%; cursor:pointer">←</button><span style="font-weight:800">تفاصيل المنتج</span><span style="margin-right:auto; font-size:0.75rem; color:var(--text-muted)">'+esc(cat.name)+'</span></div>' +
+        '<div class="breadcrumb" style="padding:10px 18px;color:var(--text-muted);font-size:.88rem;background:var(--bg-soft);border-bottom:1px solid var(--border)"><a onclick="setView(\'home\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">الرئيسية</a> / <a onclick="setView(\'shop\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">المتجر</a> / '+esc(item.n)+'</div>' +
         '<div class="amz-layout">' +
           '<div class="amz-gallery"><div class="amz-main-img" id="amzMainWrap">'+mainImg+'</div><div class="amz-thumbs">'+thumbsHtml+'</div></div>' +
-          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')+'</div><div class="amz-rating">'+stars+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">السعر يشمل الضريبة — شحن مجاني فوق 500 ج.م</div>'+bullets+'<div class="amz-secure">✅ إرجاع مجاني خلال 14 يوم · 🔒 دفع آمن</div></div>' +
+          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')+'</div><div class="amz-rating">'+stars+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">السعر يشمل الضريبة — شحن مجاني فوق 500 ج.م</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700"><div>🚚 توصيل خلال 24 ساعة</div><div>📦 المتوفر: '+qs+' قطعة · المخزن: '+q+'</div><div>🔄 إرجاع مجاني خلال 14 يوم</div></div><div class="amz-secure">✅ إرجاع مجاني خلال 14 يوم · 🔒 دفع آمن</div></div>' +
           buyBox +
           '<div class="amz-details"><div style="background:var(--bg-soft); padding:14px; border-radius:12px; font-size:0.85rem; line-height:1.8"><b>تفاصيل إضافية:</b><br>🏷️ الفئة: '+esc(cat.name)+'<br>💰 السعر الرقمي: '+price+' ج.م<br>📦 المخزن: '+q+' · المعروض: '+qs+'<br>⚠️ تنبيه عند: '+getMin(item)+'</div>'+relatedHtml+'</div>' +
         '</div>';
@@ -1896,6 +1904,24 @@
             return it ? s + itemPrice(it) * x.qty : s;
         }, 0);
     }
+    function applyCoupon(){
+        const inp=document.getElementById('couponCode');
+        const v=inp?inp.value.trim():'';
+        const dEl=document.getElementById('cart-discount');
+        if(v==='2M10'){
+            localStorage.setItem('al_sayed_coupon','2M10');
+            if(dEl) dEl.value='10%';
+            toast('✅ كوبون 10% تم تطبيقه');
+        } else if(v===''){
+            localStorage.removeItem('al_sayed_coupon');
+            if(dEl) dEl.value='';
+            toast('تم إزالة الكوبون');
+        } else {
+            toast('⚠️ كود غير صحيح — جرب 2M10');
+            return;
+        }
+        recalcCart();
+    }
     function cartTotals() {
         const subtotal = cartSubtotal();
         const dEl = document.getElementById('cart-discount');
@@ -1905,9 +1931,14 @@
             if (dv.endsWith('%')) discount = subtotal * (parseFloat(dv) || 0) / 100;
             else discount = parseFloat(dv) || 0;
         }
+        // كوبون 2M10 يعطي 10% إذا لم يكتب خصم يدوي
+        const coupon=document.getElementById('couponCode');
+        if(coupon && coupon.value.trim()==='2M10' && (!dEl || !dEl.value.trim())) discount = subtotal*0.10;
+        else if(localStorage.getItem('al_sayed_coupon')==='2M10' && (!dEl || !dEl.value.trim())) discount = subtotal*0.10;
         discount = Math.max(0, Math.min(discount, subtotal));
         const tax = (subtotal - discount) * (settings.tax || 0) / 100;
-        return { subtotal: subtotal, discount: discount, tax: tax, total: subtotal - discount + tax };
+        const shipping = subtotal > 200 ? 0 : (subtotal>0?20:0);
+        return { subtotal: subtotal, discount: discount, tax: tax, shipping: shipping, total: subtotal - discount + tax + shipping };
     }
     function recalcCart() {
         const t = cartTotals();
@@ -1915,9 +1946,11 @@
         const dis = document.getElementById('cart-discount-val');
         const tax = document.getElementById('cart-tax-val');
         const tot = document.getElementById('cart-total-val');
+        const ship = document.getElementById('cart-shipping');
         if (sub) sub.textContent = fmt(t.subtotal) + ' ج.م';
         if (dis) dis.textContent = t.discount > 0 ? '−' + fmt(t.discount) + ' ج.م' : '—';
         if (tax) tax.textContent = t.tax > 0 ? fmt(t.tax) + ' ج.م' : '—';
+        if (ship) ship.textContent = t.shipping ? fmt(t.shipping) + ' ج.م' : 'مجاني';
         if (tot) tot.textContent = fmt(t.total) + ' ج.م';
         document.getElementById('cartFabTotal').textContent = cartCount() ? fmt(cartTotals().total) + ' ج.م' : 'السلة';
     }
@@ -1977,21 +2010,26 @@
                     '<button class="cart-remove" onclick="removeFromCart(' + i + ')">✕</button>' +
                 '</div>';
         });
-        html += '<div class="cart-total-row"><span>الإجمالي (' + cartCount() + ' قطعة)</span><span>' + fmt(total) + ' ج.م</span></div>';
+        let shipping = total > 200 ? 0 : 20;
+        let _couponApplied = localStorage.getItem('al_sayed_coupon')==='2M10';
+        let linesHtml = html;
+        // نبني ملخص الطلب مع شحن وكوبون
+        let summaryHtml='';
         if (can('invoice')) {
-            html +=
-                '<div class="cart-footer">' +
-                    '<div class="form-group" style="margin-top:12px"><label>👤 اسم العميل</label>' +
+            summaryHtml =
+                '<div class="summary">' +
+                    '<h3>ملخص الطلب</h3>' +
+                    '<div class="form-group" style="margin-top:6px"><label>👤 اسم العميل</label>' +
                         '<input type="text" id="cart-customer" placeholder="نقدي" value="' + esc(prevCustomer || '') + '">' +
                     '</div>' +
-                    '<div class="form-group"><label>🏷️ الخصم (ج.م أو % — مثلاً 10 أو 5%)</label>' +
-                        '<input type="text" id="cart-discount" placeholder="0" oninput="recalcCart()">' +
-                    '</div>' +
+                    '<div class="coupon"><input id="couponCode" placeholder="كود الخصم (جرب 2M10)" value="'+(_couponApplied?'2M10':'')+'"><button class="btn btn-outline" style="padding:11px 16px;white-space:nowrap" onclick="applyCoupon()">تطبيق</button></div>' +
                     '<div class="cart-totals">' +
-                        '<div class="ct-row"><span>الإجمالي الفرعي</span><span id="cart-subtotal">—</span></div>' +
+                        '<div class="ct-row"><span>المجموع الفرعي</span><span id="cart-subtotal">—</span></div>' +
                         '<div class="ct-row"><span>الخصم</span><span id="cart-discount-val">—</span></div>' +
+                        '<div class="ct-row"><span>الشحن</span><span id="cart-shipping">'+(shipping ? fmt(shipping)+' ج.م' : 'مجاني')+'</span></div>' +
                         '<div class="ct-row' + (settings.tax > 0 ? '' : ' style="display:none"') + '"><span>الضريبة' + (settings.tax > 0 ? ' (' + settings.tax + '%)' : '') + '</span><span id="cart-tax-val">—</span></div>' +
                     '</div>' +
+                    '<div class="form-group" style="margin-top:10px"><label>🏷️ خصم إضافي (ج.م أو %)</label><input type="text" id="cart-discount" placeholder="0" oninput="recalcCart()"></div>' +
                     '<div class="cart-total-row" style="margin-top:0;border:none;padding-top:6px"><span>الإجمالي النهائي</span><span id="cart-total-val">—</span></div>' +
                     '<div class="modal-actions" style="justify-content:space-between;margin-top:10px">' +
                         '<button class="btn btn-outline" onclick="clearCart()">🗑️ إفراغ</button>' +
@@ -1999,12 +2037,16 @@
                     '</div>' +
                 '</div>';
         } else {
-            html +=
+            summaryHtml =
+                '<div class="summary"><h3>ملخص الطلب</h3>' +
+                '<div class="ct-row"><span>المجموع الفرعي</span><span>'+fmt(total)+' ج.م</span></div>' +
+                '<div class="ct-row"><span>الشحن</span><span>'+(shipping ? fmt(shipping)+' ج.م' : 'مجاني')+'</span></div>' +
+                '<div class="ct-row" style="font-weight:900;color:var(--primary)"><span>الإجمالي</span><span>'+fmt(total+shipping)+' ج.م</span></div>' +
                 '<div style="text-align:center;margin-top:14px;font-size:0.85rem;font-weight:800;color:var(--text-muted)">👷 أكمل عملية الشراء عند العامل لطباعة الفاتورة</div>' +
-                '<div class="modal-actions" style="justify-content:center;margin-top:12px">' +
-                    '<button class="btn btn-outline" onclick="clearCart()">🗑️ تفريغ السلة</button>' +
+                '<div class="modal-actions" style="justify-content:center;margin-top:12px"><button class="btn btn-outline" onclick="clearCart()">🗑️ تفريغ السلة</button></div>' +
                 '</div>';
         }
+        html = '<div class="cart-layout"><div class="cart-lines">'+linesHtml+'</div>'+summaryHtml+'</div>';
         body.innerHTML = html;
         if (can('invoice')) recalcCart();
     }
