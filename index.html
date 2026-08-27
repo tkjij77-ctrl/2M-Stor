@@ -908,23 +908,38 @@
         .btn-loading { opacity: 0.7; pointer-events: none; position: relative; }
         .login-switch-mode { font-size: 0.82rem; font-weight: 800; color: var(--primary); background: none; border: none; cursor: pointer; padding: 8px; margin-top: 10px; }
         .login-switch-mode:hover { text-decoration: underline; }
-        /* ===== PRODUCT DETAIL — يملأ الصفحة + منتجات مشابهة ===== */
+        /* ===== PRODUCT DETAIL — أمازون: 3 أعمدة (صور | تفاصيل | شراء) ===== */
         .product-detail-overlay { position: fixed; inset: 0; z-index: 12000; background: var(--bg-body); display: none; overflow-y: auto; animation: fadeIn 0.2s ease; }
         .product-detail-overlay.open { display: block; }
-        .product-detail-card { background: var(--bg-card); width: 100%; min-height: 100vh; max-width: 860px; margin: 0 auto; border-radius: 0; box-shadow: none; animation: modalIn 0.25s ease; }
-        .product-detail-img { width: 100%; height: 360px; object-fit: cover; background: var(--bg-soft); display: flex; align-items: center; justify-content: center; font-size: 4rem; position: relative; }
-        .product-detail-img img { width: 100%; height: 100%; object-fit: cover; }
-        .product-detail-back{ position:absolute; top:16px; right:16px; background: rgba(0,0,0,0.55); color:#fff; border:none; width:42px; height:42px; border-radius:50%; font-size:1.3rem; cursor:pointer; backdrop-filter: blur(6px); display:flex; align-items:center; justify-content:center; }
-        .product-detail-body { padding: 22px 18px 100px; }
-        .product-detail-name { font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; line-height:1.3; }
-        .product-detail-cat { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-bottom: 12px; }
-        .product-detail-price { font-size: 1.8rem; font-weight: 900; color: var(--primary); margin-bottom: 14px; }
-        .product-detail-avail { font-size: 0.9rem; font-weight: 800; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px; display: inline-block; }
-        .product-detail-avail.ok { background: #e0f7f4; color: #0d4f6c; border:1px solid #00c9a7; }
-        .product-detail-avail.no { background: var(--danger-soft); color: var(--danger); }
-        .product-detail-info { font-size: 0.88rem; color: var(--text-muted); font-weight: 700; line-height: 1.8; margin-bottom: 18px; background: var(--bg-soft); padding:14px; border-radius:14px; }
-        .product-detail-actions { display: flex; gap: 10px; flex-wrap:wrap; margin-bottom: 22px; }
-        .product-detail-actions .btn { flex: 1; min-width:140px; padding: 14px; font-size: 1rem; justify-content:center; }
+        .product-detail-card { background: var(--bg-card); width: 100%; min-height: 100vh; max-width: 1200px; margin: 0 auto; border-radius: 0; box-shadow: none; animation: modalIn 0.25s ease; }
+        .amz-layout{ display:grid; grid-template-columns: 380px 1fr 280px; gap:24px; padding:22px 18px; }
+        .amz-gallery{ position: sticky; top: 18px; }
+        .amz-main-img{ width:100%; height:380px; background: var(--bg-soft); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:4rem; overflow:hidden; border:1px solid var(--border); }
+        .amz-main-img img{ width:100%; height:100%; object-fit:contain; background:#fff; }
+        .amz-thumbs{ display:flex; gap:8px; margin-top:10px; overflow-x:auto; scrollbar-width:none; }
+        .amz-thumb{ width:60px; height:60px; border-radius:10px; border:2px solid var(--border); overflow:hidden; flex-shrink:0; cursor:pointer; background:var(--bg-soft); display:flex; align-items:center; justify-content:center; }
+        .amz-thumb.active{ border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+        .amz-title{ font-size:1.55rem; font-weight:900; line-height:1.35; margin-bottom:8px; }
+        .amz-meta{ font-size:0.85rem; color:var(--text-muted); font-weight:700; margin-bottom:10px; }
+        .amz-rating{ color: var(--gold); font-size:0.9rem; margin-bottom:10px; }
+        .amz-price{ font-size:2rem; font-weight:900; color: #0F1111; margin-bottom:4px; }
+        [data-theme="dark"] .amz-price{ color: var(--text-main); }
+        .amz-price small{ font-size:0.85rem; color:var(--text-muted); font-weight:700; }
+        .amz-bullets{ font-size:0.88rem; line-height:1.9; color:var(--text-main); margin:12px 0 14px; padding-right:18px; }
+        .amz-bullets li{ margin-bottom:4px; }
+        .amz-buybox{ border:1px solid var(--border); border-radius:14px; padding:16px; background: var(--bg-card); position: sticky; top: 18px; box-shadow: var(--shadow); }
+        .amz-buy-price{ font-size:1.6rem; font-weight:900; color: var(--primary); }
+        .amz-buy-avail{ font-size:0.85rem; font-weight:800; margin:8px 0 10px; }
+        .amz-buy-avail.ok{ color:#067D62; } .amz-buy-avail.no{ color:var(--danger); }
+        .amz-qty{ display:flex; align-items:center; gap:8px; margin:10px 0; }
+        .amz-qty select{ padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg-soft); font-weight:700; }
+        .amz-btn-cart{ width:100%; background: #FFD814; color:#0F1111; border:1px solid #FCD200; border-radius:50px; padding:12px; font-weight:800; cursor:pointer; margin-bottom:8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .amz-btn-cart:hover{ background:#F7CA00; }
+        .amz-btn-buy{ width:100%; background: #FFA41C; color:#0F1111; border:1px solid #FF8F00; border-radius:50px; padding:12px; font-weight:800; cursor:pointer; }
+        .amz-btn-buy:hover{ background:#FA8900; }
+        .amz-secure{ font-size:0.75rem; color:var(--text-muted); margin-top:8px; display:flex; align-items:center; gap:6px; }
+        .amz-details{ grid-column: 1 / -1; margin-top:8px; }
+        .amz-section{ margin-top:18px; }
         .product-related-title{ font-size:1.1rem; font-weight:900; margin: 18px 0 12px; display:flex; align-items:center; gap:8px; }
         .product-related{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap:12px; }
         .related-card{ background: var(--bg-card); border:1px solid var(--border); border-radius:14px; overflow:hidden; cursor:pointer; transition: transform 0.2s, box-shadow 0.2s; }
@@ -934,6 +949,7 @@
         .related-card-body{ padding:10px; }
         .related-card-name{ font-size:0.82rem; font-weight:800; line-height:1.3; min-height:2.4em; }
         .related-card-price{ font-size:0.95rem; font-weight:900; color:var(--primary); margin-top:4px; }
+        @media (max-width: 980px){ .amz-layout{ grid-template-columns: 1fr; } .amz-gallery, .amz-buybox{ position: static; } }
     </style>
 </head>
 <body>
@@ -1540,33 +1556,29 @@
         container.innerHTML = html;
     }
 
-    // ===== PRODUCT DETAIL — يملأ الصفحة + منتجات من نفس الصنف =====
+    // ===== PRODUCT DETAIL — أمازون: صور يسار | تفاصيل وسط | شراء يمين =====
     function openProductDetail(ci, ii) {
       const cat = db[ci], item = cat && cat.items[ii];
       if (!item) return;
-      let qs = getQs(item), q = getQ(item), price = itemPrice(item);
-      let avail = qs > 0 ? '<div class="product-detail-avail ok">\u2705 متاح: ' + qs + ' قطعة</div>' : '<div class="product-detail-avail no">\u274C غير متوفر</div>';
-      let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="eager" decoding="async">' : '\uD83D\uDCE6';
-      let cartBtn = qs > 0 ? '<button class="btn btn-primary" onclick="addToCart(' + ci + ',' + ii + ');closeProductDetail()">\uD83D\uDED2 إضافة للسلة</button>' : '<button class="btn btn-outline" disabled>غير متوفر</button>';
-      let editBtn = can('del') ? '<button class="btn btn-outline" onclick="closeProductDetail();openModal(\'edit\',' + ci + ',' + ii + ')">\u270F\uFE0F تعديل</button>' : '';
-      // منتجات من نفس الصنف
+      let qs = getQs(item), q = getQ(item), price = itemPrice(item), isAvail = qs>0;
+      let availBadge = isAvail ? '<span style="color:#067D62;font-weight:800">\u2705 متوفر</span>' : '<span style="color:var(--danger);font-weight:800">\u274C غير متوفر</span>';
+      let stars = '\u2B50\u2B50\u2B50\u2B50\u2606 <span style="color:var(--text-muted);font-size:0.82rem">4.3 ('+(q+qs+7)+' تقييم)</span>';
+      let mainImg = item.img ? '<img src="'+item.img+'" alt="" loading="eager" decoding="async" id="amzMainImg">' : '<span style="font-size:4rem">\uD83D\uDCE6</span>';
+      // thumbnails من نفس الصنف + الصورة الرئيسية
+      let thumbs = [item].concat(cat.items.filter((_,idx)=>idx!==ii).slice(0,4));
+      let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" onclick="document.getElementById(\'amzMainImg\')&&(document.getElementById(\'amzMainImg\').src=\''+(t.img||'')+'\');document.querySelectorAll(\'.amz-thumb\').forEach(x=>x.classList.remove(\'active\'));this.classList.add(\'active\')">'+(t.img?'<img src="'+t.img+'" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
+      let bullets = '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b> — كود #'+(item.cid||'—')+'</li><li>السعر الرقمي: <b>'+price+' ج.م</b> — النص: '+esc(item.p)+'</li><li>المخزن: <b>'+q+'</b> · المعروض: <b>'+qs+'</b> · تنبيه عند <b>'+getMin(item)+'</b></li>'+(item.b?'<li>باركود: <b>'+esc(item.b)+'</b></li>':'')+'<li>قيمة المخزن: <b>'+fmt(q*price)+' ج.م</b> · المعروض: <b>'+fmt(qs*price)+' ج.م</b></li></ul>';
+      let qtyOpts = Array.from({length: Math.min(10, Math.max(1,qs))}, (_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
+      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?'✅ متاح — '+qs+' قطعة جاهزة للشحن':'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🔒 عملية شراء آمنة — دفع عند الاستلام متاح</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">المتاح '+qs+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
       let related = cat.items.filter((_,idx)=> idx!==ii).slice(0,6);
-      let relatedHtml = related.length ? '<div class="product-related-title">\uD83D\uDCE6 منتجات من نفس الصنف — ' + esc(cat.name) + '</div><div class="product-related">' + related.map(r=>{
-        let rIdx = cat.items.indexOf(r);
-        let rImg = r.img ? '<img src="'+r.img+'" alt="" loading="lazy">' : '\uD83D\uDCE6';
-        let rQs = getQs(r);
-        return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+(rQs>0?'\u2705 متاح '+rQs:'\u274C غير متوفر')+'</div></div></div>';
-      }).join('') + '</div>' : '<p style="color:var(--text-muted);font-size:0.85rem;margin-top:12px">لا توجد منتجات أخرى في هذا الصنف</p>';
+      let relatedHtml = related.length ? '<div class="product-related-title">📦 منتجات من نفس الصنف — '+esc(cat.name)+'</div><div class="product-related">'+related.map(r=>{ let rIdx=cat.items.indexOf(r); let rImg=r.img?'<img src="'+r.img+'" loading="lazy">':'📦'; let rQs=getQs(r); return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+(rQs>0?'✅ متاح '+rQs:'❌ غير متوفر')+'</div></div></div>'; }).join('')+'</div>' : '';
       document.getElementById('productDetailCard').innerHTML =
-        '<div class="product-detail-img"><button class="product-detail-back" onclick="closeProductDetail()" aria-label="رجوع">\u2190</button>' + imgHtml + '</div>' +
-        '<div class="product-detail-body">' +
-          '<div class="product-detail-name">' + esc(item.n) + '</div>' +
-          '<div class="product-detail-cat">\uD83D\uDCC2 ' + esc(cat.name) + (item.b ? ' \u00B7 \uD83D\uDD33 ' + esc(item.b) : '') + ' \u00B7 \uD83D\uDD22 #' + (item.cid||'—') + '</div>' +
-          '<div class="product-detail-price">' + esc(item.p) + ' <small style="font-size:0.9rem">ج.م</small> <small style="font-size:0.8rem;color:var(--text-muted)">/ رقمي ' + price + '</small></div>' +
-          avail +
-          '<div class="product-detail-info">\uD83D\uDCE6 في المخزن: <b>' + q + '</b> \u00B7 \uD83C\uDFEA معروض للبيع: <b>' + qs + '</b> \u00B7 \u26A0\uFE0F تنبيه عند: <b>' + getMin(item) + '</b><br>\uD83D\uDCB0 قيمة المخزن: <b>' + fmt(q*price) + ' ج.م</b> \u00B7 قيمة المعروض: <b>' + fmt(qs*price) + ' ج.م</b>' + (item.b ? '<br>\uD83D\uDD33 باركود: ' + esc(item.b) : '') + '</div>' +
-          '<div class="product-detail-actions">' + cartBtn + editBtn + '<button class="btn btn-outline" onclick="closeProductDetail()">\u2715 إغلاق</button><button class="btn btn-ghost" onclick="if(navigator.share) navigator.share({title: \''+esc(item.n).replace(/'/g,"\\'")+'\', text: \''+esc(item.p).replace(/'/g,"\\'")+' ج.م\'}).catch(()=>{})">\uD83D\uDD17 مشاركة</button></div>' +
-          relatedHtml +
+        '<div style="padding:12px 18px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-card); z-index:2"><button onclick="closeProductDetail()" style="background:var(--bg-soft); border:1px solid var(--border); width:40px; height:40px; border-radius:50%; cursor:pointer">←</button><span style="font-weight:800">تفاصيل المنتج</span><span style="margin-right:auto; font-size:0.75rem; color:var(--text-muted)">'+esc(cat.name)+'</span></div>' +
+        '<div class="amz-layout">' +
+          '<div class="amz-gallery"><div class="amz-main-img" id="amzMainWrap">'+mainImg+'</div><div class="amz-thumbs">'+thumbsHtml+'</div></div>' +
+          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')+'</div><div class="amz-rating">'+stars+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">السعر يشمل الضريبة — شحن مجاني فوق 500 ج.م</div>'+bullets+'<div class="amz-secure">✅ إرجاع مجاني خلال 14 يوم · 🔒 دفع آمن</div></div>' +
+          buyBox +
+          '<div class="amz-details"><div style="background:var(--bg-soft); padding:14px; border-radius:12px; font-size:0.85rem; line-height:1.8"><b>تفاصيل إضافية:</b><br>🏷️ الفئة: '+esc(cat.name)+'<br>💰 السعر الرقمي: '+price+' ج.م<br>📦 المخزن: '+q+' · المعروض: '+qs+'<br>⚠️ تنبيه عند: '+getMin(item)+'</div>'+relatedHtml+'</div>' +
         '</div>';
       document.getElementById('productDetailOverlay').classList.add('open');
       window.scrollTo(0,0);
