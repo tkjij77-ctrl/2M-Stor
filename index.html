@@ -1092,6 +1092,7 @@
         </nav>
         <div class="header-actions">
             <span class="role-chip" id="roleChip"></span>
+            <button id="favHeaderBtn" class="burger-btn" onclick="setView('shop'); shopFavOnly=true; setTimeout(()=>{const cb=document.getElementById('favOnly'); if(cb) cb.checked=true; renderAll(); updateFavBadge();},80)" title="المفضلة" aria-label="المفضلة" style="position:relative">❤️<span id="favCount" style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;min-width:18px;height:18px;border-radius:50%;display:none;place-items:center;font-size:.65rem;font-weight:800;padding:0 4px;box-shadow:0 2px 6px rgba(0,0,0,.2)">0</span></button>
             <button id="lockBtn" class="burger-btn" onclick="quickLock()" title="قفل الكاونتر السريع" aria-label="قفل الكاونتر" style="display:none">🔒</button>
             <button id="themeToggle" class="burger-btn" onclick="toggleDarkMode()" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي">🌙</button>
             <button id="burgerBtn" class="burger-btn" aria-label="القائمة">☰</button>
@@ -1265,6 +1266,9 @@
     let currentCat = 'all';
     let currentView = 'home';
     let shopPageSize = 40, shopLimit = 40;
+    let shopSort = 'default';
+    let shopFavOnly = false;
+    let favs = JSON.parse(localStorage.getItem('al_sayed_fav')||'[]');
     let searchDebounce = null;
     let editingCat = -1, editingIdx = -1;
     let invoiceCart = [];
@@ -1426,6 +1430,23 @@
             return safe.replace(re, m => '<span class="search-highlight">' + m + '</span>');
         } catch (e) { return safe; }
     }
+    function favKey(ci,ii){ return ci+':'+ii; }
+    function isFav(ci,ii){ return favs.includes(favKey(ci,ii)); }
+    function toggleFav(ci,ii){
+        const k=favKey(ci,ii);
+        if(favs.includes(k)) favs=favs.filter(x=>x!==k);
+        else favs.push(k);
+        try{ localStorage.setItem('al_sayed_fav', JSON.stringify(favs)); }catch(e){}
+        updateFavBadge();
+        renderAll();
+        toast(isFav(ci,ii)?'❤️ أُضيف للمفضلة':'💔 أُزيل من المفضلة');
+    }
+    function updateFavBadge(){
+        const el=document.getElementById('favCount');
+        if(el){ el.textContent=favs.length; el.style.display=favs.length?'grid':'none'; }
+        const fc=document.getElementById('favCountMobile');
+        if(fc){ fc.textContent=favs.length; fc.style.display=favs.length?'inline-flex':'none'; }
+    }
 
     // ===== SETTINGS (بيانات المحل والإيصال) =====
     let settings = Object.assign(
@@ -1478,14 +1499,20 @@
     }
     function renderFilterRow() {
         const row = document.getElementById('filterRow');
+        if (!row) return;
         if (currentView === 'stock') {
             row.innerHTML = '<select id="stockFilter" onchange="renderAll()">' +
                 '<option value="all">📋 الكل</option><option value="available">✅ متوفر</option>' +
                 '<option value="low">⚠️ منخفض</option><option value="out">❌ نافذ</option></select>';
+        } else if (currentView === 'shop') {
+            row.innerHTML = '<div class="shop-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
+                + '<select id="stockFilter" onchange="renderAll()"><option value="all">📋 الكل</option><option value="available">✅ متوفر</option><option value="out">❌ غير متوفر</option></select>'
+                + '<select id="sortSelect" onchange="shopSort=this.value;renderAll()"><option value="default">الترتيب الافتراضي</option><option value="qs-desc">المتاح: الأعلى</option><option value="price-asc">السعر: الأقل → الأعلى</option><option value="price-desc">السعر: الأعلى → الأقل</option><option value="name-asc">الاسم: أ→ي</option></select>'
+                + '<label style="display:flex;gap:6px;align-items:center;font-weight:800;font-size:.82rem;cursor:pointer;margin-right:auto"><input type="checkbox" id="favOnly" '+(shopFavOnly?'checked':'')+' onchange="shopFavOnly=this.checked;renderAll()"> ❤️ المفضلة فقط</label>'
+                + '</div>';
+            const ss=document.getElementById('sortSelect'); if(ss) ss.value=shopSort;
         } else {
-            row.innerHTML = '<select id="stockFilter" onchange="renderAll()">' +
-                '<option value="all">📋 الكل</option><option value="available">✅ متوفر</option>' +
-                '<option value="out">❌ غير متوفر</option></select>';
+            row.innerHTML='';
         }
     }
 
@@ -1734,19 +1761,41 @@
         document.getElementById('sectionTitle').innerHTML =
             '<span>🏪 ' + esc(title) + ' <span class="cat-count">' + items.length + '</span></span>' +
             '<span class="total-val">🛒 متاح: ' + fmt(availSum) + ' قطعة</span>';
+        // فلتر المفضلة
+        if(shopFavOnly){
+            items = items.filter(({ci,ii})=> isFav(ci,ii));
+            if(items.length===0){
+                let container2=document.getElementById('view-root');
+                if(container2) container2.classList.toggle('no-anim', !anim);
+                document.getElementById('sectionTitle').innerHTML='<span>❤️ المفضلة <span class="cat-count">0</span></span><span class="total-val">—</span>';
+                const cont=document.getElementById('view-root');
+                cont.innerHTML='<div class="empty-state"><div class="icon">❤️</div>لا توجد منتجات في المفضلة<br><button class="btn btn-outline" style="margin-top:12px" onclick="shopFavOnly=false;const cb=document.getElementById(\'favOnly\'); if(cb) cb.checked=false; renderAll()">عرض الكل</button></div>';
+                return;
+            }
+        }
+        // ترتيب حسب اختيار المستخدم
+        if(shopSort==='price-asc') items.sort((a,b)=> itemPrice(a.item)-itemPrice(b.item));
+        else if(shopSort==='price-desc') items.sort((a,b)=> itemPrice(b.item)-itemPrice(a.item));
+        else if(shopSort==='name-asc') items.sort((a,b)=> a.item.n.localeCompare(b.item.n,'ar'));
+        else if(shopSort==='qs-desc') items.sort((a,b)=> getQs(b.item)-getQs(a.item));
+        else items.sort((a,b)=> getQs(b.item)-getQs(a.item));
+        if(shopFavOnly){
+            document.getElementById('sectionTitle').innerHTML='<span>❤️ المفضلة <span class="cat-count">'+items.length+'</span></span><span class="total-val">🛒 متاح: '+fmt(items.reduce((s,{item})=>s+getQs(item),0))+' قطعة</span>';
+        }
         let container = document.getElementById('view-root');
         container.classList.toggle('no-anim', !anim);
         if (items.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="icon">📭</div>لا توجد نتائج</div>';
             return;
         }
-        items.sort((a,b)=> getQs(b.item)-getQs(a.item));
         let total = items.length;
         let display = items.slice(0, shopLimit);
         let html = '<div class="shop-grid">';
         display.forEach(({cat, ci, item, ii}, idx) => {
             let delay = anim ? ' style="animation-delay:' + Math.min(idx * 35, 320) + 'ms"' : '';
             let qs = getQs(item);
+            let favActive=isFav(ci,ii);
+            let favBtnHtml='<button class="fav-btn '+(favActive?'active':'')+'" style="position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;font-size:1rem;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:1;transition:transform .2s" onclick="event.stopPropagation();toggleFav('+ci+','+ii+')">'+(favActive?'❤️':'🤍')+'</button>';
             let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="lazy" decoding="async">' : '<span>📦</span>';
             let avail = qs > 0
                 ? '<div class="shop-avail ok">متاح: ' + qs + '</div>'
@@ -1765,7 +1814,7 @@
             }
             html +=
                 '<div class="shop-card"' + delay + ' onclick="openProductDetail(' + ci + ',' + ii + ')">' +
-                    '<div class="shop-img">' + imgHtml + '</div>' +
+                    '<div class="shop-img" style="position:relative;overflow:hidden">' + favBtnHtml + imgHtml + '</div>' +
                     '<div class="shop-body">' +
                         '<div class="shop-name">' + highlightName(item.n, search) + '</div>' +
                         '<div class="shop-price">' + esc(item.p) + ' <span>ج.م</span></div>' +
@@ -4128,6 +4177,7 @@
     renderFilterRow();
     renderAll();
     updateCartBadge();
+    updateFavBadge();
     if (cloudCfg && cloudCfg.on) {
       if(window.supabase){
         initCloudClient();

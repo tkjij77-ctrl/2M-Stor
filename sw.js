@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v21 (إصلاح تسجيل الدخول defer→block + ترجمة أخطاء)
-const CACHE = 'al-sayed-v21';
+// Service Worker — 2M-Stor v22 (متجر: ترتيب + مفضلة + fav badge)
+const CACHE = 'al-sayed-v22';
 const URLS = [
   'index.html',
   'manifest.json',
