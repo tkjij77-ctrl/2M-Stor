@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v15 (إصلاح قفل يظهر كـ footer)
-const CACHE = 'al-sayed-v15';
+// Service Worker — 2M-Stor v16 (ستايل كحلي/تركواز #0d4f6c/#00c9a7)
+const CACHE = 'al-sayed-v16';
 const URLS = [
   'index.html',
   'manifest.json',
