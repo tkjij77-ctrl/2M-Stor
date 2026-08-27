@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v19 (استجابة لكل الشاشات + أداء: content-visibility/lazy/عزل سكرول)
-const CACHE = 'al-sayed-v19';
+// Service Worker — 2M-Stor v20 (لاندنج v3 hero/blob/features)
+const CACHE = 'al-sayed-v20';
 const URLS = [
   'index.html',
   'manifest.json',
