@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v20 (لاندنج v3 hero/blob/features)
-const CACHE = 'al-sayed-v20';
+// Service Worker — 2M-Stor v21 (إصلاح تسجيل الدخول defer→block + ترجمة أخطاء)
+const CACHE = 'al-sayed-v21';
 const URLS = [
   'index.html',
   'manifest.json',

@@ -13,7 +13,7 @@
     <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js">
     <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js">
     <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon-192.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -3776,8 +3776,18 @@
       const email = (document.getElementById('cl-email').value || '').trim();
       const pw = document.getElementById('cl-pass').value;
       if (!email || !pw) return loginErr('اكتب الإيميل وكلمة المرور');
+      if(!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش جاهز — انتظر ثانية وحاول تاني');
+      const btn=document.querySelector('#paneLogin .btn-primary');
+      if(btn){ btn.disabled=true; btn.textContent='⏳ جاري الدخول...'; }
       const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
-      if (error) return loginErr('❌ ' + (error.message || 'خطأ في الدخول'));
+      if(btn){ btn.disabled=false; btn.textContent='🔓 تسجيل الدخول'; }
+      if (error) {
+        let msg=error.message||'خطأ في الدخول';
+        if(/Invalid login credentials/i.test(msg)) msg='الإيميل أو كلمة المرور غير صحيحة — تأكد أو أنشئ حساب جديد';
+        else if(/Email not confirmed/i.test(msg)) msg='الإيميل غير مؤكد — افتح رابط التأكيد في بريدك أو عطّل Confirm email من Supabase';
+        else if(/Too many requests/i.test(msg)) msg='محاولات كثيرة — انتظر دقيقة وحاول تاني';
+        return loginErr('❌ '+msg);
+      }
       await onCloudSession(data.session);
     }
     async function cloudDoRegister() {
@@ -3870,22 +3880,27 @@
       }
     }
 
+    let _forceLocal=false;
+    function forceLocalLogin(){ _forceLocal=true; renderLogin(); toast('🏠 وضع محلي — استخدم admin / admin'); }
+    function forceCloudLogin(){ _forceLocal=false; renderLogin(); }
     // ── واجهة شاشة الدخول (محلي / سحابي) ──
     function renderLogin() {
       const inner = document.getElementById('loginInner');
       if (!inner) return;
-      if (cloudReady() || (cloudCfg && cloudCfg.on && window.supabase)) {
+      const showCloud = !_forceLocal && (cloudReady() || (cloudCfg && cloudCfg.on && window.supabase));
+      if (showCloud) {
         inner.innerHTML =
           '<div class="login-tabs">' +
             '<button class="login-tab active" id="tabLogin" onclick="switchLoginTab(\'login\')">🔓 دخول</button>' +
             '<button class="login-tab" id="tabRegister" onclick="switchLoginTab(\'register\')">➕ حساب جديد</button>' +
           '</div>' +
           '<div id="paneLogin">' +
-            '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" style="direction:ltr;text-align:left" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
-            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
+            '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" autocomplete="email" style="direction:ltr;text-align:left" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
+            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" autocomplete="current-password" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
             '<button class="btn btn-primary" style="width:100%" onclick="cloudDoLogin()">🔓 تسجيل الدخول</button>' +
-            '<button class="btn btn-outline" id="randomBtn" style="width:100%;margin-top:10px" onclick="cloudCreateRandomAccount()">🎲 إنشاء حساب عشوائي</button>' +
+            '<button class="btn btn-outline" id="randomBtn" style="width:100%;margin-top:10px;white-space:normal;line-height:1.4" onclick="cloudCreateRandomAccount()">🎲 إنشاء حساب عشوائي</button>' +
             '<div class="login-error" id="loginError"></div>' +
+            '<button class="login-switch-mode" onclick="forceLocalLogin()">🏠 مش قادر تدخل؟ جرّب الدخول المحلي (admin / admin)</button>' +
           '</div>' +
           '<div id="paneRegister" style="display:none">' +
             '<div class="form-group"><label>اسم المستخدم (بيظهر للناس)</label><input type="text" id="reg-username" placeholder="اسم المستخدم" style="direction:ltr;text-align:left"></div>' +
@@ -3902,11 +3917,12 @@
             '<button class="login-tab" id="tabRegister" onclick="switchLoginTab(\'register\')">➕ حساب جديد</button>' +
           '</div>' +
           '<div id="paneLogin">' +
-            '<div class="form-group"><label>اسم المستخدم</label><input type="text" id="login-user" placeholder="اسم المستخدم" autocomplete="username"></div>' +
-            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="login-pass" placeholder="••••" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')doLogin()"></div>' +
+            '<div class="form-group"><label>اسم المستخدم</label><input type="text" id="login-user" placeholder="اسم المستخدم" autocomplete="username" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'"></div>' +
+            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="login-pass" placeholder="••••" autocomplete="current-password" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')doLogin()"></div>' +
             '<button class="btn btn-primary" style="width:100%" onclick="doLogin()">🔓 تسجيل الدخول</button>' +
-            '<button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="quickCustomer()">⚡ دخول سريع كعميل (حساب عشوائي)</button>' +
+            '<button class="btn btn-outline" style="width:100%;margin-top:10px;white-space:normal;line-height:1.4" onclick="quickCustomer()">⚡ دخول سريع كعميل (حساب عشوائي)</button>' +
             '<div class="login-error" id="loginError"></div>' +
+            '<button class="login-switch-mode" onclick="forceCloudLogin()">☁️ الرجوع للسحابة</button>' +
           '</div>' +
           '<div id="paneRegister" style="display:none">' +
             '<p style="font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-bottom:12px">حساب عميل جديد — للتصفح والإضافة للسلة</p>' +
@@ -4112,11 +4128,33 @@
     renderFilterRow();
     renderAll();
     updateCartBadge();
-    if (cloudCfg && cloudCfg.on && window.supabase) {
-      initCloudClient();
-      setCloudStatus(sb ? 'on' : 'connect');
-      showLogin();
-      cloudInit();
+    if (cloudCfg && cloudCfg.on) {
+      if(window.supabase){
+        initCloudClient();
+        setCloudStatus(sb ? 'on' : 'connect');
+        showLogin();
+        cloudInit();
+      } else {
+        // Supabase CDN لسه بيحمل — انتظر لحظات ثم اعد المحاولة (يحل مشكلة defer القديم)
+        let _tries=0;
+        const _iv=setInterval(()=>{
+          _tries++;
+          if(window.supabase){
+            clearInterval(_iv);
+            initCloudClient();
+            setCloudStatus(sb ? 'on' : 'connect');
+            renderLogin();
+            showLogin();
+            cloudInit();
+          } else if(_tries>20){
+            clearInterval(_iv);
+            renderLogin();
+            showLogin();
+          }
+        }, 400);
+        renderLogin();
+        showLogin();
+      }
     } else if (sessionUser && users.some(u => u.u === sessionUser)) {
       sessionRole = currentUser().role;
       applyRoleUI();
