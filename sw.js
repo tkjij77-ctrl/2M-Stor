@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v14 (إصلاح 455→229 + ترتيب المتاح أولاً)
-const CACHE = 'al-sayed-v14';
+// Service Worker — 2M-Stor v15 (إصلاح قفل يظهر كـ footer)
+const CACHE = 'al-sayed-v15';
 const URLS = [
   'index.html',
   'manifest.json',
