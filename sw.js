@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v27 (رفع صور سهل: سحب/لصق/التقاط/رابط)
-const CACHE = 'al-sayed-v27';
+// Service Worker — 2M-Stor v28 (إصلاح إزالة الصورة)
+const CACHE = 'al-sayed-v28';
 const URLS = [
   'index.html',
   'manifest.json',

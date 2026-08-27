@@ -2818,11 +2818,16 @@
         let mn = mnEl ? (parseInt(mnEl.value) || 0) : 5;
 
         const orig = (editingIdx >= 0 && editingCat >= 0) ? db[editingCat].items[editingIdx] : null;
-        const img = imgState.dirty ? imgState.val : (orig ? (orig.img || null) : null);
         let rec = { n, p, q, qs, b, pn: pn, min: mn };
-        if (img) rec.img = img;
-        if (orig) { rec.lid = orig.lid; rec.cid = orig.cid; rec._ts = orig._ts; rec.imgUrl = orig.imgUrl; }
-        else { rec.lid = genLid(); }
+        // معالجة الصورة: dirty يعني المستخدم لمس الصورة (تغيير أو إزالة)
+        if (imgState.dirty) {
+            if (imgState.val) { rec.img = imgState.val; rec.imgUrl = ''; }
+            else { rec.img = ''; rec.imgUrl = ''; }
+        } else if (orig && orig.img) {
+            rec.img = orig.img; rec.imgUrl = orig.imgUrl || '';
+        }
+        if (orig) { rec.lid = orig.lid; rec.cid = orig.cid; rec._ts = orig._ts; if(rec.imgUrl===undefined) rec.imgUrl = orig.imgUrl || ''; }
+        else { rec.lid = genLid(); if(rec.imgUrl===undefined) rec.imgUrl=''; }
 
         if (editingIdx >= 0 && editingCat >= 0) {
             let wasMoved = editingCat !== cat;
