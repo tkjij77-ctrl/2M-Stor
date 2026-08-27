@@ -1297,6 +1297,12 @@
     let invoices = JSON.parse(localStorage.getItem('al_sayed_invoices')) || [];
     // هجرة حالات الطلب القديمة (بدون status) → قيد المعالجة
     invoices.forEach(inv=>{ if(!inv.status) inv.status='قيد المعالجة'; });
+    // ===== IndexedDB للـ offline الحقيقي (يتجاوز 5MB localStorage) — لا يمس السلوك الحالي =====
+    const IDB_NAME='al-sayed-v2', IDB_STORE='kv';
+    function idbGet(key){ return new Promise(res=>{ try{ const r=indexedDB.open(IDB_NAME,1); r.onupgradeneeded=e=>{ try{ e.target.result.createObjectStore(IDB_STORE); }catch{} }; r.onsuccess=()=>{ try{ const tx=r.result.transaction(IDB_STORE,'readonly'); const st=tx.objectStore(IDB_STORE); const g=st.get(key); g.onsuccess=()=>res(g.result||null); g.onerror=()=>res(null); }catch{res(null)} }; r.onerror=()=>res(null);}catch{res(null)} }); }
+    function idbSet(key,val){ try{ const r=indexedDB.open(IDB_NAME,1); r.onupgradeneeded=e=>{ try{ e.target.result.createObjectStore(IDB_STORE); }catch{} }; r.onsuccess=()=>{ try{ const tx=r.result.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(val,key); }catch{} }; }catch{} }
+    // حاول تحميل من IDB لو localStorage فارغ (جهاز جديد أو quota exceeded سابقاً)
+    (async()=>{ try{ const v=await idbGet('al_sayed_db'); if(v && !localStorage.getItem('al_sayed_db')){ try{ db=JSON.parse(v); dbIsFactory=false; renderAll(); }catch{} } const iv=await idbGet('al_sayed_invoices'); if(iv){ try{ const parsed=JSON.parse(iv); if(parsed.length && !invoices.length){ invoices=parsed; invoices.forEach(x=>{ if(!x.status) x.status='قيد المعالجة'; }); renderAll(); } }catch{} } }catch{} })();
     let currentCat = 'all';
     let currentView = 'home';
     let shopPageSize = 40, shopLimit = 40;
@@ -2160,7 +2166,9 @@
 
     // ===== INVOICE =====
     function saveInvoices() {
-        localStorage.setItem('al_sayed_invoices', JSON.stringify(invoices));
+        const s=JSON.stringify(invoices);
+        try{ localStorage.setItem('al_sayed_invoices', s); }catch(e){ idbSet('al_sayed_invoices', s); }
+        idbSet('al_sayed_invoices', s);
     }
     function createInvoiceFromCart() {
         if (!can('invoice')) return toast('⚠️ لا تملك صلاحية إنشاء الفواتير');
@@ -2351,16 +2359,19 @@
         renderAccount();
         try{ if(document.getElementById('dashOverlay').classList.contains('open')) renderDashboard(); }catch(e){}
     }
-    // ===== PERSISTENCE =====
+    // ===== PERSISTENCE (مع IndexedDB fallback) =====
     function save() {
+        const str=JSON.stringify(db);
         try {
-            localStorage.setItem('al_sayed_db', JSON.stringify(db));
+            localStorage.setItem('al_sayed_db', str);
         } catch (e) {
-            toast('⚠️ مساحة التخزين ممتلئة! احذف بعض صور المنتجات');
-            return;
+            idbSet('al_sayed_db', str);
+            toast('⚠️ localStorage ممتلئ — تم الحفظ في IndexedDB');
         }
+        idbSet('al_sayed_db', str);
         renderAll();
         updateCartBadge();
+        updateFavBadge();
     }
 
     // ===== UNDO TOAST (تراجع عن الحذف) =====
@@ -2811,14 +2822,25 @@
                 canvas.height = img.height * scale;
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                let rawValue = code ? code.data : null;
-                if (!rawValue && 'BarcodeDetector' in window) {
-                    const detector = new BarcodeDetector();
-                    detector.detect(canvas).then(b => { handleScan(b.length > 0 ? b[0].rawValue : null); }).catch(() => handleScan(null));
-                } else {
-                    handleScan(rawValue);
+                // BarcodeDetector ناتيف أولاً (60fps) ثم jsQR fallback
+                if ('BarcodeDetector' in window) {
+                    try {
+                        const detector = new BarcodeDetector({formats:['qr_code','code_128','ean_13','ean_8','upc_a']});
+                        detector.detect(canvas).then(b=>{
+                            if(b.length>0 && b[0].rawValue) handleScan(b[0].rawValue);
+                            else {
+                                const code2 = (typeof jsQR!=='undefined') ? jsQR(imageData.data, imageData.width, imageData.height) : null;
+                                handleScan(code2 ? code2.data : null);
+                            }
+                        }).catch(()=>{
+                            const code2 = (typeof jsQR!=='undefined') ? jsQR(imageData.data, imageData.width, imageData.height) : null;
+                            handleScan(code2 ? code2.data : null);
+                        });
+                        return;
+                    } catch {}
                 }
+                const code = (typeof jsQR!=='undefined') ? jsQR(imageData.data, imageData.width, imageData.height) : null;
+                handleScan(code ? code.data : null);
             };
             img.src = ev.target.result;
         };
@@ -2887,15 +2909,23 @@
         video.srcObject = camStream;
         try { await video.play(); } catch (e) {}
         const canvas = document.createElement('canvas');
-        const tick = () => {
+        let detector=null;
+        try{ if('BarcodeDetector' in window) detector=new BarcodeDetector({formats:['qr_code','code_128','ean_13','ean_8','upc_a']}); }catch{}
+        const tick = async () => {
             if (!camStream) return;
             if (video.videoWidth > 0) {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0);
+                if(detector){
+                    try{
+                        const barcodes = await detector.detect(canvas);
+                        if(barcodes.length && barcodes[0].rawValue){ const v=barcodes[0].rawValue; stopCameraScan(); handleScan(v); return; }
+                    }catch{}
+                }
                 const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(d.data, d.width, d.height);
+                const code = (typeof jsQR!=='undefined') ? jsQR(d.data, d.width, d.height) : null;
                 if (code && code.data) { const val = code.data; stopCameraScan(); handleScan(val); return; }
             }
             camRaf = requestAnimationFrame(tick);

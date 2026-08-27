@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v25 (حالات الطلب: شحن/توصيل/رفض/إلغاء)
-const CACHE = 'al-sayed-v25';
+// Service Worker — 2M-Stor v26 (BarcodeDetector ناتيف + IndexedDB fallback)
+const CACHE = 'al-sayed-v26';
 const URLS = [
   'index.html',
   'manifest.json',
