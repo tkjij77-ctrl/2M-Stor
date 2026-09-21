@@ -26,7 +26,23 @@ jobs:
       - run: npm ci
       - run: npm run test
 
+  # ✅ T2.2: مهمة البناء — كانت غائبة تمامًا، ولهذا لم يُكشف أن next build يفشل
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+
+  # ℹ️ يحتاج SUPABASE_ACCESS_TOKEN و SUPABASE_DB_PASSWORD كأسرار للمستودع
+  # وإلا يفشل — ولذلك continue-on-error حتى تضبط الأسرار
   supabase-lint:
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
