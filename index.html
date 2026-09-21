@@ -4683,18 +4683,45 @@
     }
 
     // ── استيراد كامل: يستبدل السحابة بالبيانات المحلية ──
+    // 🔒 T3.4 (2026-09-21): كان هذا الزر **يمسح نهائيًا** كل الفواتير
+    // والأصناف والأقسام من السحابة (delete) بضغطة وتأكيد واحد — وبيانات
+    // جهاز آخر تختفي بلا رجعة. الآن: أرشفة (حذف ناعم قابل للاستعادة)،
+    // والفواتير لا تُمسّ إطلاقًا، مع تأكيد مزدوج ونسخة احتياطية قبل التنفيذ.
     async function cloudFullReplace() {
       if (!cloudReady()) return;
-      toast('☁️ مزامنة الاستيراد...');
+      if (!can('dash')) return toast('⚠️ استبدال بيانات السحابة للمدير فقط');
+
+      const localCats  = db.length;
+      const localItems = db.reduce((n, c) => n + (c.items || []).length, 0);
+      if (localItems === 0) return toast('⚠️ لا توجد أصناف محلية لرفعها');
+
+      const warnMsg =
+        '⚠️⚠️ عملية كبيرة — استبدال بيانات السحابة\n\n' +
+        'ماذا سيحدث:\n' +
+        '  • كل الأقسام والأصناف الحالية على السحابة تُؤرشف (حذف ناعم) — تُستعاد من «سلة المحذوفات»\n' +
+        '  • تُرفع بيانات هذا الجهاز: ' + localCats + ' قسم · ' + localItems + ' صنف\n' +
+        '  • أي جهاز آخر لم يزامن تعديلاته قد يفقد تعديلات لم تُرفع بعد\n' +
+        '  • ✅ الفواتير لا تُمسّ إطلاقًا (سجلات مالية)\n\n' +
+        'اكتب كلمة «استبدال» للمتابعة:';
+      const typed = prompt(warnMsg);
+      if (typed !== 'استبدال') return toast('⛔ أُلغيت العملية — لم يُمسّ شيء');
+
+      // نسخة احتياطية محلية قبل أي تغيير
+      try { autoBackup(); } catch (e) {}
+      toast('☁️ جاري الاستبدال...');
+
       try {
-        await sb.from('invoice_items').delete().neq('id', 0);
-        await sb.from('invoices').delete().neq('id', 0);
-        await sb.from('items').delete().neq('id', 0);
-        await sb.from('categories').delete().neq('id', 0);
-        db.forEach(c => { delete c.cid; c.items.forEach(it => { delete it.cid; }); });
-        invoices.forEach(inv => { delete inv.cid; });
+        const now = new Date().toISOString();
+        // أرشفة بدل المسح — الحذف ناعم فيمكن الاسترجاع
+        await sb.from('items').update({ deleted_at: now }).is('deleted_at', null);
+        await sb.from('categories').update({ deleted_at: now }).is('deleted_at', null);
+
+        // فك ارتباط المعرّفات السحابية فقط (الفواتير تبقى كما هي)
+        db.forEach(c => { delete c.cid; c._ts = null; c.items.forEach(it => { delete it.cid; it._ts = null; }); });
+        logAction('استبدال بيانات السحابة (أرشفة + رفع)', localCats + ' قسم · ' + localItems + ' صنف');
         migrateIfNeeded();
-      } catch (e) { toast('❌ فشل مزامنة الاستيراد: ' + (e.message || '')); }
+        toast('✅ تم — البيانات المرفوعة الآن على السحابة، والقديمة في «سلة المحذوفات»', 5000);
+      } catch (e) { toast('❌ فشل استبدال بيانات السحابة: ' + (e.message || '')); }
     }
 
     // ── مصادقة سحابية ──
