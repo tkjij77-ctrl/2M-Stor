@@ -40,7 +40,7 @@ jobs:
         language: [javascript-typescript]
     steps:
       - name: جلب الشيفرة
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: تهيئة CodeQL
         uses: github/codeql-action/init@v3
