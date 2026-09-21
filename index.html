@@ -2881,6 +2881,7 @@
             '<div class="form-group"><label>🗄️ النسخ الاحتياطية (تلقائية يومياً — آخر 7)</label><div class="user-list">' + backupRows + '</div></div>' +
             '<div class="modal-actions between">' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                    '<button class="btn btn-outline" onclick="openSyncStatus()">🔄 حالة المزامنة' + ((outbox.length || outboxFailed.length) ? ' (' + (outbox.length + outboxFailed.length) + ')' : '') + '</button>' +
                     '<button class="btn btn-outline" onclick="openTrash()">🗑️ سلة المحذوفات</button>' +
                     '<button class="btn btn-outline" onclick="manualBackup()">💾 نسخة الآن</button>' +
                 '</div>' +
@@ -2923,6 +2924,52 @@
         toast('✅ تم حفظ الإعدادات');
         renderAll();
     }
+    // ═══════════════════════════════════════════════════════════════
+    //  🔄 لوحة حالة المزامنة (T3.2) — ما لم يُرفع بعد، ولماذا
+    // ═══════════════════════════════════════════════════════════════
+    function openSyncStatus() {
+        if (!can('dash')) return toast('⚠️ حالة المزامنة للمدير فقط');
+        const body = document.getElementById('modalBody');
+        const modal = document.getElementById('modal');
+        modal.style.display = 'flex';
+
+        const pendRows = outbox.map((e, i) =>
+            '<div class="user-row"><div><div class="user-name">' + esc(describeEntry(e)) + '</div>' +
+            '<div class="user-meta">بانتظار الرفع · محاولات: ' + (e.attempts || 0) + (e.lastError ? ' · آخر خطأ: ' + esc(e.lastError) : '') + '</div></div></div>'
+        ).join('');
+
+        const failRows = outboxFailed.map((e, i) =>
+            '<div class="user-row"><div><div class="user-name">❌ ' + esc(describeEntry(e)) + '</div>' +
+            '<div class="user-meta">فشلت ' + (e.attempts || 0) + ' محاولة · ' + esc(e.lastError || 'سبب غير معروف') + '</div></div></div>'
+        ).join('');
+
+        const fmtT = (ts) => { try { return new Date(ts).toLocaleString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+
+        body.innerHTML =
+            '<h2>🔄 حالة <span class="accent">المزامنة</span></h2>' +
+            '<div class="user-list" style="margin-bottom:12px">' +
+              '<div class="user-row"><div><div class="user-name">' + (cloudReady() ? '☁️ متصل بالسحابة' : '📱 وضع محلي فقط') + '</div>' +
+              '<div class="user-meta">' + (isOnline() ? 'الإنترنت متاح' : '⚠️ لا يوجد إنترنت') +
+              (lastSync ? ' · آخر مزامنة: ' + esc(fmtT(lastSync)) : '') + '</div></div></div>' +
+            '</div>' +
+
+            '<div class="form-group"><label>📤 بانتظار الرفع (' + outbox.length + ')</label>' +
+            '<div class="user-list">' + (pendRows || '<div style="padding:10px;font-size:.8rem;color:var(--text-muted);font-weight:700">✅ لا شيء بانتظار الرفع</div>') + '</div></div>' +
+
+            '<div class="form-group"><label>❌ عمليات فشلت (' + outboxFailed.length + ')</label>' +
+            '<div class="user-list">' + (failRows || '<div style="padding:10px;font-size:.8rem;color:var(--text-muted);font-weight:700">✅ لا عمليات فاشلة</div>') + '</div>' +
+            '<p style="font-size:.72rem;color:var(--text-muted);font-weight:700;margin-top:6px">العمليات الفاشلة لا تُرفع تلقائيًا — راجع السبب ثم «أعد المحاولة»، أو تجاهلها إن كانت قديمة.</p>' +
+            (outboxFailed.length ? '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">' +
+                '<button class="btn btn-primary" onclick="retryFailedOps();openSyncStatus()">🔄 أعد المحاولة</button>' +
+                '<button class="btn btn-outline" onclick="clearFailedOps();openSyncStatus()">🗑️ تجاهل الكل</button></div>' : '') +
+            '</div>' +
+
+            '<div class="modal-actions between">' +
+              '<button class="btn btn-outline" onclick="flushOutbox();setTimeout(openSyncStatus,600)">⬆️ ارفع الآن</button>' +
+              '<button class="btn btn-outline" onclick="closeModal();openSettingsModal()">🔙 الإعدادات</button>' +
+            '</div>';
+    }
+
     // ═══════════════════════════════════════════════════════════════
     //  🗑️ واجهة سلة المحذوفات (T3.4) — استعادة أو حذف نهائي
     // ═══════════════════════════════════════════════════════════════
@@ -4088,10 +4135,22 @@
     let sb = null;
     let cloudProfile = null;
     let cloudStatus = 'off'; // off | on | offline | connect
+    // ═══════════════════════════════════════════════════════════════
+    //  🔄 T3.2 (2026-09-21) — طابور مزامنة لا يعلق ولا يُخفي الأخطاء
+    //  المشاكل التي أُغلقت:
+    //   1) عملية واحدة فاشلة كانت تحجز الطابور كله للأبد (head-of-line blocking)
+    //   2) لا إعادة محاولة دورية: فشل عابر يترك الطابور متوقفًا حتى تغيير جديد
+    //   3) لا عدّاد محاولات ولا قائمة فشل — الأخطاء كانت صامتة تمامًا
+    //   4) inv-ins كانت تُنشئ فاتورة مكرّرة عند إعادة المحاولة بعد نجاح جزئي
+    //   5) لا تنظيف للطابور من التعديلات المكرّرة على نفس الصنف
+    // ═══════════════════════════════════════════════════════════════
     let outbox = JSON.parse(localStorage.getItem('al_sayed_outbox') || '[]');
+    let outboxFailed = JSON.parse(localStorage.getItem('al_sayed_outbox_failed') || '[]');
     let pushTimer = null;
     let flushing = false;
     let lastSync = 0;
+    const MAX_ATTEMPTS = 5;        // بعدها تنتقل العملية لقائمة الفشل
+    const MAX_QUEUE = 800;         // سقف أمان للطابور
 
     function cloudReady() { return !!(cloudCfg && cloudCfg.on && cloudCfg.url && cloudCfg.key && sb); }
     function initCloudClient() {
@@ -4127,12 +4186,40 @@
     function isOnline() { return typeof navigator === 'undefined' || navigator.onLine !== false; }
 
     // ── الـ Outbox (طابور التغييرات اللي هترحل للسحابة) ──
-    function persistOutbox() { try { localStorage.setItem('al_sayed_outbox', JSON.stringify(outbox)); } catch (e) {} }
+    function persistOutbox() {
+      try {
+        localStorage.setItem('al_sayed_outbox', JSON.stringify(outbox));
+        localStorage.setItem('al_sayed_outbox_failed', JSON.stringify(outboxFailed));
+      } catch (e) {}
+    }
+    // مفتاح التكرار: العمليات التي تحمل «الحالة النهائية» يمكن استبدال الأقدم فيها
+    function dedupeKey(e) {
+      if (e.t === 'item-upd' || e.t === 'item-ins') return 'i:' + e.lid;
+      if (e.t === 'cat-upd' || e.t === 'cat-ins') return 'c:' + e.lid;
+      if (e.t === 'set') return 's:' + e.key;
+      if (e.t === 'inv-status') return 'v:' + e.lid;
+      return null;   // الحذف والإدراج لا يُنظَّفان (ترتيبهم مهم)
+    }
     function queue(entry) {
       if (!cloudReady()) return; // وضع محلي: مفيش مزامنة
+      const k = dedupeKey(entry);
+      if (k) {
+        // لو نفس العملية في الطابور → نحدّثها بدل تكرارها (آخر حالة تكسب)
+        for (let i = outbox.length - 1; i >= 0; i--) {
+          if (dedupeKey(outbox[i]) === k && outbox[i].t === entry.t) outbox.splice(i, 1);
+        }
+      }
       entry.ts = Date.now();
+      entry.attempts = 0;
       outbox.push(entry);
+      if (outbox.length > MAX_QUEUE) {
+        // لا نمو غير محدود: نُبلّغ المستخدم بدل أن يمتلئ التخزين بصمت
+        const dropped = outbox.splice(0, outbox.length - MAX_QUEUE);
+        outboxFailed.push(...dropped.slice(0, 50).map(d => Object.assign({}, d, { lastError: 'تجاوز سقف الطابور' })));
+        toast('⚠️ الطابور ممتلئ — ' + dropped.length + ' عملية قديمة لم تُرفع', 5000);
+      }
       persistOutbox();
+      updateSyncChip();
       schedulePush();
     }
     function schedulePush() {
@@ -4255,6 +4342,12 @@
         if (!inv || inv.cid) return;
         let invNo = inv.no || invCounter;
         let lastErr = null;
+        // 🔄 T3.2: قبل الإدراج، شوف الفاتورة دي موجودة فعلًا؟ (نجاح جزئي سابق)
+        // بدونها: إعادة المحاولة تصطدم بـunique(invoice_no) وتعلق الطابور للأبد.
+        try {
+          const { data: exist } = await sb.from('invoices').select('id').eq('invoice_no', invNo).maybeSingle();
+          if (exist && exist.id) { inv.cid = exist.id; return; }
+        } catch (e) {}
         for (let attempt = 0; attempt < 3; attempt++) {
           const { data, error } = await sb.from('invoices').insert({
             invoice_no: invNo, customer_name: inv.customer,
@@ -4305,6 +4398,29 @@
       }
     }
 
+    // خطأ دائم (خطأ في البيانات) أم عابر (شبكة/سيرفر)؟
+    // الفرق مهم: العابر يُعاد ترتيبه، والدائم ينتقل لقائمة الفشل فلا يعلّق الطابور.
+    function classifyError(err) {
+      const msg = String((err && (err.message || err.error_description || err.details)) || err || '');
+      const code = String((err && (err.code || err.status)) || '');
+      if (/Failed to fetch|NetworkError|network|timeout|timed out|fetch failed|Load failed|ERR_/i.test(msg)) return 'transient';
+      if (/^5\d\d$/.test(code)) return 'transient';
+      if (code === '429') return 'transient';
+      if (/JWT|token|refresh|expired/i.test(msg)) return 'transient';
+      if (code === '23505' || /duplicate key|unique constraint/i.test(msg)) return 'permanent';
+      if (/column .* does not exist|could not find the .* column|schema cache/i.test(msg)) return 'permanent';
+      if (code === '23503' || /foreign key/i.test(msg)) return 'permanent';
+      if (code === '42P01' || /relation .* does not exist/i.test(msg)) return 'permanent';
+      if (/permission denied|violates row-level security|42501/i.test(msg)) return 'permanent';
+      return 'permanent';   // الاحتياط: لا نعيد محاولة شيء مجهول للأبد
+    }
+    function describeEntry(e) {
+      const names = { 'cat-ins':'إضافة قسم', 'cat-upd':'تعديل قسم', 'cat-del':'حذف قسم',
+                      'item-ins':'إضافة صنف', 'item-upd':'تعديل صنف', 'item-del':'حذف صنف',
+                      'inv-ins':'فاتورة جديدة', 'inv-del':'حذف فاتورة', 'inv-status':'حالة طلب', 'set':'إعداد' };
+      return (names[e.t] || e.t) + (e.key ? ' (' + e.key + ')' : '');
+    }
+
     // ── تفريغ الطابور (دفع التغييرات للسحابة) ──
     async function flushOutbox() {
       if (!cloudReady()) return;
@@ -4313,22 +4429,81 @@
       if (flushing) return; // حلقة تانية شغالة — هتخلص هي
       flushing = true;
       setCloudStatus('on');
+      let transientHit = false;
       while (outbox.length > 0) {
         const e = outbox.shift();
         persistOutbox();
         try {
           await applyEntry(e);
+          e.attempts = 0;
         } catch (err) {
-          outbox.unshift(e);
-          persistOutbox();
-          setCloudStatus('offline');
-          flushing = false;
-          return;
+          const kind = classifyError(err);
+          e.attempts = (e.attempts || 0) + 1;
+          e.lastError = String((err && (err.message || err.details)) || err).slice(0, 200);
+          if (kind === 'transient' && e.attempts < MAX_ATTEMPTS) {
+            // عابر: نحفظ الترتيب ونعود لاحقًا (لا نحرق الطابور)
+            outbox.unshift(e);
+            persistOutbox();
+            setCloudStatus('offline');
+            transientHit = true;
+            break;
+          }
+          if (e.attempts >= MAX_ATTEMPTS || kind === 'permanent') {
+            // 🛑 لا يعلّق الطابور: ينتقل لقائمة الفشل مع سبب واضح
+            outboxFailed.push(Object.assign({}, e, { failedAt: Date.now() }));
+            if (outboxFailed.length > 100) outboxFailed = outboxFailed.slice(-100);
+            persistOutbox();
+            console.warn('[outbox] فشلت العملية ونُقلت لقائمة الفشل:', describeEntry(e), e.lastError);
+          } else {
+            outbox.push(e);   // عابر مع محاولات متبقية → آخره ليكمل الباقي
+          }
         }
       }
       flushing = false;
       persistOutbox();
-      pullAll().catch(() => {});
+      updateSyncChip();
+      // إعادة محاولة تلقائية بتأخير متزايد — بدل انتظار تغيير جديد من المستخدم
+      if (outbox.length > 0) {
+        const tries = Math.max(...outbox.map(x => x.attempts || 0), 0);
+        const delay = Math.min(60000, 3000 * Math.pow(2, tries));
+        if (pushTimer) clearTimeout(pushTimer);
+        pushTimer = setTimeout(() => { if (isOnline()) flushOutbox(); }, delay);
+      }
+      if (!transientHit) pullAll().catch(() => {});
+    }
+
+    // ── مؤشر «عملية لم تُرفع» في الشريط العلوي ──
+    function updateSyncChip() {
+      const el = document.getElementById('cloudChip');
+      if (!el) return;
+      const pend = outbox.length, failed = outboxFailed.length;
+      if (failed > 0) { el.textContent = '⚠️ ' + failed + ' عملية فشلت'; el.style.color = 'var(--danger)'; el.style.display = 'inline-flex'; return; }
+      el.style.color = '';
+      if (pend > 0) { el.textContent = '⏳ ' + pend + ' بانتظار الرفع'; el.style.display = 'inline-flex'; return; }
+      setCloudStatus(cloudStatus);
+    }
+
+    // ── إعادة المحاولة اليدوية لقائمة الفشل ──
+    function retryFailedOps() {
+      if (!outboxFailed.length) return toast('✅ لا توجد عمليات فاشلة');
+      const n = outboxFailed.length;
+      outbox.push(...outboxFailed.map(f => {
+        const c = Object.assign({}, f); c.attempts = 0; delete c.failedAt; delete c.lastError; return c;
+      }));
+      outboxFailed = [];
+      persistOutbox();
+      updateSyncChip();
+      toast('🔄 أُعيدت ' + n + ' عملية للطابور');
+      flushOutbox();
+    }
+    function clearFailedOps() {
+      if (!outboxFailed.length) return;
+      if (!confirm('تجاهل ' + outboxFailed.length + ' عملية فشلت نهائيًا؟ لن تُرفع للسحابة.')) return;
+      logAction('تجاهل عمليات مزامنة فاشلة', String(outboxFailed.length));
+      outboxFailed = [];
+      persistOutbox();
+      updateSyncChip();
+      toast('🗑️ تم تجاهل العمليات الفاشلة');
     }
 
     // ── سحب البيانات من السحابة ودمجها (الأحدث يربح، والمتغيّر محلياً له الأولوية) ──
@@ -4912,6 +5087,17 @@
       showLogin();
     }
     window.addEventListener('online', () => { if (cloudReady()) { flushOutbox(); pullAll(); } }, { passive: true });
+    // 🔄 T3.2: لو فشل الرفع أثناء الاتصال (انقطاع لحظي بمكان)، نعيد المحاولة
+    // دوريًا بدل انتظار تغيير جديد من المستخدم — كان الطابور يبقى متوقفًا للأبد.
+    setInterval(() => {
+        if (!cloudReady()) return;
+        if (document.visibilityState === 'visible' && outbox.length > 0 && !flushing) flushOutbox();
+        updateSyncChip();
+    }, 30000);
+    // عند العودة للتبويب: ارفع ما تبقّى فورًا
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && cloudReady() && outbox.length > 0) flushOutbox();
+    });
     window.addEventListener('offline', () => { if (cloudReady()) setCloudStatus('offline'); }, { passive: true });
     setInterval(() => {
         if (cloudReady() && sessionRole) {
