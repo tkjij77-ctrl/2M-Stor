@@ -1832,7 +1832,7 @@
             let price = itemPrice(item);
             let cls = q <= 0 ? 'danger' : (q <= 5 ? 'warn' : '');
             let thumb = item.img
-                ? '<img class="card-thumb" src="' + item.img + '" alt="" loading="lazy" decoding="async">'
+                ? '<img class="card-thumb" src="' + esc(item.img) + '" alt="" loading="lazy" decoding="async">'
                 : '<div class="card-thumb card-thumb-fb">📦</div>';
             let bHtml = item.b ? '<span class="qr-badge">🔳 ' + esc(item.b) + '</span>' : '';
             html +=
@@ -1920,7 +1920,9 @@
             let qs = getQs(item);
             let favActive=isFav(ci,ii);
             let favBtnHtml='<button class="fav-btn '+(favActive?'active':'')+'" style="position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;font-size:1rem;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:1;transition:transform .2s" onclick="event.stopPropagation();toggleFav('+ci+','+ii+')">'+(favActive?'❤️':'🤍')+'</button>';
-            let imgHtml = item.img ? '<img src="' + item.img + '" alt="" loading="lazy" decoding="async">' : '<span>📦</span>';
+            // 🔒 T1.1: esc() تمنع كسر خاصية src (XSS). ملاحظة مهمة: لا نقيّد بالـ https فقط
+            // لأن التطبيق يستخدم data: URLs للمعاينة قبل رفع الصورة إلى Storage.
+            let imgHtml = item.img ? '<img src="' + esc(item.img) + '" alt="" loading="lazy" decoding="async">' : '<span>📦</span>';
             let avail = qs > 0
                 ? '<div class="shop-avail ok">متاح: ' + qs + '</div>'
                 : '<div class="shop-avail no">غير متوفر</div>';
@@ -2110,7 +2112,7 @@
             const price = itemPrice(item);
             const sub = price * c.qty;
             total += sub;
-            const thumb = item.img ? '<img src="' + item.img + '" alt="" loading="lazy" decoding="async">' : '📦';
+            const thumb = item.img ? '<img src="' + esc(item.img) + '" alt="" loading="lazy" decoding="async">' : '📦';
             html +=
                 '<div class="cart-item">' +
                     '<div class="cart-thumb">' + thumb + '</div>' +
@@ -2245,8 +2247,10 @@
                         e.innerHTML='';
                         new QRCode(e, {text:qrData, width:110, height:110, correctLevel:QRCode.CorrectLevel.H});
                     } else if(e){
-                        // fallback: صورة من qrserver
-                        e.innerHTML='<img src=\"https://api.qrserver.com/v1/create-qr-code/?size=110x110&data='+encodeURIComponent(qrData)+'\" width=\"110\" height=\"110\" style=\"display:block\">';
+                        // 🔒 T1.2 (2026-09-21): أُلغي الـ fallback إلى api.qrserver.com —
+                        // كان يرسل اسم العميل والإجمالي والبائع لخدمة خارجية.
+                        // الآن: توليد محلي فقط (qrcodejs)، وإن فشل نظهر تنبيهًا بدل تسريب البيانات.
+                        e.innerHTML='<div style="width:110px;height:110px;display:grid;place-items:center;border:1px dashed var(--border);border-radius:8px;font-size:.6rem;color:var(--text-muted);text-align:center;padding:6px">تعذّر توليد QR<br>تحقق من الاتصال</div>';
                     }
                 });
             }catch{}
@@ -3421,9 +3425,46 @@
 
     let users = JSON.parse(localStorage.getItem('al_sayed_users') || 'null');
     if (!Array.isArray(users)) users = [];
-    if (!users.some(x => x.u === 'admin')) users.unshift({ u: 'admin', p: hashPass('admin'), role: 'admin', name: 'المدير' });
-    if (!users.some(x => x.u === 'Amel')) users.push({ u: 'Amel', p: hashPass('Amel'), role: 'worker', name: 'العامل' });
+    // 🔒 T0.5 (2026-09-21): أُلغيت الحسابات الافتراضية بكلمات مرور معروفة (admin/admin · Amel/Amel).
+    // الأجهزة التي عليها حسابات محلية بالفعل تستمر كما هي بلا أي تغيير.
+    // الأجهزة الجديدة: المدير يُنشئ أول حساب محلي بكلمة مرور يختارها هو (شاشة «تهيئة أول مرة»).
     function saveUsers() { localStorage.setItem('al_sayed_users', JSON.stringify(users)); }
+
+    // 🔒 T0.5: إنشاء حساب المدير المحلي أول مرة — بكلمة مرور يختارها المالك
+    async function createFirstLocalAdmin() {
+        const uEl = document.getElementById('setup-user');
+        const pEl = document.getElementById('setup-pass');
+        const p2El = document.getElementById('setup-pass2');
+        const err = document.getElementById('loginError');
+        const show = (m) => { if (err) { err.textContent = m; err.style.display = 'block'; } };
+        const un = (uEl && uEl.value.trim()) || '';
+        const pw = (pEl && pEl.value) || '';
+        const pw2 = (p2El && p2El.value) || '';
+        if (un.length < 2) return show('اكتب اسم مستخدم (حرفان على الأقل)');
+        if (pw.length < 6) return show('كلمة المرور 6 أحرف على الأقل');
+        if (pw === un || pw === 'admin' || pw === '123456' || pw === 'password') return show('كلمة المرور ضعيفة جدًا — اختر كلمة أقوى');
+        if (pw !== pw2) return show('كلمتا المرور غير متطابقتين');
+        if (users.some(x => x.u.toLowerCase() === un.toLowerCase())) return show('اسم المستخدم مستخدم بالفعل');
+        const nu = { u: un, role: 'admin', name: 'المدير', _firstRun: true };
+        // استخدام نفس آلية التشفير القوية الموجودة في التطبيق: PBKDF2 + salt عشوائي
+        // ⚠️ مهم: verifyPass يتحقق من وجود user.salt — بدون salt سيفشل الدخول لاحقًا
+        try {
+            if (window.crypto && crypto.subtle) {
+                const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+                nu.salt = b64(saltBytes);
+                nu.p = await pbkdf2(pw, nu.salt);
+            } else {
+                nu.p = hashPass(pw);   // متصفح قديم جدًا — نسخة أضعف لكن تعمل
+            }
+        } catch (e) { nu.p = hashPass(pw); }
+        users.push(nu);
+        saveUsers();
+        clearLock();
+        setUser(nu);
+        logAction('تهيئة أول مرة — إنشاء مدير محلي', un);
+        toast('✅ تم إنشاء حساب المدير المحلي — احفظ كلمة المرور في مكان آمن', 6000);
+        afterLogin();
+    }
 
     let sessionUser = localStorage.getItem('al_sayed_session_user') || '';
     let sessionRole = '';
@@ -3503,7 +3544,9 @@
         setUser(found);
         logAction('تسجيل دخول', found.u);
         afterLogin();
-        if (found.u === 'admin' && pw === 'admin') toast('⚠️ بتستخدم كلمة مرور المدير الافتراضية — غيّرها من المنيو ← 🔒', 6000);
+        // 🔒 T0.5: الحسابات الافتراضية أُلغيت — نتحقق الآن من قوة كلمة المرور فعليًا
+        if (pw.length < 6 || pw.toLowerCase() === String(found.u).toLowerCase() || ['admin','123456','password','12345678'].includes(pw.toLowerCase()))
+            toast('⚠️ كلمة مرورك ضعيفة — غيّرها من القائمة ← 🔒', 8000);
         upgradeHash(found, pw);
     }
     function quickCustomer() {
@@ -4206,66 +4249,26 @@
       if (sb) { try { sb.auth.signOut(); } catch (e) {} }
       cloudProfile = null;
     }
-    // ── الدخول السريع: حساب زائر جاهز على السحابة بضغطة واحدة ──
+    // ── 🔒 T0.5 (2026-09-21): أُلغي الدخول السريع بحساب زائر مشترك ──
+    // السبب: كان يحمل كلمة مرور مكتوبة في كود الموقع العلني، أي أن أي زائر
+    // يستطيع الدخول بهذا الحساب. الحساب نفسه (guest@2m-stor.app) يجب حذفه من
+    // Supabase → Authentication → Users.
     async function cloudQuickLogin() {
-      if (!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش متاح دلوقتي');
-      const btn = document.getElementById('quickBtn');
-      if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الدخول...'; }
-      try {
-        const { data, error } = await sb.auth.signInWithPassword({
-          email: 'guest@2m-stor.app',
-          password: '2M#Stor-Guest-2026'
-        });
-        if (error) {
-          if (btn) { btn.disabled = false; btn.textContent = '⚡ دخول سريع فوري (زائر)'; }
-          return loginErr('⚠️ ' + (error.message || 'خطأ في الدخول السريع'));
-        }
-        await onCloudSession(data.session);
-      } catch (e) {
-        if (btn) { btn.disabled = false; btn.textContent = '⚡ دخول سريع فوري (زائر)'; }
-        loginErr('❌ ' + (e.message || 'فشل الاتصال — اتأكد من النت'));
-      }
+      return loginErr('⛔ الدخول السريع أُلغي لأسباب أمنية — سجّل دخولك بحسابك أو أنشئ حسابًا جديدًا');
     }
-    // ── إنشاء حساب عشوائي: كل ضغطة = حساب جديد مستقل على السحابة ──
+    // ── 🔒 T0.5 (2026-09-21): أُلغي إنشاء الحسابات العشوائية بضغطة واحدة ──
+    // السبب: كان يسمح لأي زائر بإنشاء حسابات سحابية بلا حدود (بلا CAPTCHA ولا
+    // تحقق بريدي) — وهو ما كان يُستغل في ثغرة تصعيد الصلاحيات A1.
+    // الحسابات الجديدة الآن تُنشأ من تبويب «+ حساب جديد» بإيميل حقيقي + تأكيد بريدي.
     async function cloudCreateRandomAccount() {
-      if (!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش متاح دلوقتي');
-      const btn = document.getElementById('randomBtn');
-      if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري إنشاء حساب...'; }
-      try {
-        const rnd = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        const username = 'guest_' + rnd.slice(-8);
-        const email = username + '@2m-stor.app';
-        const password = 'Rnd#' + rnd.slice(-6) + Math.random().toString(36).slice(2, 4) + '!';
-        const display_name = 'زائر-' + rnd.slice(-4).toUpperCase();
-        const { data, error } = await sb.auth.signUp({
-          email, password,
-          options: { data: { username, display_name } }
-        });
-        if (error) {
-          if (btn) { btn.disabled = false; btn.textContent = '🎲 إنشاء حساب عشوائي'; }
-          return loginErr('⚠️ ' + (error.message || 'فشل إنشاء الحساب'));
-        }
-        if (data.session) {
-          await onCloudSession(data.session);
-          toast('✅ حسابك: ' + username, 4000);
-        } else if (data.user) {
-          // لو تأكيد الإيميل مطلوب — ندخل مباشرة
-          const { data: s2, error: e2 } = await sb.auth.signInWithPassword({ email, password });
-          if (e2) {
-            if (btn) { btn.disabled = false; btn.textContent = '🎲 إنشاء حساب عشوائي'; }
-            return loginErr('✅ تم إنشاء ' + username + ' — سجّل دخول به');
-          }
-          await onCloudSession(s2.session);
-        }
-      } catch (e) {
-        const b = document.getElementById('randomBtn');
-        if (b) { b.disabled = false; b.textContent = '🎲 إنشاء حساب عشوائي'; }
-        loginErr('❌ ' + (e.message || 'فشل الاتصال — اتأكد من النت'));
-      }
+      toast('⛔ إنشاء الحسابات العشوائية أُلغي — استخدم تبويب «+ حساب جديد» بإيميلك', 6000);
+      return loginErr('استخدم «+ حساب جديد» وسجّل بإيميلك الحقيقي');
     }
 
     let _forceLocal=false;
-    function forceLocalLogin(){ _forceLocal=true; renderLogin(); toast('🏠 وضع محلي — استخدم admin / admin'); }
+    // 🔒 T0.5: الوضع المحلي يبقى كاحتياطي للعمل بدون إنترنت (لا يستطيع الوصول للسحابة)،
+    // لكن لا يُذكر أي كلمة مرور في الواجهة — الحساب المحلي بكلمة مرور يحددها المالك.
+    function forceLocalLogin(){ _forceLocal=true; renderLogin(); toast('🏠 وضع محلي — سجّل دخولك بحسابك المحلي', 4000); }
     function forceCloudLogin(){ _forceLocal=false; renderLogin(); }
     // ── واجهة شاشة الدخول (محلي / سحابي) ──
     function renderLogin() {
@@ -4282,9 +4285,8 @@
             '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" autocomplete="email" style="direction:ltr;text-align:left" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
             '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" autocomplete="current-password" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
             '<button class="btn btn-primary" style="width:100%" onclick="cloudDoLogin()">🔓 تسجيل الدخول</button>' +
-            '<button class="btn btn-outline" id="randomBtn" style="width:100%;margin-top:10px;white-space:normal;line-height:1.4" onclick="cloudCreateRandomAccount()">🎲 إنشاء حساب عشوائي</button>' +
             '<div class="login-error" id="loginError"></div>' +
-            '<button class="login-switch-mode" onclick="forceLocalLogin()">🏠 مش قادر تدخل؟ جرّب الدخول المحلي (admin / admin)</button>' +
+            '<button class="login-switch-mode" onclick="forceLocalLogin()">🏠 الدخول بحساب محلي (بدون إنترنت)</button>' +
           '</div>' +
           '<div id="paneRegister" style="display:none">' +
             '<div class="form-group"><label>اسم المستخدم (بيظهر للناس)</label><input type="text" id="reg-username" placeholder="اسم المستخدم" style="direction:ltr;text-align:left"></div>' +
@@ -4294,6 +4296,17 @@
             '<button class="btn btn-primary" style="width:100%" onclick="cloudDoRegister()">✅ إنشاء الحساب والدخول</button>' +
           '</div>' +
           '<p style="font-size:0.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">☁️ وضع سحابي — بياناتك محفوظة ومتزامنة على كل الأجهزة · الحسابات الجديدة تكون عميل</p>';
+      } else if (users.length === 0) {
+        // 🔒 T0.5: لا توجد حسابات محلية — نطلب من المالك إنشاء حساب المدير بكلمة مرور خاصة به
+        inner.innerHTML =
+          '<h3 style="margin:0 0 4px;text-align:center">🔐 تهيئة أول مرة</h3>' +
+          '<p style="font-size:.78rem;color:var(--text-muted);font-weight:700;text-align:center;margin-bottom:14px">لا يوجد حساب على هذا الجهاز.<br>أنشئ حساب المدير بكلمة مرور تختارها أنت — ولا تُشاركها مع أحد.</p>' +
+          '<div class="form-group"><label>اسم المستخدم</label><input type="text" id="setup-user" value="admin" style="direction:ltr;text-align:left" autocomplete="username"></div>' +
+          '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="setup-pass" placeholder="••••••" autocomplete="new-password"></div>' +
+          '<div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="setup-pass2" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')createFirstLocalAdmin()"></div>' +
+          '<button class="btn btn-primary" style="width:100%" onclick="createFirstLocalAdmin()">✅ إنشاء حساب المدير والدخول</button>' +
+          '<div class="login-error" id="loginError"></div>' +
+          '<button class="login-switch-mode" onclick="forceCloudLogin()">☁️ عندي حساب سحابي — الدخول من السحابة</button>';
       } else {
         inner.innerHTML =
           '<div class="login-tabs">' +

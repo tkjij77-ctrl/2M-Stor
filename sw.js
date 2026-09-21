@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v29 (وقت مفصل + فاتورة QR نسختين + رسم حالة + لغة دور)
-const CACHE = 'al-sayed-v29';
+// Service Worker — 2M-Stor v30 (تحديث أمني: إزالة أبواب دخول + سد XSS + إيقاف تسريب بيانات الفواتير)
+const CACHE = 'al-sayed-v30';   // 🔒 T0.5/T1.1/T1.2 — تحديث أمني إلزامي
 const URLS = [
   'index.html',
   'manifest.json',
