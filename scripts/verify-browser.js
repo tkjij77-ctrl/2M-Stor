@@ -3,7 +3,6 @@
 //  يشغّل النسخة الأصلية (قبل) والنسخة المُصلَّحة (بعد) ويقارن النتيجة
 // ═══════════════════════════════════════════════════════════════════
 const { chromium } = require('playwright');
-const fs = require('fs');
 
 const PAYLOAD = 'x" onerror="window.__XSS_FIRED=1" data-x="';
 
@@ -84,7 +83,7 @@ async function run(label, url, allowCDN) {
   });
 
   // اذهب لصفحة العرض وانتظر الكروت
-  await page.evaluate(() => { try { setView('shop'); } catch (e) {} });
+  await page.evaluate(() => { try { setView('shop'); } catch {} });
   await page.waitForTimeout(1200);
   const shop = await page.evaluate(() => ({
     grid: !!document.querySelector('.shop-grid'),
@@ -94,7 +93,7 @@ async function run(label, url, allowCDN) {
   }));
 
   // اختبار شاشة الدخول: هل نص admin/admin اختفى؟ وهل شاشة التهيئة تظهر؟
-  await page.evaluate(() => { try { localStorage.removeItem('al_sayed_session_user'); _forceLocal = true; showLogin(); renderLogin(); } catch (e) {} });
+  await page.evaluate(() => { try { localStorage.removeItem('al_sayed_session_user'); _forceLocal = true; showLogin(); renderLogin(); } catch {} });
   await page.waitForTimeout(600);
   const login = await page.evaluate(() => {
     const el = document.getElementById('loginInner');

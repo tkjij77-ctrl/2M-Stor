@@ -2,7 +2,7 @@
 //  T2.5 — اختبار منطق سلة تطبيق Next.js
 //  (كانت السلة useState([]) داخل مكوّن: تفقد كل شيء عند التحديث)
 // ═══════════════════════════════════════════════════════════════════
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 const store = new Map<string, string>();
 vi.stubGlobal("localStorage", {

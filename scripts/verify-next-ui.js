@@ -74,12 +74,7 @@ const BASE = 'http://127.0.0.1:3100';
   check('السلة الفارغة تُظهر رسالة واضحة', /السلة فارغة/.test(cartText), '');
 
   // نضيف منتجًا عبر المخزن المشترك (كما يفعل زر المتجر)
-  const added = await page.evaluate(async () => {
-    const mod = await import('/_next/static/chunks/app/page.js').catch(() => null);
-    // نستخدم الواجهة البرمجية للحالة من localStorage بدل تحميل الحِزم
-    return null;
-  });
-
+  // ملاحظة: لا نحقن الوحدة مباشرة — نزرع الحالة في localStorage ثم نعيد التحميل
   // الإضافة الحقيقية: نفتح المتجر ونضغط زر «إضافة للسلة» (البيانات من السحابة محجوبة → نزرعها)
   await page.evaluate(() => {
     localStorage.setItem('al_sayed_cart_next', JSON.stringify([
@@ -109,7 +104,6 @@ const BASE = 'http://127.0.0.1:3100';
 
   // الكميات تُعدّل
   // ⚠️ الكوبون مطبَّق: المجموع الفرعي 280 · الخصم 28 · الإجمالي 252
-  const beforePlus = await page.innerText('body');
   // ⚠️ الأزرار متشابهة نصًّا (− + 🗑️ على كل سطر) — نستخدم وسوم الوصول
   await page.click('button[aria-label^="زيادة"]');
   await page.waitForTimeout(700);

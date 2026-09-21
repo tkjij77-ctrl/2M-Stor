@@ -193,11 +193,13 @@ export function computeTotals(list: CartLine[], rules: Partial<SaleRules> = DEFA
   return {
     subtotal,
     discount,
+    afterDiscount,
     shipping,
     freeShip,
     couponApplied: !!codeOk,
     tax,
-    total: round2(subtotal - discount + tax + shipping),
+    // ⚠️ نفس صيغة index.html حرفيًا: afterDiscount + ضريبة + شحن
+    total: round2(afterDiscount + tax + shipping),
     count: cartCount(list),
   };
 }

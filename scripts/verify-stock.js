@@ -33,7 +33,6 @@ const SEED = [{
   await page.evaluate(() => setUser({ u: 'admin', role: 'admin', name: 'مدير النظام' }));
 
   let allPass = true;
-  const line = s => console.log(s);
   const check = (name, pass, detail) => {
     console.log(`  ${pass ? '✅' : '❌'} ${name}${detail ? '  → ' + detail : ''}`);
     allPass = allPass && pass;

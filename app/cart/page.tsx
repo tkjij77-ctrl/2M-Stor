@@ -76,7 +76,7 @@ export default function CartPage() {
         setSignedIn(true);
         setLoginMsg("✅ تم تسجيل الدخول");
       }
-    } catch (e) {
+    } catch {
       setLoginMsg("تعذّر الاتصال — تحقق من الشبكة");
     }
     setBusy(false);

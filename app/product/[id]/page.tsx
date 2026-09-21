@@ -2,10 +2,20 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { ProductActions } from "@/components/add-to-cart";
 
+// شكل الصف كما يعود من PostgREST (العميل غير مؤنَّع في هذه الصفحة)
+type ItemRow = {
+  id: number; name: string; price_text: string; price_num: number;
+  stock_q: number | null; display_qs: number | null; min_alert: number | null;
+  barcode: string | null; image_url: string | null; category_id: number | null;
+  categories: { name?: string | null } | null;
+};
+type RelatedRow = { id: number; name: string; price_text: string; display_qs: number | null; image_url: string | null };
+
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sb = await createClient();
-  const { data: item } = await sb.from("items").select("*, categories(name)").eq("id", id).single();
+  const { data: rawItem } = await sb.from("items").select("*, categories(name)").eq("id", id).single();
+  const item = rawItem as ItemRow | null;
   if (!item) return <main className="content"><p>المنتج غير موجود</p><Link href="/" className="btn btn-outline">رجوع للمتجر</Link></main>;
   const qs = item.display_qs ?? 0;
   const available = qs > 0;
@@ -24,7 +34,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       ? `الشحن ${r.shipping ?? 0} ج.م — ومجاني للطلبات فوق ${r.freeShip} ج.م`
       : `الشحن ${r.shipping ?? 0} ج.م`;
   // منتجات من نفس الصنف
-  const { data: related } = await sb.from("items").select("id, name, price_text, display_qs, image_url").eq("category_id", item.category_id).neq("id", item.id).eq("deleted_at", null).limit(6);
+  const { data: rawRelated } = await sb.from("items").select("id, name, price_text, display_qs, image_url").eq("category_id", item.category_id).neq("id", item.id).eq("deleted_at", null).limit(6);
+  const related = (rawRelated ?? []) as RelatedRow[];
   return (
     <main className="content" style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 40 }}>
       <Link href="/" className="btn btn-ghost" style={{ marginBottom: 12 }}>← رجوع للمتجر</Link>
@@ -34,12 +45,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             {item.image_url ? <img src={item.image_url} alt={item.name} style={{width:"100%",height:"100%",objectFit:"contain", background:"#fff"}} /> : <span style={{fontSize:"4rem"}}>📦</span>}
           </div>
           <div className="amz-thumbs" style={{display:"flex", gap:8, marginTop:10, overflowX:"auto"}}>
-            {[item, ...(related||[])].slice(0,5).map((t:any)=><div key={t.id} className="amz-thumb" style={{width:60,height:60,borderRadius:10, border:"2px solid var(--border)", overflow:"hidden", flexShrink:0, background:"var(--bg-soft)", display:"flex", alignItems:"center", justifyContent:"center"}}>{t.image_url ? <img src={t.image_url} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : "📦"}</div>)}
+            {[item, ...related].slice(0,5).map((t)=><div key={t.id} className="amz-thumb" style={{width:60,height:60,borderRadius:10, border:"2px solid var(--border)", overflow:"hidden", flexShrink:0, background:"var(--bg-soft)", display:"flex", alignItems:"center", justifyContent:"center"}}>{t.image_url ? <img src={t.image_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : "📦"}</div>)}
           </div>
         </div>
         <div>
           <h1 className="amz-title" style={{fontSize:"1.55rem", fontWeight:900}}>{item.name}</h1>
-          <div className="amz-meta" style={{fontSize:"0.85rem", color:"var(--text-muted)", fontWeight:700}}>📂 {(item as any).categories?.name || "—"} · 🔢 #{item.id} {item.barcode ? `· 🔳 ${item.barcode}`: ""}</div>
+          <div className="amz-meta" style={{fontSize:"0.85rem", color:"var(--text-muted)", fontWeight:700}}>📂 {item.categories?.name || "—"} · 🔢 #{item.id} {item.barcode ? `· 🔳 ${item.barcode}`: ""}</div>
           {/* 🔴 T2.5: أُزيل تقييم مفبرك كان يُحسب من المخزون نفسه!
               «⭐⭐⭐⭐☆ 4.3 (X تقييم)» حيث X = stock + display + 7 — رقم لا علاقة له
               بأي تقييم حقيقي. لا نعرض تقييمات حتى تتوفر تقييمات فعلية من العملاء. */}
@@ -51,7 +62,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             {shippingNote}
           </div>
           <ul className="amz-bullets" style={{fontSize:"0.88rem", lineHeight:1.9, margin:"12px 0", paddingRight:18}}>
-            <li>الصنف: <b>{(item as any).categories?.name}</b> — كود #{item.id}</li>
+            <li>الصنف: <b>{item.categories?.name || "—"}</b> — كود #{item.id}</li>
             <li>السعر الرقمي: <b>{item.price_num} ج.م</b> — النص: {item.price_text}</li>
             <li>المخزن: <b>{item.stock_q}</b> · المعروض: <b>{qs}</b></li>
           </ul>
@@ -68,18 +79,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             item={{ n: item.name, p: item.price_text, pn: item.price_num, q: item.stock_q ?? 0, qs: qs, min: item.min_alert ?? 0,
                     b: item.barcode || "", img: item.image_url || "", imgUrl: item.image_url || "",
                     lid: String(item.id), cid: item.id }}
-            catName={(item as any).categories?.name}
+            catName={item.categories?.name ?? undefined}
           />
         </div>
       </div>
-      {related && related.length>0 && (
+      {related.length > 0 && (
         <div style={{marginTop:24}}>
-          <div className="product-related-title">📦 منتجات من نفس الصنف — {(item as any).categories?.name}</div>
+          <div className="product-related-title">📦 منتجات من نفس الصنف — {item.categories?.name || "—"}</div>
           <div className="product-related">
-            {related.map((r:any)=>(
+            {related.map((r)=>(
               <Link key={r.id} href={{ pathname: "/product/[id]", query: { id: String(r.id) } }} className="related-card" style={{textDecoration:"none", color:"inherit"}}>
                 <div className="related-card-img">{r.image_url ? <img src={r.image_url} alt={r.name} loading="lazy"/> : "📦"}</div>
-                <div className="related-card-body"><div className="related-card-name">{r.name}</div><div className="related-card-price">{r.price_text} ج.م</div><div style={{fontSize:"0.72rem", fontWeight:700, color: r.display_qs>0 ? "#00c9a7" : "#e5484d"}}>{r.display_qs>0 ? `✅ متاح ${r.display_qs}` : "❌ غير متوفر"}</div></div>
+                <div className="related-card-body"><div className="related-card-name">{r.name}</div><div className="related-card-price">{r.price_text} ج.م</div><div style={{fontSize:"0.72rem", fontWeight:700, color: (r.display_qs ?? 0)>0 ? "#00c9a7" : "#e5484d"}}>{(r.display_qs ?? 0)>0 ? `✅ متاح ${r.display_qs ?? 0}` : "❌ غير متوفر"}</div></div>
               </Link>
             ))}
           </div>

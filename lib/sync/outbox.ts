@@ -225,8 +225,8 @@ async function compressDataUrl(dataUrl: string) {
     const img = new window.Image();
     img.onload = () => {
       let w = img.width,
-        h = img.height,
-        maxW = 1024;
+        h = img.height;
+      const maxW = 1024;
       if (w > maxW) {
         h = Math.round((h * maxW) / w);
         w = maxW;

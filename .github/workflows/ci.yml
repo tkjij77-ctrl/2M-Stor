@@ -37,10 +37,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
+      # ✅ إصلاح: كان البناء يفشل في CI لغياب أسرار المستودع
+      # ("Your project's URL and API key are required") — الآن نستخدم بدائل
+      # صريحة عند غياب السر، والبناء يبقى فحصًا حقيقيًا للكود لا للأسرار.
       - run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
 
   # ✅ T2.3: بوابة ثغرات الحزم — كانت 12 ثغرة (منها 1 حرجة) تمر بلا أن يلاحظها أحد
   # لأن لا شيء كان يفحص التبعيات. تمنع عودة العدد للارتفاع.
@@ -54,19 +57,31 @@ jobs:
       - name: فحص ثغرات الحزم (عالي وحرج يُفشل المهمة)
         run: npm audit --audit-level=high
 
-  # ℹ️ يحتاج SUPABASE_ACCESS_TOKEN و SUPABASE_DB_PASSWORD كأسرار للمستودع
-  # وإلا يفشل — ولذلك continue-on-error حتى تضبط الأسرار
+  # ℹ️ يحتاج SUPABASE_ACCESS_TOKEN (وSUPABASE_DB_PASSWORD عند وجود كلمة مرور قاعدة)
+  # ✅ إصلاح: كانت المهمة تفشل عند غياب الأسرار. الآن تُتخطّى بوضوح بدل الفشل
+  # الصامت، ومع وجود الأسرار تعمل فعليًا على قاعدة مرتبطة.
   supabase-lint:
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: gate
+        name: هل أسرار Supabase متاحة؟
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then echo "run=yes" >> "$GITHUB_OUTPUT"; else echo "run=no" >> "$GITHUB_OUTPUT"; fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       - uses: supabase/setup-cli@v1
+        if: steps.gate.outputs.run == 'yes'
         with: { version: latest }
-      - run: supabase db lint --linked
+      - run: supabase db lint --linked --level warning
+        if: steps.gate.outputs.run == 'yes'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      - if: steps.gate.outputs.run == 'no'
+        run: echo "ℹ️ لا SUPABASE_ACCESS_TOKEN — تُخطّيت المهمة. أضِفه من Settings ← Secrets ← Actions"
+      # بديل يعمل بلا أسرار: فحص الانحراف بين الترحيلات والكود
+      - run: node scripts/verify-schema-drift.js --repo
 
   e2e:
     runs-on: ubuntu-latest
@@ -77,4 +92,13 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps
       - run: npm run build
-      - run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
+      # لا نُشغّل اختبارات E2E بلا متغيرات حقيقية (ستفشل بلا معنى)
+      - name: اختبارات E2E (تحتاج أسرار Supabase)
+        if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
+        run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}

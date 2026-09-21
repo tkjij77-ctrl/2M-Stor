@@ -27,7 +27,7 @@ self.addEventListener('activate', e => {
       .then(() => {
         if (self.clients && self.clients.matchAll) {
           return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-            list.forEach(c => { try { c.postMessage({ type: 'sw-update-ready' }); } catch (err) {} });
+            list.forEach(c => { try { c.postMessage({ type: 'sw-update-ready' }); } catch {} });
           });
         }
       })
@@ -41,7 +41,7 @@ self.addEventListener('message', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   let url;
-  try { url = new URL(e.request.url); } catch (err) { return; }
+  try { url = new URL(e.request.url); } catch { return; }
   const isSupaImg = url.hostname.includes('supabase.co') && url.pathname.includes('/storage/');
   if (isSupaImg) {
     e.respondWith(

@@ -6,8 +6,10 @@ export async function initSentry() {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
   if (!dsn) return;
   try {
-    const Sentry = await import(/* webpackIgnore: true */ "@sentry/browser" as string);
-    (Sentry as any).init({ dsn, tracesSampleRate: 0.2 });
+    const Sentry = await import(/* webpackIgnore: true */ "@sentry/browser" as string) as unknown as {
+      init(opts: { dsn: string; tracesSampleRate: number }): void;
+    };
+    Sentry.init({ dsn, tracesSampleRate: 0.2 });
   } catch {
     // الحزمة غير مثبّتة — نتجاهل بهدوء
   }

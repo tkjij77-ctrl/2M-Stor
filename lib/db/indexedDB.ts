@@ -16,7 +16,7 @@ export async function getIDBInstance() {
   });
 }
 // للتوافق مع useShop: getIDB(key)
-export async function getIDB<T = any>(key?: string): Promise<T | null> {
+export async function getIDB<T = unknown>(key?: string): Promise<T | null> {
   const store = key === "invoices" ? STORE_INV : key === "outbox" ? STORE_OUTBOX : STORE_DB;
   const id = "current";
   try {
@@ -31,7 +31,7 @@ export async function getIDB<T = any>(key?: string): Promise<T | null> {
   } catch {}
   return null;
 }
-export async function setIDB(key: string, value: any): Promise<void> {
+export async function setIDB(key: string, value: unknown): Promise<void> {
   const store = key === "invoices" ? STORE_INV : key === "outbox" ? STORE_OUTBOX : STORE_DB;
   try {
     const idb = await getIDBInstance();

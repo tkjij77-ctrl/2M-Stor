@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getQ, getQs, getMin, firstNum } from "@/lib/db/lid";
+import { getQ, getQs, firstNum } from "@/lib/db/lid";
 
 describe("lid helpers", () => {
   it("getQ/getQs defaults", () => {

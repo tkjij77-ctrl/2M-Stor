@@ -119,12 +119,10 @@ function parseSql(sql) {
     grants: [],      // نصوص grant/revoke على الدوال
     raw: {},         // "نوع:اسم" -> نص العبارة (لإصدار مسوّدة الترحيل)
   };
-  const src = stripComments(sql);
   const stmts = splitStatements(sql); // العبارات الأصلية (بلا حذف تعليقات داخل النصوص)
 
   for (const rawStmt of stmts) {
     const st = clean(stripComments(rawStmt));
-    const low = st.toLowerCase();
     // ⚠️ نحفظ **العبارة بلا تعليقات**: العبارة الأصلية قد تبدأ بـ`-- وصف`، وعند
     // إصدار مسوّدة ترحيل يصير السطر كله تعليقًا ⇒ العبارة لا تُنفَّذ ولا أحد يلاحظ.
     const keep = (kind, name) => { inv.raw[kind + ":" + name] = clean(stripComments(rawStmt)); };

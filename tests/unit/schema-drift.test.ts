@@ -35,6 +35,8 @@ type Inv = {
   triggers: Record<string, string>;
   publications: Set<string>;
   buckets: Set<string>;
+  // ⚠️ كان ناقصًا في هذا النوع بينما السكربت يُنتجه فعلًا ⇒ فشل tsc --noEmit
+  raw: Record<string, string>;
 };
 type DriftRow = { kind: string; name: string; note: string };
 

@@ -12,7 +12,18 @@ export async function compressImage(base64: string, maxW = 1024, quality = 0.7):
   return blob;
 }
 
-export async function uploadItemImage(sb: any, lid: string, base64: string) {
+// الحاجة الفعلية من عميل Supabase في هذه الدالة — لا نستورد النوع الكامل
+// حتى يبقى الملف قابلًا للاختبار بعميل مُقلَّد.
+export type StorageClient = {
+  storage: {
+    from(bucket: string): {
+      upload(path: string, file: Blob, opts?: { upsert?: boolean; contentType?: string }): Promise<{ error: unknown }>;
+      getPublicUrl(path: string): { data: { publicUrl: string } };
+    };
+  };
+};
+
+export async function uploadItemImage(sb: StorageClient, lid: string, base64: string) {
   const blob = await compressImage(base64);
   const path = `${lid}.jpg`;
   const { error } = await sb.storage.from("products").upload(path, blob, { upsert: true, contentType: "image/jpeg" });

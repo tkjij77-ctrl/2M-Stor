@@ -4,6 +4,7 @@
 //            دعم الفواتير (idempotent) · عزل الفاشل فلا يعلّق الطابور
 // ═══════════════════════════════════════════════════════════════════
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Db } from "@/lib/db/types";
 
 // ── بيئة مصغّرة: localStorage + عميل Supabase وهمي ──
 const store = new Map<string, string>();
@@ -35,11 +36,20 @@ function fakeClient() {
   const chain = (table: string, op: string, payload?: Row | Row[]) => {
     calls.push({ table, op, payload });
     const res = respond(table, op, payload);
-    const p: any = Promise.resolve(res);
-    p.select = () => ({ single: () => Promise.resolve(res), maybeSingle: () => Promise.resolve(res) });
-    p.eq = () => p;
-    p.single = () => Promise.resolve(res);
-    p.maybeSingle = () => Promise.resolve(res);
+    // عميل مُقلَّد: كائن ثم (thenable) يحمل سلسلة PostgREST
+    type Res = ReturnType<typeof respond>;
+    type Chain = Promise<Res> & {
+      select(): { single(): Promise<Res>; maybeSingle(): Promise<Res> };
+      eq(): Chain;
+      single(): Promise<Res>;
+      maybeSingle(): Promise<Res>;
+    };
+    const p: Chain = Object.assign(Promise.resolve(res) as Promise<Res>, {
+      select: () => ({ single: () => Promise.resolve(res), maybeSingle: () => Promise.resolve(res) }),
+      single: () => Promise.resolve(res),
+      maybeSingle: () => Promise.resolve(res),
+      eq: () => p,
+    });
     return p;
   };
   return {
@@ -62,7 +72,7 @@ vi.mock("@/lib/db/indexedDB", () => ({ saveDB: async () => {} }));
 
 import { queue, flushOutbox, classifyError, outboxStatus, retryFailed, clearQueue } from "@/lib/sync/outbox";
 
-const DB = () => [
+const DB = (): Db => [
   {
     name: "قسم",
     lid: "Lc1",
@@ -70,7 +80,7 @@ const DB = () => [
     _ts: "t",
     items: [{ n: "صنف", p: "10", pn: 10, q: 5, qs: 5, min: 1, b: "", img: "", lid: "La", cid: 101 }],
   },
-] as any;
+];
 
 beforeEach(() => {
   store.clear();
@@ -144,7 +154,7 @@ describe("طابور المزامنة", () => {
   });
 
   it("🔒 عملية فاشلة دائمًا لا تمنع تنفيذ ما بعدها (كانت تعلّق الطابور)", async () => {
-    responder = (table, op, payload) => {
+    responder = (table, op) => {
       if (table === "items" && op === "update") return { error: { code: "42703", message: 'column "x" does not exist' } };
       return { data: { id: 9, updated_at: "t" }, error: null };
     };

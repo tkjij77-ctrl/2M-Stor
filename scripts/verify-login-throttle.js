@@ -13,7 +13,6 @@
 const { chromium } = require('playwright');
 
 const URL = process.env.APP_URL || 'http://127.0.0.1:8123/index.html';
-const MOCK_URL = 'https://mock.supabase.co';
 
 // ── سيرفر مُقلَّد: الحالة تعيش خارج المتصفح ──────────────────────
 const S = { fails: [], windowMs: 15 * 60 * 1000, limit: 5, calls: { gate: 0, fail: 0, ok: 0 } };
@@ -45,7 +44,7 @@ function gate(u) {
       const url = req.url();
       if (!url.includes('supabase.co')) return route.continue();
       const fn = url.includes('/rpc/') ? url.split('/rpc/')[1].split('?')[0] : '';
-      const body = (() => { try { return req.postDataJSON() || {}; } catch (e) { return {}; } })();
+      const body = (() => { try { return req.postDataJSON() || {}; } catch { return {}; } })();
       if (fn === 'login_gate' || fn === 'login_fail') {
         S.calls[fn === 'login_gate' ? 'gate' : 'fail']++;
         if (fn === 'login_fail') S.fails.push({ u: body.p_username, d: body.p_device, at: now() });
@@ -81,7 +80,7 @@ function gate(u) {
     }, { cloud, seed });
     await page.goto(URL, { waitUntil: 'load' });
     await page.waitForFunction(() => typeof doLogin === 'function');
-    await page.evaluate(() => { try { renderLogin(); showLogin(); } catch (e) {} });
+    await page.evaluate(() => { try { renderLogin(); showLogin(); } catch {} });
     await page.waitForTimeout(600);
     return { ctx, page };
   }
@@ -132,7 +131,7 @@ function gate(u) {
 
   // ── 3) جوهر F2: مسح بيانات المتصفح + نافذة جديدة ──
   console.log('\n【3】 مسح بيانات المتصفح ونافذة جديدة — هل يسقط القفل؟');
-  await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+  await page.evaluate(() => { try { localStorage.clear(); } catch {} });
   await ctx.close();
   ({ ctx, page } = await open({ cloud: true }));
   const rFresh = await tryLogin(page, 'owner@test.com', 'wrong');
