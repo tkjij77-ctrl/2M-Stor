@@ -3,19 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 🔒 T1.3 (2026-09-21): سياسة أمان المحتوى (CSP)
+         GitHub Pages لا يسمح برؤوس HTTP، ولهذا تُضبط هنا عبر meta.
+         ملاحظات:
+         · 'unsafe-inline' في script-src ضروري لأن الواجهة تستخدم onclick= بكثافة
+           (إزالته تحتاج إعادة هيكلة الأحداث — مهمة T5.1)
+         · لا حاجة لـ 'unsafe-eval' — الكود لا يستخدم eval أو new Function (تم التحقق)
+         · img-src يسمح بأي https للحفاظ على توافق صور المنتجات القديمة
+         · frame-ancestors غير مدعومة في meta (تحتاج رأس HTTP — Cloudflare Pages) -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self';">
     <meta name="description" content="نظام متكامل لإدارة المخزون والفواتير والمبيعات">
     <title>2M-Stor - إدارة المخزون والمبيعات</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://uzzxhbotbshsgpdnbrmd.supabase.co" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- 🔒 T1.3: أُزيل preconnect لـ cdn.jsdelivr.net — المكتبات أصبحت محلية -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-    <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js">
-    <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js">
-    <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- 🔒 T1.3 (2026-09-21): المكتبات الأربع أصبحت محلية داخل /vendor بدل CDN خارجي.
+         الفائدة: لا اعتماد على نطاق خارجي · لا خطر تغيّر الملف من المصدر (سلسلة توريد)
+         · تعمل أوفلاين بالكامل · أسرع تحميلًا (كاش الـ Service Worker).
+         الإصدارات (مقارنة البصمة مع المصدر الرسمي مُتحقَّق منها):
+           jsQR 1.4.0 · @supabase/supabase-js 2.45.4 · qrcodejs 1.0.0 · Chart.js 4.4.0 -->
+    <link rel="preload" as="script" href="vendor/jsqr.min.js">
+    <link rel="preload" as="script" href="vendor/supabase.min.js">
+    <script defer src="vendor/jsqr.min.js"></script>
+    <script src="vendor/supabase.min.js"></script>
+    <script src="vendor/qrcode.min.js"></script>
+    <script src="vendor/chart.umd.min.js"></script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon-192.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1630,7 +1644,7 @@
         allItems.sort((a,b)=>getQs(b.it)-getQs(a.it));
         let featured=allItems.slice(0,4);
         let featHtml=featured.length?featured.map(({cat,ci,it,ii})=>{
-            let img=it.img?'<img src="'+it.img+'" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'<span style="font-size:2.2rem">📦</span>';
+            let img=it.img?'<img src="'+esc(it.img)+'" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'<span style="font-size:2.2rem">📦</span>';
             let qs=getQs(it);
             return '<div class="shop-card" style="cursor:pointer" onclick="setView(\'shop\'); setTimeout(()=>openProductDetail('+ci+','+ii+'),120)">'
                 +'<div class="shop-img" style="height:150px">'+img+'</div>'
@@ -1734,7 +1748,7 @@
             if(!favProducts.length) content='<div class="empty-state"><div class="icon">❤️</div>قائمة المفضلة فارغة<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">تصفح المنتجات</button></div>';
             else {
                 content='<div class="shop-grid">'+favProducts.map(({cat,ci,it,ii})=>{
-                    let img=it.img?'<img src="'+it.img+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'📦';
+                    let img=it.img?'<img src="'+esc(it.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'📦';
                     return '<div class="shop-card" onclick="openProductDetail('+ci+','+ii+')"><div class="shop-img" style="height:130px;position:relative"><button style="position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:1" onclick="event.stopPropagation();toggleFav('+ci+','+ii+');renderAccount()">❤️</button>'+img+'</div><div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div class="shop-price">'+esc(it.p)+' ج.م</div></div></div>';
                 }).join('')+'</div>';
             }
@@ -1955,16 +1969,32 @@
     }
 
     // ===== PRODUCT DETAIL — أمازون: صور يسار | تفاصيل وسط | شراء يمين =====
+    // 🔒 T1.1: صور المنتج الحالية (تُملأ عند الرسم) — تُستخدم في amzSetMain بدل
+    // تمرير رابط الصورة كنص داخل onclick (كان يسمح بحقن جافاسكربت عبر الصورة)
+    let amzThumbs = [];
+    function amzSetMain(idx) {
+        try {
+            const t = amzThumbs[idx];
+            if (!t || !t.img) return;
+            const el = document.getElementById('amzMainImg');
+            if (el) el.src = t.img;
+            document.querySelectorAll('.amz-thumb').forEach((x, i) => x.classList.toggle('active', i === idx));
+        } catch (e) {}
+    }
     function openProductDetail(ci, ii) {
       const cat = db[ci], item = cat && cat.items[ii];
       if (!item) return;
       let qs = getQs(item), q = getQ(item), price = itemPrice(item), isAvail = qs>0;
       let availBadge = isAvail ? '<span style="color:#067D62;font-weight:800">\u2705 متوفر</span>' : '<span style="color:var(--danger);font-weight:800">\u274C غير متوفر</span>';
       let stars = '\u2B50\u2B50\u2B50\u2B50\u2606 <span style="color:var(--text-muted);font-size:0.82rem">4.3 ('+(q+qs+7)+' تقييم)</span>';
-      let mainImg = item.img ? '<img src="'+item.img+'" alt="" loading="eager" decoding="async" id="amzMainImg">' : '<span style="font-size:4rem">\uD83D\uDCE6</span>';
+      let mainImg = item.img ? '<img src="'+esc(item.img)+'" alt="" loading="eager" decoding="async" id="amzMainImg">' : '<span style="font-size:4rem">\uD83D\uDCE6</span>';
       // thumbnails من نفس الصنف + الصورة الرئيسية
       let thumbs = [item].concat(cat.items.filter((_,idx)=>idx!==ii).slice(0,4));
-       let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" onclick="document.getElementById(\'amzMainImg\')&&(document.getElementById(\'amzMainImg\').src=\''+(t.img||'')+'\');document.querySelectorAll(\'.amz-thumb\').forEach(x=>x.classList.remove(\'active\'));this.classList.add(\'active\')">'+(t.img?'<img src="'+t.img+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
+       // 🔒 T1.1 (2026-09-21): كان هذا الموضع الأخطر — رابط الصورة يُحقن داخل جافاسكربت
+       // في السمة onclick، أي أن صورة ضارة = تنفيذ كود تعسّفي. الآن: نداء دالة بالفهرس فقط،
+       // والصورة تُقرأ من البيانات مباشرة (لا نص يُبنى داخل سياق تنفيذي)، ومهربة في src.
+       amzThumbs = thumbs;
+       let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" onclick="amzSetMain('+idx+')">'+(t.img?'<img src="'+esc(t.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
       let bullets = '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b> — كود #'+(item.cid||'—')+'</li><li>السعر الرقمي: <b>'+price+' ج.م</b> — النص: '+esc(item.p)+'</li><li>المخزن: <b>'+q+'</b> · المعروض: <b>'+qs+'</b> · تنبيه عند <b>'+getMin(item)+'</b></li>'+(item.b?'<li>باركود: <b>'+esc(item.b)+'</b></li>':'')+'<li>قيمة المخزن: <b>'+fmt(q*price)+' ج.م</b> · المعروض: <b>'+fmt(qs*price)+' ج.م</b></li></ul>';
       let qtyOpts = Array.from({length: Math.min(10, Math.max(1,qs))}, (_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
       let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?'✅ متاح — '+qs+' قطعة جاهزة للشحن':'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🔒 عملية شراء آمنة — دفع عند الاستلام متاح</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">المتاح '+qs+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
@@ -2475,7 +2505,7 @@
             let item = db[ci].items[ii];
             imgState = { val: item.img || null, dirty: false };
             let catOpts = db.map((c, i) => '<option value="' + i + '"' + (i === ci ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('');
-            let imgPrev = imgState.val ? '<img src="' + imgState.val + '" alt="">' : '<span>📷</span>';
+            let imgPrev = imgState.val ? '<img src="' + esc(imgState.val) + '" alt="">' : '<span>📷</span>';
             body.innerHTML =
                 '<h2>✏️ تعديل <span class="accent">' + esc(item.n) + '</span></h2>' +
                 '<div class="modal-section">📂 القسم</div>' +
@@ -2565,7 +2595,7 @@
     function renderImagePreview() {
         const el = document.getElementById('img-preview');
         if (!el) return;
-        el.innerHTML = imgState.val ? '<img src="' + imgState.val + '" alt="">' : '<span>📷</span>';
+        el.innerHTML = imgState.val ? '<img src="' + esc(imgState.val) + '" alt="">' : '<span>📷</span>';
     }
     function handleDrop(e){
         e.preventDefault();
