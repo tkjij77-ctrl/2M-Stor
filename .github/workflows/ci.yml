@@ -19,8 +19,17 @@ jobs:
       - run: npm run lint --if-present
       - run: npm run typecheck
       # ✅ T2.3: صحة ملفات الـworkflow نفسها (كان خطأ صياغة واحد يعطّل كل CI بصمت)
+      # ⚠️ action-validator يأخذ ملفًا واحدًا لكل استدعاء — تمرير ثلاثة معًا
+      # كان يُطبع «Usage» ويفشل المهمة بلا فحص أي ملف.
       - name: التحقق من صيغة ملفات GitHub Actions
-        run: npx --yes @action-validator/cli .github/workflows/ci.yml .github/workflows/codeql.yml .github/workflows/backup.yml
+        run: |
+          for f in .github/workflows/*.yml; do
+            echo "── فحص $f"
+            npx --yes @action-validator/cli "$f"
+          done
+      # فحصنا الخاص: يلتقط ما لا يلتقطه action-validator (مثل secrets داخل if)
+      - name: فحص إعداد CI/Dependabot/CodeQL
+        run: python3 scripts/verify-ci-config.py
 
   test:
     runs-on: ubuntu-latest
