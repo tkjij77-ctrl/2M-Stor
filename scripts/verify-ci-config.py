@@ -79,7 +79,13 @@ if cq:
     if isinstance(trig, list):
         trig = {k: None for k in trig}
     check("CodeQL: صلاحية رفع النتائج", perms.get("security-events") == "write")
-    check("CodeQL: تهيئة + تحليل", "github/codeql-action/init@v3" in uses)
+    # ⚠️ لا نُثبّت رقم الإصدار في الفحص: Dependabot يرقّي هذه الإجراءات دوريًا،
+    # وتثبيت الرقم هنا يجعل ترقية مشروعة تُفشل CI (ويُغري بتعطيل الفحص).
+    check(
+        "CodeQL: تهيئة + تحليل",
+        any(re.fullmatch(r"github/codeql-action/init@v\d+", u) for u in uses)
+        and any(re.fullmatch(r"github/codeql-action/analy[sz]e@v\d+", u) for u in uses),
+    )
     check(
         "CodeQL: خطوة التحليل",
         any(u.startswith("github/codeql-action/analyze@") for u in uses),
