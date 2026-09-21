@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════════
+#  T2.3 — فحص أمني للشيفرة (CodeQL)
+#  يبحث عن أنماط خطيرة فعلية (XSS · حقن · مسارات · أسرار) في كل
+#  دفع، لا يعتمد على مراجعة بشرية.
+#  المستودع عام ⇒ الفحص مجاني بلا اشتراك.
+# ═══════════════════════════════════════════════════════════════════
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # كل يوم اثنين 4:17 صباحًا (توقيت UTC) — يكشف ثغرات قواعد جديدة
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+# أقل صلاحيات ممكنة — وتُزاد في المهمة نفسها فقط
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: تحليل الشيفرة (JavaScript/TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write   # لرفع النتائج إلى تبويب Security
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+    steps:
+      - name: جلب الشيفرة
+        uses: actions/checkout@v4
+
+      - name: تهيئة CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality: يضيف قواعد الجودة (كود ميت · مقارنات خاطئة)
+          # لا security-extended فقط — لأن مشروعًا صغيرًا يتحمّل الفحص الأوسع
+          queries: security-and-quality
+
+      - name: البناء التلقائي
+        uses: github/codeql-action/autobuild@v3
+
+      - name: التحليل ورفع النتائج
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

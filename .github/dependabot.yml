@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════════
+#  T2.3 — تحديثات الحزم التلقائية (Dependabot)
+#  كانت الثغرات تتراكم بصمت: 12 ثغرة في الحزم (منها واحدة حرجة)
+#  لم يكتشفها أحد لأن لا شيء كان يراقب التبعيات.
+# ═══════════════════════════════════════════════════════════════════
+version: 2
+
+updates:
+  # ── حزم التطبيق (npm) ──
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "04:00"
+      timezone: Africa/Cairo
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: scope
+    # تجميع التحديثات في طلبات قليلة قابلة للمراجعة بدل 20 طلبًا
+    groups:
+      production-patch-minor:
+        patterns: ["*"]
+        dependency-type: production
+        update-types: [minor, patch]
+      development-patch-minor:
+        patterns: ["*"]
+        dependency-type: development
+        update-types: [minor, patch]
+      # ترقيات كبرى منفصلة دائمًا — لا تُدمج تلقائيًا: next@16 و react@20
+      # تغيّران سلوك البناء، ولذلك تُراجَع واحدة واحدة
+      major-upgrades:
+        patterns: ["*"]
+        update-types: [major]
+
+  # ── إجراءات GitHub نفسها (Actions) ──
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "04:30"
+      timezone: Africa/Cairo
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "chore(ci)"
