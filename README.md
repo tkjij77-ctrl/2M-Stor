@@ -355,3 +355,27 @@ main  ──── محمي: لا دفع مباشر ──── يجب PR + ن�
 
 > كل الأرقام أعلاه مُنتَجة بتشغيل فعلي، لا تقديرية. آخر دفعة إلى `main`:
 > CI (6 مهام) ✅ · CodeQL ✅ · Pages ✅.
+---
+
+## تنفيذ إصلاحات قاعدة البيانات (مسارَان مُختبَران)
+
+> مفتاح `anon` ومفتاح `sb_secret_…` **لا ينفّذان SQL** — هما مفتاحا PostgREST فقط
+> (السرّي يتجاوز RLS لكنه لا يصل إلى Management API، ولا توجد على القاعدة أي دالة
+> تنفّذ SQL). تنفيذ `DDL` يحتاج أحد المسارين:
+
+**المسار 1 — لصق يدوي (الأبسط):** Supabase → SQL Editor → الصق `scripts/apply-backend-all.sql`
+مرة واحدة (آمن الإعادة) → ثم تحقّق:
+
+```bash
+bash scripts/verify-live-visitor.sh          # الحكم بعين الزائر: صفر فواتير + 15 مفتاحًا عامًا
+```
+
+**المسار 2 — اتصال مباشر (بكلمة مرور القاعدة):**
+
+```bash
+SUPABASE_DB_PASSWORD='...' bash scripts/apply-live-psql.sh --check   # فحص الاعتماد بلا تنفيذ
+SUPABASE_DB_PASSWORD='...' bash scripts/apply-live-psql.sh           # التنفيذ + التحقق
+```
+
+المضيف المُثبَت بالقياس: `aws-1-eu-west-1.pooler.supabase.com` (المستخدم `postgres.<ref>`)
+— والمضيف المباشر `db.<ref>.supabase.co` يعطي IPv6 فقط.
