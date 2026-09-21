@@ -49,7 +49,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           <div className="product-related-title">📦 منتجات من نفس الصنف — {(item as any).categories?.name}</div>
           <div className="product-related">
             {related.map((r:any)=>(
-              <Link key={r.id} href={`/product/${r.id}`} className="related-card" style={{textDecoration:"none", color:"inherit"}}>
+              <Link key={r.id} href={{ pathname: "/product/[id]", query: { id: String(r.id) } }} className="related-card" style={{textDecoration:"none", color:"inherit"}}>
                 <div className="related-card-img">{r.image_url ? <img src={r.image_url} alt={r.name} loading="lazy"/> : "📦"}</div>
                 <div className="related-card-body"><div className="related-card-name">{r.name}</div><div className="related-card-price">{r.price_text} ج.م</div><div style={{fontSize:"0.72rem", fontWeight:700, color: r.display_qs>0 ? "#00c9a7" : "#e5484d"}}>{r.display_qs>0 ? `✅ متاح ${r.display_qs}` : "❌ غير متوفر"}</div></div>
               </Link>

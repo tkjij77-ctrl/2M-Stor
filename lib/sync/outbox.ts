@@ -96,6 +96,7 @@ export async function pullAll(db:DbCategory[]){
   const sb=createClient();
   const [catsR, itemsR] = await Promise.all([sb.from('categories').select('*'), sb.from('items').select('*')]);
   if(catsR.error) throw catsR.error;
+  if(itemsR.error) throw itemsR.error;
   // merge كما في index.html:3327
   const aliveCats=new Set(catsR.data.filter((r:any)=>!r.deleted_at).map((r:any)=>r.id));
   for(let i=db.length-1;i>=0;i--) if(db[i].cid && !aliveCats.has(db[i].cid)) db.splice(i,1);

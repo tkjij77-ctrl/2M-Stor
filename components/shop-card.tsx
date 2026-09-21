@@ -5,7 +5,8 @@ import Link from "next/link";
 export function ShopCard({ item, onAdd, qtyInCart }: { item: DbItem; onAdd: (qty:number)=>void; qtyInCart: number }) {
   const qs = getQs(item);
   const available = qs > 0;
-  const href = `/product/${item.cid || item.lid}`;
+  // ✅ إصلاح typedRoutes: الصيغة النصية المبنية ديناميكيًا لا تُطابق RouteImpl<string>
+  const href = { pathname: "/product/[id]" as const, query: { id: String(item.cid || item.lid) } };
   return (
     <div className="shop-card">
       <Link href={href} className="shop-img" style={{ textDecoration: "none" }}>{item.imgUrl ? <img src={item.imgUrl} alt={item.n} loading="lazy" decoding="async"/> : "🛍️"}</Link>
