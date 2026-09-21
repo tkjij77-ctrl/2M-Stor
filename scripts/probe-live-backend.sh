@@ -13,7 +13,15 @@
 set -uo pipefail
 REF="uzzxhbotbshsgpdnbrmd"
 BASE="https://$REF.supabase.co"
-KEY="$(cat /tmp/anon.key)"
+# مفتاح anon العام (منشور في الموقع نفسه) — يُقرأ من ملف مؤقت أو من index.html
+if [ -f /tmp/anon.key ]; then
+  KEY="$(cat /tmp/anon.key)"
+else
+  KEY="$(grep -oE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html 2>/dev/null | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
+fi
+if [ -z "${KEY:-}" ]; then
+  echo "❌ لم أجد مفتاح anon — لا ملف /tmp/anon.key ولا مفتاح منشور في index.html"; exit 1
+fi
 H=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json")
 
 t() { timeout 20 curl -s -o /tmp/probe.out -w "%{http_code}" "${H[@]}" "$@" 2>/dev/null; }
