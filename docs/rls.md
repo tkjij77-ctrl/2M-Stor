@@ -9,7 +9,7 @@
 | البند | العدد | المصدر |
 |---|---|---|
 | جداول في `public` | **8** | الترحيلات كلها (7 أساس + `login_attempts`) |
-| سياسات RLS | **22** | الترحيلات كلها بالترتيب |
+| سياسات RLS | **23** | الترحيلات كلها بالترتيب |
 | دوال | 27 | منها 4 مساعدة أمنية · 4 دوال قفل دخول · `public_settings` للزائر |
 | مشغّلات (Triggers) | 8 | منها حارس تصعيد الدور |
 | فهارس | 15 | منها فهرسان نصيان عربيان · 3 لجدول محاولات الدخول |
@@ -41,10 +41,25 @@
 
 - السياسات المتعلقة بالمستخدمين صارت `for … to authenticated` (لا تُقيَّم للزائر أصلًا)،
 - ما يحتاجه الزائر فعلًا (`categories` · `items` · إعدادات المتجر) يمر عبر
-  **`public_settings()`** (security definer · قائمة بيضاء بـ12 مفتاحًا: `store_name` · `phone` ·
-  `address` · `desc` · `currency` · `return_days` · `return_note` · `shipping_fee` ·
-  `free_shipping_over` · `tax_pct` · `stock_mode` · `oversell_policy`) — فلا يُكشف الجدول ولا
-  أي مفتاح داخلي، ولا يُمنح الزائر تنفيذ `my_role()`.
+  **`public_settings()`** (security definer · قائمة بيضاء بـ**15 مفتاحًا**) **وسياسة
+  `settings_public_read` على الجدول بنفس القائمة** — فلا يُكشف أي مفتاح داخلي، ولا يُمنح
+  الزائر تنفيذ `my_role()`.
+
+  المفاتيح الخمسة عشر = **مفاتيح `mergeSettings()` في `index.html` حرفيًا**:
+  `store_name` · `address` · `phone` · `footer` · `tax_pct` · `store_desc` · `return_days` ·
+  `return_note` · `shipping_fee` · `free_shipping_over` · `coupon_code` · `coupon_pct` ·
+  `stock_mode` · `oversell_policy` · `role_perms`
+  — **مفحوصة آليًا**: يفشل الفاحص إن أضافت الواجهة مفتاحًا ولم يُضَف للقائمة (أو العكس).
+
+  > ⚠️ **عطل حقيقي اكتُشف وأُصلح (21 سبتمبر 2026):** القائمة كُتبت أول مرة من الذاكرة
+  > بأسماء لا وجود لها (`store_phone` · `store_address` · `currency`) وأغفلت
+  > `footer` · `coupon_code` · `coupon_pct` · `role_perms` — أي أن الواجهة كانت ستفقد
+  > التذييل والكوبون للزائر بعد الترحيل، صامتةً. والسبب الجذري: قائمة مكتوبة في SQL
+  > تُوازَن بذاكرة بشرية لا بمصدر الكود. الحل: فحص آلي يقارن القائمتين.
+  >
+  > وثانيًا: الجدول كان سيصير مقصورًا على `to authenticated`، والواجهة تقرأه مباشرة
+  > ⇒ كان الزائر سيقرأ **صفرًا** بلا خطأ. لذلك أُضيفت `settings_public_read` لنفس
+  > المفاتيح: واجهة الزائر لا تتغير، وصلاحيته لا تتوسع (نفس القائمة بالضبط).
 - **دوال القفل الثلاث ممنوحة للزائر عن قصد** (`login_gate` · `login_fail` · `login_ok`):
   من يحاول الدخول هو غير مسجَّل بالتعريف، فلو مُنعت الدوال لانهار القفل. وهي لا تكشف شيئًا:
   تُرجع `allowed`/`locked_seconds`/`attempts_left` فقط، والقفل نفسه محسوب داخل الجدول المحجوب.
@@ -53,7 +68,7 @@
 |---|---|---|
 | `categories` | `cats_read` (select) · `cats_write` (all) | القراءة للجميع (المتجر مفتوح بلا تسجيل) · الكتابة لـ`admin`/`worker` |
 | `items` | `items_read` (select) · `items_write` (all) | نفس القاعدة |
-| `settings` | `settings_read` (select) · `settings_write` (all) | نفس القاعدة |
+| `settings` | `settings_read` (select · `authenticated`) · `settings_public_read` (select · `anon` — 15 مفتاحًا عامًّا فقط) · `settings_write` (all · مدير) | المسجَّل يقرأ كل الإعدادات · الزائر يقرأ المفاتيح العامة فقط |
 | `invoices` | `inv_read` · `inv_create` · `inv_update` · `inv_delete` | قراءة: الإدارة أو البائع نفسه أو العميل باسمه · إنشاء: أي مسجَّل · تعديل: الإدارة · حذف: المدير |
 | `invoice_items` | `iitems_insert` · `iitems_update` · `iitems_delete` | إنشاء لأي مسجَّل · تعديل/حذف للإدارة (`iitems_rw` القديمة **محذوفة**) |
 | `audit_log` | `audit_read` (select) · `audit_write` (insert) | كتابة للعامل والمدير فقط (كانت لأي مسجَّل) |

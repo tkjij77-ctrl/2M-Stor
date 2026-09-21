@@ -109,6 +109,11 @@ echo ""
 echo "【4】 البيانات المرجعية للاختبار (أقسام وحسابات)"
 Q "insert into public.categories (name) values ('قسم تجريبي')" >/dev/null
 CAT=$(Q "select id from public.categories limit 1")
+# إعدادات مثل قاعدتك الحيّة: مفاتيح واجهة + مفتاح داخلي (يجب ألّا يصل للزائر)
+Q "insert into public.settings (key, value) values
+     ('store_name','متجر الاختبار'), ('footer','شكراً لتسوقكم'), ('tax_pct','0'),
+     ('phone','0100'), ('address','المنصورة'), ('role_perms','{\"customer\":{}}'),
+     ('baseline_synced','2026-08-26')" >/dev/null
 for pair in "$STAFF_UID:worker1:worker" "$ADMIN_UID:admin1:admin" "$CUST_UID:cust1:customer"; do
   UID_="${pair%%:*}"; REST="${pair#*:}"; UN="${REST%%:*}"; RO="${REST##*:}"
   Q "insert into auth.users (id, email) values ('$UID_','$UN@test.local') on conflict (id) do nothing" >/dev/null
@@ -217,8 +222,19 @@ V=$(as_role anon - "select count(*) from public.categories" | tr -d ' ')
 [ "${V:-0}" -ge 1 ] && ok "الزائر يقرأ الأقسام ($V)" || bad "الزائر لا يقرأ الأقسام" "$V"
 V=$(as_role anon - "select public.public_settings() ? 'store_name'" | tr -d ' ')
 [ "$V" = "t" ] || [ "$V" = "f" ] && ok "الإعدادات العامة متاحة للزائر (public_settings)" || bad "public_settings لا تعمل للزائر" "$V"
+# ── الإعدادات العامة للزائر: نفس ما تقرأه الواجهة بالضبط، ولا مفتاح داخلي ──
+# (عطل حقيقي: السياسة كانت لتُصفّر قراءة الزائر للجدول ⇒ يفقد التذييل والكوبون بصمت)
 V=$(as_role anon - "select count(*) from public.settings" | tr -d ' ')
-[ "${V:-1}" = "0" ] && ok "جدول الإعدادات نفسه مقصور على المسجَّلين (0 صف للزائر)" || bad "الزائر يقرأ جدول الإعدادات" "$V"
+[ "${V:-0}" -ge 5 ] && ok "الزائر يقرأ الإعدادات العامة مباشرة ($V مفتاحًا — كما تقرأ الواجهة)" || bad "الزائر لا يقرأ الإعدادات العامة" "$V"
+V=$(as_role anon - "select count(*) from public.settings where key = 'baseline_synced'" | tr -d ' ')
+[ "${V:-1}" = "0" ] && ok "الزائر لا يرى المفاتيح الداخلية (baseline_synced)" || bad "الزائر يرى مفتاحًا داخليًا!" "$V"
+V=$(as_role anon - "select count(*) from public.settings where key in ('footer','tax_pct')" | tr -d ' ')
+[ "${V:-0}" = "2" ] && ok "المفاتيح التي تستخدمها الواجهة متاحة (footer · tax_pct)" || bad "مفتاح من مفاتيح الواجهة مفقود" "$V"
+V=$(as_role anon - "select jsonb_object_keys(public.public_settings())" | wc -l | tr -d ' ')
+V2=$(as_role anon - "select count(*) from public.settings" | tr -d ' ')
+[ "${V:-0}" = "${V2:-1}" ] && ok "القائمة البيضاء وقراءة الجدول متطابقتان ($V = $V2)" || bad "الدالة والسياسة مختلفتان!" "$V مقابل $V2"
+V=$(as_role authenticated "$STAFF_UID" "select count(*) from public.settings" | tr -d ' ')
+[ "${V:-0}" -ge 7 ] && ok "المسجَّل يقرأ كل الإعدادات ($V)" || bad "المسجَّل لا يقرأ كل الإعدادات" "$V"
 V=$(as_role anon - "insert into public.items (category_id,name,price_text,price_num,stock_q,display_qs) values ($CAT,'تسلل','1',1,1,1)")
 echo "$V" | grep -qiE "denied|policy|permission" && ok "الزائر لا يستطيع الإضافة" || bad "الزائر أضاف صنفًا!" "$V"
 V=$(as_role anon - "select count(*) from public.invoices" | tr -d ' ')

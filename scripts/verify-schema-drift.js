@@ -361,6 +361,43 @@ function selfCheck() {
   }
   check("كل سياسة تُحذف قبل إنشائها (ترحيلات آمنة الإعادة)", notIdempotent.length === 0, notIdempotent.slice(0, 3).join(" · "));
 
+  // 2-ج) قائمة الإعدادات العامة (public_settings + settings_public_read) يجب أن
+  //      تطابق **حرفيًا** مفاتيح `mergeSettings()` في الواجهة.
+  //      ⚠️ سبب هذا الفحص: العطل الحقيقي الذي وقع فعلًا — كُتبت القائمة من الذاكرة
+  //      باسم `store_phone` غير الموجود، وأُغفل `footer` و`coupon_code`، فكانت
+  //      واجهة الزائر ستفقد التذييل والكوبون بعد الترحيل بلا أي رسالة خطأ.
+  {
+    const app = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    const appKeys = new Set();
+    const mergeBlock = /function mergeSettings[\s\S]*?\n    \}/.exec(app);
+    if (mergeBlock) {
+      const mapBlock = /const map = \{([\s\S]*?)\};/.exec(mergeBlock[0]);
+      if (mapBlock) for (const m of mapBlock[1].matchAll(/([a-z_]+)\s*:/g)) appKeys.add(m[1]);
+    }
+    if (/rs\.key === 'role_perms'/.test(mergeBlock ? mergeBlock[0] : app)) appKeys.add("role_perms");
+
+    const sqlFile = files.find((f) => f.includes("rls_anon_access"));
+    const sql = fs.readFileSync(path.join(MIGRATIONS, sqlFile), "utf8");
+    const lists = [...sql.matchAll(/key in \(([\s\S]*?)\)/g)].map((m) =>
+      new Set([...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]))
+    );
+    const sqlKeys = lists[0] || new Set();
+    const missingInSql = [...appKeys].filter((k) => !sqlKeys.has(k));
+    const extraInSql = [...sqlKeys].filter((k) => !appKeys.has(k));
+    check(
+      "قائمة الإعدادات العامة تطابق مفاتيح الواجهة (" + appKeys.size + " مفتاحًا)",
+      appKeys.size > 0 && missingInSql.length === 0 && extraInSql.length === 0,
+      (missingInSql.length ? "ناقص في SQL: " + missingInSql.join(" · ") + " " : "") +
+      (extraInSql.length ? "زائد في SQL: " + extraInSql.join(" · ") : "")
+    );
+    // الدالة والسياسة يجب أن تستخدما **نفس** القائمة (وإلا اختلفت رؤية الواجهة عن الدالة)
+    check(
+      "public_settings وsettings_public_read بنفس القائمة",
+      lists.length >= 2 && lists.slice(1).every((l) => l.size === sqlKeys.size && [...l].every((k) => sqlKeys.has(k))),
+      lists.length < 2 ? "قائمة واحدة فقط في الملف" : ""
+    );
+  }
+
   // 3) الجداول التي يقرأها التطبيق موجودة في المخطط
   const appTables = new Set();
   const appRpcs = new Set();

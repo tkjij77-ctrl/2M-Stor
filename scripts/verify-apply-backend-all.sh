@@ -63,6 +63,11 @@ Q "insert into public.invoices(invoice_no, customer_name, total) values
 Q "create policy leak_probe_read on public.invoices for select using (true);
    create policy leak_probe_write on public.invoices for update using (true);
    create policy leak_probe_delete on public.invoices for delete using (true)" >/dev/null
+# إعدادات مثل قاعدتك الحيّة (اسم المتجر · تذييل · كوبون · مفتاح داخلي)
+Q "insert into public.settings (key, value) values
+     ('store_name','آل السيد'), ('footer','شكراً لتسوقكم'), ('tax_pct','0'),
+     ('coupon_code','SAVE10'), ('coupon_pct','10'), ('role_perms','{\"customer\":{}}'),
+     ('baseline_synced','2026-08-26')" >/dev/null
 ROWS=$(Q "select count(*) from public.invoices")
 [ "$ROWS" = "3" ] && echo "  ✅ بذرنا 3 فواتير (كما على القاعدة الحيّة)" || echo "  ⚠️ البذر أنتج $ROWS صفًا"
 BEFORE=$(as_role anon - "select count(*) from public.invoices" | tail -1)
@@ -89,6 +94,15 @@ STILL=$(Q "select count(*) from public.invoices")
 as_role anon - "insert into public.invoices(invoice_no, customer_name, total) values (9999, 'زائر', 1)" >/dev/null 2>&1
 STILL2=$(Q "select count(*) from public.invoices")
 [ "$STILL2" = "3" ] && ok "الزائر لا يُنشئ فاتورة" || bad "الزائر أنشأ فاتورة! صار $STILL2"
+
+echo ""
+echo "【2-ب】 واجهة الزائر لم تفقد إعداداتها (العطل الذي كاد يقع بصمت)"
+PUB_KEYS=$(as_role anon - "select count(*) from public.settings" | tail -1)
+[ "${PUB_KEYS:-0}" -ge 5 ] && ok "الزائر يقرأ المفاتيح العامة ($PUB_KEYS) — التذييل والكوبون باقيان" || bad "الزائر يقرأ $PUB_KEYS مفتاحًا ⇒ سيفقد التذييل والكوبون"
+SEEN=$(as_role anon - "select count(*) from public.settings where key='baseline_synced'" | tail -1)
+[ "${SEEN:-1}" = "0" ] && ok "المفتاح الداخلي غير مكشوف للزائر" || bad "المفتاح الداخلي مكشوف!"
+COUPON=$(as_role anon - "select value from public.settings where key='coupon_code'" | tail -1)
+[ "$COUPON" = "SAVE10" ] && ok "الكوبون متاح للزائر (كما تقرأه الواجهة)" || bad "الكوبون غير متاح للزائر" "$COUPON"
 
 echo ""
 echo "【3】 الكائنات أُنشئت"
