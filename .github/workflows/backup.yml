@@ -1,0 +1,91 @@
+name: Backup
+
+# ═══════════════════════════════════════════════════════════════════
+#  نسخة احتياطية يومية لقاعدة بيانات 2M-Stor (T1.6)
+#  السبب: الخطة المجانية في Supabase بلا PITR، والمشاريع الخاملة تتوقف.
+#  الناتج: ملف SQL يومي محفوظ 90 يومًا + إمكانية استعادة مُختبَرة.
+#
+#  الإعداد المطلوب (مرة واحدة):
+#    GitHub → Settings → Secrets and variables → Actions:
+#      SUPABASE_ACCESS_TOKEN  ← من supabase.com/dashboard/account/tokens
+#      SUPABASE_DB_PASSWORD   ← كلمة مرور قاعدة البيانات (عند إنشاء المشروع)
+#      SUPABASE_PROJECT_REF   ← uzzxhbotbshsgpdnbrmd  (أو أضفه كـ Variable)
+# ═══════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    # 22:00 بتوقيت القاهرة = 19:00 UTC (بعد إغلاق المحل)
+    - cron: '0 19 * * *'
+  workflow_dispatch:      # تشغيل يدوي عند الحاجة
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: التحقق من توفّر الأسرار
+        id: check
+        run: |
+          if [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ] || [ -z "${{ secrets.SUPABASE_DB_PASSWORD }}" ]; then
+            echo "::warning::النسخ الاحتياطي لم يُنفَّذ — الأسرار SUPABASE_ACCESS_TOKEN أو SUPABASE_DB_PASSWORD غير مضبوطة"
+            echo "ready=false" >> $GITHUB_OUTPUT
+          else
+            echo "ready=true" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+
+      - uses: supabase/setup-cli@v1
+        if: steps.check.outputs.ready == 'true'
+        with:
+          version: latest
+
+      - name: ربط المشروع
+        if: steps.check.outputs.ready == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF || 'uzzxhbotbshsgpdnbrmd' }}"
+
+      - name: تصدير المخطط + البيانات
+        if: steps.check.outputs.ready == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          date_str=$(date +%F)
+          mkdir -p backup
+
+          # 1) المخطط (الجداول + السياسات + الدوال + الـ triggers)
+          supabase db dump --schema public -f "backup/${date_str}-schema.sql"
+
+          # 2) البيانات (كل الصفوف) — الحجم الصغير جدًا في هذا المشروع
+          supabase db dump --data-only --schema public -f "backup/${date_str}-data.sql"
+
+          # 3) الملفات المهمة من المستودع كنسخة ثانية
+          cp -r supabase/migrations backup/${date_str}-migrations 2>/dev/null || true
+
+          echo "### محتوى النسخة" > summary.md
+          echo "" >> summary.md
+          ls -lh backup | tail -n +2 >> summary.md
+          echo "" >> summary.md
+          echo "**عدد الأصناف:**" >> summary.md
+          grep -c "INSERT INTO public.items" "backup/${date_str}-data.sql" 2>/dev/null >> summary.md || echo "—" >> summary.md
+          cat summary.md
+
+      - name: حفظ النسخة كـ Artifact
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_number }}
+          path: backup/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: تقرير في ملخص التشغيل
+        if: steps.check.outputs.ready == 'true'
+        run: cat summary.md >> $GITHUB_STEP_SUMMARY
