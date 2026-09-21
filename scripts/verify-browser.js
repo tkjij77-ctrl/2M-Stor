@@ -164,7 +164,12 @@ async function run(label, url, allowCDN) {
 
   if (after.r.onerrorSample.length) line('\n  ℹ️ عناصر بها [onerror] في النسخة المُصلَّحة (للتشخيص):\n    ' + after.r.onerrorSample.join('\n    '));
   if (after.r.cats > 0) line(`\n  ℹ️ البيانات: ${after.r.cats} قسمًا · أول قسم: «${after.r.firstCat}»`);
-  if (after.consoleErrors.length) line('\n  ℹ️ أخطاء الكونسول المتبقية بعد الإصلاح (موروثة من قاعدة البيانات — انظر N-1):\n    ' + [...new Set(after.consoleErrors)].slice(0, 4).join('\n    '));
+  // ملاحظة N-1 (مُغلقة بترحيل 20260921050000): كانت هذه الأخطاء تأتي من القاعدة
+  // لأن سياسات الجداول كانت تفشل للزائر («permission denied for function my_role»).
+  // الاختبار **يحجب طلبات Supabase عمدًا** حفاظًا على بيانات المحل، فالطلبات
+  // المحجوبة تُنتج ERR_FAILED/404 هنا — لا عطلًا في التطبيق. الإثبات الحقيقي
+  // لسلوك الزائر على القاعدة نفسها موجود في scripts/verify-sql-live.sh (قسم RLS).
+  if (after.consoleErrors.length) line('\n  ℹ️ أخطاء الكونسول المتبقية (طلبات Supabase محجوبة في الاختبار — ليست أعطالًا؛ سلوك الزائر مُختبَر على قاعدة حقيقية في verify-sql-live):\n    ' + [...new Set(after.consoleErrors)].slice(0, 4).join('\n    '));
   if (after.pageErrors.length) line('\n  ⚠️ أخطاء الصفحة بعد الإصلاح:\n    ' + after.pageErrors.slice(0, 5).join('\n    '));
   if (after.cspViolations.length) line('\n  ⚠️ انتهاكات CSP:\n    ' + after.cspViolations.slice(0, 5).join('\n    '));
 

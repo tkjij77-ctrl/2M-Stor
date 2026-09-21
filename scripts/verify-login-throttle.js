@@ -1,0 +1,223 @@
+// ═══════════════════════════════════════════════════════════════════
+//  F2 — قفل محاولات الدخول: هل هو حقيقي أم وهمي؟ (متصفح حقيقي)
+//
+//  العطل القديم: القفل كان في `localStorage` وحده ⇒
+//    • مسح بيانات المتصفح يلغيه
+//    • نافذة خاصة/جهاز آخر لا تراه أصلًا
+//  الاختبار يثبت أن القفل الجديد لا يعتمد على المتصفح: نُقلّد السيرفر
+//  (login_gate / login_fail / login_ok) بحالة محفوظة **خارج المتصفح**،
+//  ثم نمسح localStorage ونفتح نافذة جديدة ونتأكد أن القفل باقٍ.
+//
+//  التشغيل: node scripts/verify-login-throttle.js   (يحتاج الخادم على 8123)
+// ═══════════════════════════════════════════════════════════════════
+const { chromium } = require('playwright');
+
+const URL = process.env.APP_URL || 'http://127.0.0.1:8123/index.html';
+const MOCK_URL = 'https://mock.supabase.co';
+
+// ── سيرفر مُقلَّد: الحالة تعيش خارج المتصفح ──────────────────────
+const S = { fails: [], windowMs: 15 * 60 * 1000, limit: 5, calls: { gate: 0, fail: 0, ok: 0 } };
+const now = () => Date.now();
+const prune = () => { S.fails = S.fails.filter((a) => now() - a.at < S.windowMs); };
+function gate(u) {
+  prune();
+  const n = S.fails.filter((a) => a.u === u).length;
+  if (n >= S.limit) return { allowed: false, locked_seconds: 300, attempts_left: 0, scope: 'username' };
+  return { allowed: true, locked_seconds: 0, attempts_left: S.limit - n, scope: 'none' };
+}
+
+(async () => {
+  const browser = await chromium.launch();
+  const errors = [];
+  let fails = 0;
+  const check = (name, pass, detail) => {
+    if (!pass) fails++;
+    console.log(`  ${pass ? '✅' : '❌'} ${name}${detail ? '  → ' + String(detail).slice(0, 90) : ''}`);
+  };
+
+  // ── صفحة بسحابة مُقلَّدة (on:true ⇒ واجهة الدخول السحابية كما في الإنتاج) ──
+  async function open({ cloud = true, seed = true } = {}) {
+    const ctx = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1200, height: 900 } });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 140)));
+    await page.route('**/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (!url.includes('supabase.co')) return route.continue();
+      const fn = url.includes('/rpc/') ? url.split('/rpc/')[1].split('?')[0] : '';
+      const body = (() => { try { return req.postDataJSON() || {}; } catch (e) { return {}; } })();
+      if (fn === 'login_gate' || fn === 'login_fail') {
+        S.calls[fn === 'login_gate' ? 'gate' : 'fail']++;
+        if (fn === 'login_fail') S.fails.push({ u: body.p_username, d: body.p_device, at: now() });
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gate(body.p_username)) });
+      }
+      if (fn === 'login_ok') {
+        S.calls.ok++;
+        S.fails = S.fails.filter((a) => a.u !== body.p_username);
+        return route.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+      }
+      if (fn) return route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+      if (url.includes('/auth/v1/')) {
+        // كل محاولات الدخول السحابي تفشل بحساب/كلمة مرور خاطئة
+        return route.fulfill({ status: 400, contentType: 'application/json',
+          body: JSON.stringify({ code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }) });
+      }
+      if (url.includes('/rest/v1/')) {
+        const single = (req.headers()['accept'] || '').includes('pgrst.object');
+        return route.fulfill({ status: 200, contentType: 'application/json', body: single ? 'null' : '[]' });
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+    await page.addInitScript((cfg) => {
+      localStorage.clear();
+      if (cfg.seed) {
+        localStorage.setItem('al_sayed_users', JSON.stringify([
+          { u: 'owner', role: 'admin', name: 'المالك', p: 'x', salt: 'y' },   // كلمة المرور غير معروفة ⇒ فشل مؤكد
+        ]));
+        localStorage.setItem('al_sayed_db', JSON.stringify([]));
+        localStorage.setItem('al_sayed_invoices', '[]');
+      }
+      localStorage.setItem('al_sayed_cloud', JSON.stringify({ url: 'https://mock.supabase.co', key: 'anon-mock', on: !!cfg.cloud }));
+    }, { cloud, seed });
+    await page.goto(URL, { waitUntil: 'load' });
+    await page.waitForFunction(() => typeof doLogin === 'function');
+    await page.evaluate(() => { try { renderLogin(); showLogin(); } catch (e) {} });
+    await page.waitForTimeout(600);
+    return { ctx, page };
+  }
+
+  /** يدعم وضعي الدخول: سحابي (cl-email) ومحلي (login-user) */
+  async function tryLogin(page, user, pass) {
+    return page.evaluate(async (creds) => {
+      const cloud = !!document.getElementById('cl-email');
+      if (cloud) {
+        document.getElementById('cl-email').value = creds.u;
+        document.getElementById('cl-pass').value = creds.p;
+        await cloudDoLogin();
+      } else {
+        document.getElementById('login-user').value = creds.u;
+        document.getElementById('login-pass').value = creds.p;
+        await doLogin();
+      }
+      await new Promise((r) => setTimeout(r, 400));
+      const el = document.getElementById('loginError');
+      return { mode: cloud ? 'cloud' : 'local', text: (el && el.textContent) || '', shown: !!(el && el.style.display !== 'none') };
+    }, { u: user, p: pass });
+  }
+
+  console.log('\n═══════════════════════════════════════════════════════════════');
+  console.log('  F2 — قفل محاولات الدخول (متصفح حقيقي · سيرفر مُقلَّد بحالة)');
+  console.log('═══════════════════════════════════════════════════════════════');
+
+  let { ctx, page } = await open({ cloud: true });
+
+  // ── 0) الواجهة السحابية هي المعروضة (المسار الحقيقي للمستخدمين) ──
+  console.log('\n【0】 المسار المُختبَر');
+  const mode = await page.evaluate(() => ({ cloud: !!document.getElementById('cl-email'), local: !!document.getElementById('login-user') }));
+  check('واجهة الدخول السحابية معروضة', mode.cloud === true, JSON.stringify(mode));
+
+  // ── 1) محاولة فاشلة: رسالة واضحة + المتبقي ──
+  console.log('\n【1】 المحاولة الأولى: رسالة تفهم، لا «حدث خطأ»');
+  const r1 = await tryLogin(page, 'owner@test.com', 'wrong');
+  check('رسالة خطأ مفهومة للمستخدم', r1.shown && r1.text.includes('غير صحيحة'), r1.text.slice(0, 80));
+  check('تظهر المحاولات المتبقية (من السيرفر)', /بقي\s*\d+/.test(r1.text), r1.text.slice(-45));
+  check('السيرفر سُئل فعلًا (login_gate + login_fail)', S.calls.gate > 0 && S.calls.fail === 1, JSON.stringify(S.calls));
+
+  // ── 2) خمس محاولات ⇒ قفل الحساب ──
+  console.log('\n【2】 خمس محاولات فاشلة ⇒ قفل');
+  for (let i = 0; i < 4; i++) await tryLogin(page, 'owner@test.com', 'wrong');
+  const r5 = await tryLogin(page, 'owner@test.com', 'wrong');
+  check('رسالة القفل ظاهرة ومفهومة', r5.shown && /قُفل|قفل/.test(r5.text), r5.text.slice(0, 85));
+  check('السيرفر نفسه يقول «مقفول»', gate('owner@test.com').allowed === false, JSON.stringify(gate('owner@test.com')));
+
+  // ── 3) جوهر F2: مسح بيانات المتصفح + نافذة جديدة ──
+  console.log('\n【3】 مسح بيانات المتصفح ونافذة جديدة — هل يسقط القفل؟');
+  await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+  await ctx.close();
+  ({ ctx, page } = await open({ cloud: true }));
+  const rFresh = await tryLogin(page, 'owner@test.com', 'wrong');
+  check('بعد المسح: القفل باقٍ (لا يُتجاوز بتفريغ المتصفح)', /قُفل|قفل/.test(rFresh.text), rFresh.text.slice(0, 85));
+  const leftAfterClear = await page.evaluate(() => lockInfo());
+  check('لا قفل محلي محفوظ — القفل قادم من السيرفر', leftAfterClear === null, JSON.stringify(leftAfterClear));
+  const rGuess = await tryLogin(page, 'owner@test.com', 'maybe-correct');
+  check('حتى «كلمة المرور الصحيحة» لا تُدخل أثناء القفل', /قُفل|قفل/.test(rGuess.text), rGuess.text.slice(0, 60));
+  check('لا محاولة جديدة أُرسلت للسحابة أثناء القفل', S.calls.fail === 5, 'login_fail=' + S.calls.fail);
+
+  // ── 4) حساب آخر لا يُعاقب ──
+  console.log('\n【4】 حساب آخر لا يُقفل بسبب حساب مُقيَّد');
+  check('السيرفر يسمح للحساب الآخر', gate('other@test.com').allowed === true, JSON.stringify(gate('other@test.com')));
+  const rOther = await tryLogin(page, 'other@test.com', 'wrong');
+  check('الحساب الآخر يُدخل محاولته (لا رسالة قفل له)', !/قُفل/.test(rOther.text), rOther.text.slice(0, 70));
+
+  // ── 5) انتهاء المدة ⇒ يعود الدخول ──
+  console.log('\n【5】 انتهاء المدة ⇒ يعود الدخول متاحًا');
+  S.fails = S.fails.map((a) => ({ ...a, at: now() - S.windowMs - 1000 }));
+  check('بعد المدة السيرفر يسمح', gate('owner@test.com').allowed === true, JSON.stringify(gate('owner@test.com')));
+  const rExpired = await tryLogin(page, 'owner@test.com', 'wrong');
+  check('المستخدم يرى فشلًا عاديًا لا قفلًا', !/قُفل/.test(rExpired.text), rExpired.text.slice(0, 70));
+  await ctx.close();
+
+  // ── 6) نجاح الدخول يمسح المحاولات (حساب محلي على جهاز متصل بالسحابة) ──
+  console.log('\n【6】 نجاح الدخول يمسح المحاولات المسجَّلة');
+  S.fails = [];
+  o = await open({ cloud: true });
+  await o.page.evaluate(() => forceLocalLogin());
+  await o.page.waitForSelector('#login-user', { timeout: 10000 });
+  const okFlow = await o.page.evaluate(async () => {
+    // نضيف المستخدم إلى مصفوفة users الحيّة (لا في localStorage فقط — التطبيق يقرأها عند الإقلاع)
+    const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+    users.push({ u: 'worker2', role: 'worker', name: 'عامل', salt: salt, p: await pbkdf2('good-pass-123', salt) });
+    const seen = [];
+    for (let i = 0; i < 4; i++) seen.push(await serverFail('worker2'));
+    const gateBefore = await gateBeforeLogin('worker2');
+    document.getElementById('login-user').value = 'worker2';
+    document.getElementById('login-pass').value = 'good-pass-123';
+    await doLogin();
+    await new Promise((r) => setTimeout(r, 700));
+    return { seen, gateBefore, err: (document.getElementById('loginError') || {}).textContent || '' };
+  });
+  check('الدخول المحلي يستخدم نفس القفل السيرفري', okFlow.seen.every((x) => x && x.allowed === true) && okFlow.gateBefore.block === false,
+        'متبقٍ قبل النجاح: ' + okFlow.gateBefore.left);
+  check('الدخول نجح فعلًا (لا رسالة خطأ)', !/❌/.test(okFlow.err), okFlow.err.slice(0, 50) || '(لا رسالة)');
+  check('النجاح مسح المحاولات على السيرفر (login_ok نُفِّذ)', S.calls.ok === 1 && gate('worker2').attempts_left === 5,
+        'login_ok=' + S.calls.ok + ' · ' + JSON.stringify(gate('worker2')));
+  await o.ctx.close();
+
+  // ── 7) بلا اتصال: قفل محلي متصاعد + إفصاح صريح ──
+  console.log('\n【7】 بلا اتصال: قفل محلي متصاعد وإفصاح صريح');
+  o = await open({ cloud: false });
+  const offline = await o.page.evaluate(async () => {
+    localStorage.removeItem('al_sayed_lock');
+    for (let i = 0; i < 6; i++) failLogin();
+    const g = await gateBeforeLogin('owner');
+    return { block: g.block, online: g.online, msg: g.message, info: lockInfo() };
+  });
+  check('القفل المحلي يعمل (بلا إنترنت)', offline.block === true, offline.msg);
+  check('ويُفصح أنه محلي — بلا إيهام', offline.online === false && /محلي/.test(offline.msg), offline.msg);
+  check('المدة متصاعدة (5 محاولات ⇒ قفل ≥ دقيقة)', offline.info.until > Date.now(), 'strikes=' + offline.info.strikes);
+
+  // ── 8) السقف الزمني الصاعد محليًا ──
+  console.log('\n【8】 القفل المحلي يتضاعف (1 · 5 · 15 · 60 دقيقة)');
+  const esc = await o.page.evaluate(() => {
+    localStorage.removeItem('al_sayed_lock');
+    const out = [];
+    for (let round = 0; round < 3; round++) {
+      for (let i = 0; i < 5; i++) failLogin();
+      localStorage.setItem('al_sayed_lock', JSON.stringify({ ...lockInfo(), until: 0 })); // انتهى القفل ⇒ الجولة التالية
+      out.push(lockInfo().strikes);
+    }
+    return out;
+  });
+  check('التصاعد محفوظ (strikes 1→2→3)', esc.join(',') === '1,2,3', esc.join(','));
+  await o.ctx.close();
+
+  // ── 9) السلامة ──
+  console.log('\n【9】 سلامة');
+  check('لا أخطاء جافاسكربت', errors.length === 0, errors.slice(0, 2).join(' · ') || 'نظيف');
+
+  await browser.close();
+  console.log('\n═══════════════════════════════════════════════════════════════');
+  console.log(fails === 0 ? '  ✅ كل فحوص قفل المحاولات ناجحة (F2 مُثبَت في المتصفح)' : `  ❌ فشل ${fails} فحصًا`);
+  console.log('═══════════════════════════════════════════════════════════════');
+  process.exit(fails === 0 ? 0 : 1);
+})();

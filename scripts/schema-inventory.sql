@@ -17,7 +17,9 @@ with objs as (
   -- ── الجداول ──────────────────────────────────────────────────────
   select 'table'::text as kind, n.nspname || '.' || c.relname as name, ''::text as extra, 1 as ord, c.relname as s1, ''::text as s2
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname in ('public','storage') and c.relkind = 'r'
+  -- ⚠️ الجداول من `public` فقط: جداول `storage.*` تخصّ المنصة لا المشروع،
+  -- وإدخالها كان يولّد «فروقًا» كاذبة لا يصلحها أي ترحيل.
+  where n.nspname = 'public' and c.relkind = 'r'
     and c.relname not in ('spatial_ref_sys','migrations','schema_migrations')
 
   union all
@@ -26,7 +28,7 @@ with objs as (
   from pg_attribute a
   join pg_class c on c.oid = a.attrelid
   join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname in ('public','storage') and c.relkind = 'r' and a.attnum > 0 and not a.attisdropped
+  where n.nspname = 'public' and c.relkind = 'r' and a.attnum > 0 and not a.attisdropped
     and c.relname not in ('spatial_ref_sys','migrations','schema_migrations')
 
   union all
@@ -36,7 +38,7 @@ with objs as (
   join pg_class i on i.oid = x.indexrelid
   join pg_class t on t.oid = x.indrelid
   join pg_namespace n on n.oid = t.relnamespace
-  where n.nspname in ('public','storage') and t.relkind = 'r'
+  where n.nspname = 'public' and t.relkind = 'r'
     and not exists (select 1 from pg_constraint pc where pc.conindid = i.oid)  -- لا تُعدّ قيود المفاتيح فهارس
 
   union all
@@ -51,7 +53,10 @@ with objs as (
   -- ── الدوال في public ─────────────────────────────────────────────
   select 'function', pr.proname, '', 5, pr.proname, ''
   from pg_proc pr join pg_namespace n on n.oid = pr.pronamespace
+  -- ⚠️ دوال الإضافات (pgcrypto: crypt/armor/digest…) تُستثنى: هي من المنصة لا من
+  -- المشروع، وإدخالها كان يملأ التقرير بعشرات «الفروق» لا يصلحها أي ترحيل.
   where n.nspname = 'public'
+    and not exists (select 1 from pg_depend d where d.objid = pr.oid and d.deptype = 'e')
 
   union all
   -- ── المشغّلات (الاسم = الجدول.المشغّل) ────────────────────────────
@@ -59,7 +64,9 @@ with objs as (
   from pg_trigger t
   join pg_class c on c.oid = t.tgrelid
   join pg_namespace n on n.oid = c.relnamespace
-  where not t.tgisinternal and n.nspname in ('public','storage')
+  -- المشغّلات: public + `auth.users` وحدها (هي موضع مشغّل إنشاء الحساب في المشروع)
+  where not t.tgisinternal
+    and (n.nspname = 'public' or (n.nspname = 'auth' and c.relname = 'users'))
 
   union all
   -- ── جداول Realtime ───────────────────────────────────────────────
@@ -72,6 +79,8 @@ with objs as (
   select 'bucket', id, '', 8, id, ''
   from storage.buckets
 )
+-- ملاحظة: أسماء الأعمدة/الفهارس/السياسات مسبوقة بـpublic. أو storage. داخل عمود
+-- `extra` (اسم الجدول). الفاحص يجرّد التسبيق تلقائيًا كي تُطابَق أسماء المستودع.
 select kind || '|' || name || '|' || extra as inventory
 from objs
 order by ord, s1, s2;

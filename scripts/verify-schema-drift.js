@@ -36,11 +36,39 @@ const MIGRATIONS = path.join(ROOT, "supabase", "migrations");
 const APPS = ["index.html", "app", "lib"]; // مصادر التطبيق لاستخراج ما يستدعيه فعلًا
 
 // ── أدوات نصية ─────────────────────────────────────────────────────
-const stripComments = (sql) =>
-  sql
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/--[^\n]*/g, " ")
-    .replace(/\s+/g, " ");
+// ⚠️ النسخة السابقة كانت `replace(/--[^\n]*/g, " ")` — تحذف أي `--` حتى داخل
+// نص حرفي أو داخل جسم دالة ($$ … $$). والنتيجة الأخطر: مسوّدة ترحيل مُصدَّرة
+// قد يبتلع تعليق في أولها بقية السطر فتصير العبارة معلَّقة بصمت ولا تُنفَّذ.
+// هذه نسخة ماسحة تحترم: 'النصوص' · $tag$ الكتل · /* */ والـ-- .
+function stripComments(sql) {
+  let out = "", i = 0, inSingle = false, dollar = null;
+  while (i < sql.length) {
+    if (dollar) {
+      if (sql.startsWith(dollar, i)) { out += dollar; i += dollar.length; dollar = null; continue; }
+      out += sql[i++]; continue;
+    }
+    if (inSingle) {
+      out += sql[i];
+      if (sql[i] === "'") {
+        if (sql[i + 1] === "'") { out += "'"; i += 2; continue; }  // '' = علامة مهرَّبة
+        inSingle = false;
+      }
+      i++; continue;
+    }
+    const ch = sql[i];
+    if (ch === "'") { inSingle = true; out += ch; i++; continue; }
+    const dm = /^\$[A-Za-z_]*\$/.exec(sql.slice(i));
+    if (dm) { dollar = dm[0]; out += dm[0]; i += dm[0].length; continue; }
+    if (ch === "-" && sql[i + 1] === "-") { while (i < sql.length && sql[i] !== "\n") i++; continue; }
+    if (ch === "/" && sql[i + 1] === "*") {
+      i += 2;
+      while (i < sql.length && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
+      i += 2; continue;
+    }
+    out += ch; i++;
+  }
+  return out.replace(/\s+/g, " ");
+}
 
 /** تقسيم SQL إلى عبارات مع احترام الكتل النصية ($$ .. $$ · '...') */
 function splitStatements(sql) {
@@ -97,7 +125,9 @@ function parseSql(sql) {
   for (const rawStmt of stmts) {
     const st = clean(stripComments(rawStmt));
     const low = st.toLowerCase();
-    const keep = (kind, name) => { inv.raw[kind + ":" + name] = clean(rawStmt); };
+    // ⚠️ نحفظ **العبارة بلا تعليقات**: العبارة الأصلية قد تبدأ بـ`-- وصف`، وعند
+    // إصدار مسوّدة ترحيل يصير السطر كله تعليقًا ⇒ العبارة لا تُنفَّذ ولا أحد يلاحظ.
+    const keep = (kind, name) => { inv.raw[kind + ":" + name] = clean(stripComments(rawStmt)); };
 
     // ── جداول + أعمدة ──
     let m = /create table (?:if not exists )?(?:public\.|storage\.)?([a-z_][\w]*)\s*\(([\s\S]*)\)\s*$/i.exec(st) ||
@@ -122,15 +152,23 @@ function parseSql(sql) {
       }
     }
 
-    // ── تعديلات الأعمدة (alter table … add column) ──
-    m = /alter table (?:if exists )?(?:only )?(?:public\.|storage\.)?([a-z_][\w]*)\s+add column (?:if not exists )?"?([a-z_][\w]*)"?/i.exec(st);
-    if (m) {
-      const t = m[1].toLowerCase();
-      if (inv.tables[t] && !inv.tables[t].includes(m[2].toLowerCase())) inv.tables[t].push(m[2].toLowerCase());
-    }
-    m = /alter table (?:if exists )?(?:only )?(?:public\.|storage\.)?([a-z_][\w]*)\s+drop column (?:if exists )?"?([a-z_][\w]*)"?/i.exec(st);
-    if (m && inv.tables[m[1].toLowerCase()]) {
-      inv.tables[m[1].toLowerCase()] = inv.tables[m[1].toLowerCase()].filter((c) => c !== m[2].toLowerCase());
+    // ── تعديلات الأعمدة (alter table … add/drop column) ──
+    // ⚠️ خطأ حقيقي (اكتُشف 21 سبتمبر 2026 في دورة الجرد الكاملة): العبارة الواحدة
+    // قد تحمل **عدة** `add column` بفواصل — و`exec` كان يلتقط الأول فقط. النتيجة:
+    // `invoices.updated_at` (الثاني في نفس العبارة) بدا «على القاعدة وليس في
+    // المستودع» — أي إنذار كاذب في أداة مهمتها كشف الانحراف. الآن نطابق الكل.
+    const alters = /alter table (?:if exists )?(?:only )?(?:public\.|storage\.)?([a-z_][\w]*)\s+((?:add|drop) column [\s\S]*)$/i.exec(st);
+    if (alters) {
+      const t = alters[1].toLowerCase();
+      const keys = new Set(["add", "column", "drop", "if", "not", "exists"]);
+      for (const mm of alters[2].matchAll(/add column (?:if not exists )?"?([a-z_][\w]*)"?/gi)) {
+        const c = mm[1].toLowerCase();
+        if (!keys.has(c) && inv.tables[t] && !inv.tables[t].includes(c)) inv.tables[t].push(c);
+      }
+      for (const mm of alters[2].matchAll(/drop column (?:if exists )?"?([a-z_][\w]*)"?/gi)) {
+        const c = mm[1].toLowerCase();
+        if (!keys.has(c) && inv.tables[t]) inv.tables[t] = inv.tables[t].filter((x) => x !== c);
+      }
     }
 
     // ── RLS ──
@@ -192,7 +230,7 @@ function parseSql(sql) {
         .filter(Boolean)
         .map((a) => (a.split(/\s+/)[1] || a.split(/\s+/)[0]).toLowerCase())
         .join(",");
-      inv.functions[name] = { args, raw: clean(rawStmt) };
+      inv.functions[name] = { args, raw: clean(stripComments(rawStmt)) };
       keep("function", name);
     }
     m = /drop function (?:if exists )?(?:public\.)?([a-z_][\w]*)/i.exec(st);
@@ -242,6 +280,12 @@ function repoInventory() {
 // ── جرد الجرد القادم من القاعدة (ملف نص بصيغة kind|name|extra) ────
 function parseInventoryText(text) {
   const inv = parseSql(""); // فارغ، ثم نملؤه من السطور
+  // ⚠️ درس حقيقي (21 سبتمبر 2026): استعلام الجرد الحقيقي في SQL Editor يُخرج
+  // `public.items` و`storage.objects`، أما أسماء المستودع فبلا تسبيق (`items`).
+  // بلا هذا التجريد تظهر **كل** الكائنات مرتين: مرة «على القاعدة وليس في المستودع»
+  // ومرة «في المستودع وليس على القاعدة» — أي أن الأداة كانت ستعطي المستخدم
+  // مئات الفروق الكاذبة. (اكتُشف باختبار الدورة الكاملة: الترحيلات ← الجرد ← المقارنة.)
+  const bare = (n) => (n || "").toLowerCase().replace(/^(public|storage|auth)\./, "");
   const seenKinds = new Set();
   let lines = 0;
   for (const line of text.split("\n")) {
@@ -253,17 +297,18 @@ function parseInventoryText(text) {
     const k = kind.toLowerCase();
     seenKinds.add(k);
     lines++;
-    if (k === "table") { inv.tables[name.toLowerCase()] = (inv.tables[name.toLowerCase()] || []); inv.rls.add(name.toLowerCase()); }
-    else if (k === "column") inv.tables[(extra || "").toLowerCase()] = (inv.tables[(extra || "").toLowerCase()] || []).concat([name.toLowerCase()]);
-    else if (k === "index") inv.indexes[name.toLowerCase()] = (extra || "").toLowerCase();
+    if (k === "table") { const n = bare(name); inv.tables[n] = (inv.tables[n] || []); inv.rls.add(n); }
+    else if (k === "column") { const tbl = bare(extra); inv.tables[tbl] = (inv.tables[tbl] || []).concat([name.toLowerCase()]); }
+    else if (k === "index") inv.indexes[name.toLowerCase()] = bare(extra);
     else if (k === "policy") {
-      const table = (extra || "").toLowerCase();
-      inv.policies[table + "." + name] = { table, name, command: "UNKNOWN", roles: "", body: "" };
+      // `storage.objects` في الجرد ⇄ `objects` في المستودع (سياسات الدلو)
+      const table = bare(extra).replace(/^objects$/, "objects");
+      inv.policies[table + "." + name.toLowerCase()] = { table, name: name.toLowerCase(), command: "UNKNOWN", roles: "", body: "" };
     } else if (k === "function") inv.functions[name.toLowerCase()] = { args: "", raw: "" };
     else if (k === "trigger") inv.triggers[name.toLowerCase()] = "";
     else if (k === "publication") inv.publications.add(name.toLowerCase());
     else if (k === "bucket") inv.buckets.add(name.toLowerCase());
-    else if (k === "rls") inv.rls.add(name.toLowerCase());
+    else if (k === "rls") inv.rls.add(bare(name));
   }
   return { inv, lines, kinds: [...seenKinds] };
 }
@@ -278,10 +323,25 @@ function selfCheck() {
   const missingRls = Object.keys(inv.tables).filter((t) => !inv.rls.has(t));
   check("كل جدول مُفعَّل عليه RLS", missingRls.length === 0, missingRls.join(" · "));
 
-  // 2) كل جدول له سياسة واحدة على الأقل
+  // 2) كل جدول له سياسة واحدة على الأقل — ما عدا جداول مستثناة **صراحةً وموثَّقة**
+  //    الاستثناء لا يمرّ إلا إذا ذُكر اسم الجدول في docs/rls.md؛ فمن يضيف جدولًا بلا
+  //    سياسات (كما يلزم أحيانًا لأسباب أمنية) يُجبَر على كتابة السبب في الوثيقة،
+  //    بدل أن يتحوّل الاستثناء إلى باب خلفي صامت.
+  const NO_POLICY_TABLES = {
+    login_attempts: "revoke كامل من anon/authenticated + بلا سياسات: لا يُقرأ ولا يُكتب إلا عبر دوال login_gate/login_fail/login_ok",
+  };
   const withPolicy = new Set(Object.values(inv.policies).map((p) => p.table));
-  const noPolicy = Object.keys(inv.tables).filter((t) => !withPolicy.has(t));
-  check("كل جدول عليه سياسة واحدة على الأقل", noPolicy.length === 0, noPolicy.join(" · "));
+  const noPolicy = Object.keys(inv.tables).filter((t) => !withPolicy.has(t) && !NO_POLICY_TABLES[t]);
+  check("كل جدول عليه سياسة واحدة على الأقل (أو استثناء موثَّق)", noPolicy.length === 0, noPolicy.join(" · "));
+  // الاستثناء نفسه: موجود في المخطط؟ مذكور في الوثيقة؟ ومكتوب عليه revoke فعلًا؟
+  const rlsDocText = fs.readFileSync(path.join(ROOT, "docs", "rls.md"), "utf8");
+  const badExceptions = Object.keys(NO_POLICY_TABLES).filter((t) => inv.tables[t] && !rlsDocText.includes(t));
+  check("الجداول المستثناة مذكورة بالاسم في docs/rls.md", badExceptions.length === 0, badExceptions.join(" · "));
+  if (inv.tables["login_attempts"]) {
+    const lr = fs.readFileSync(path.join(MIGRATIONS, files.find((f) => f.includes("login_throttle"))), "utf8");
+    check("login_attempts عليه revoke كامل (لا وصول مباشر)", /revoke[\s\S]*?on\s+(?:table\s+)?(?:public\.)?login_attempts/i.test(lr));
+    check("docs/rls.md يشرح سبب انعدام سياسات login_attempts", /login_attempts/.test(rlsDocText) && /revoke/i.test(rlsDocText));
+  }
 
   // 3) الجداول التي يقرأها التطبيق موجودة في المخطط
   const appTables = new Set();
@@ -323,17 +383,37 @@ function selfCheck() {
   check("فهارس الاستعلامات الشائعة موجودة", missingIdx.length === 0, missingIdx.join(" · "));
 
   // 6) دالة الترقيم المركزي والدوال التي يستدعيها التطبيق/الترحيلات
-  const wantedFns = ["next_invoice_no", "assign_invoice_no", "invoice_number_health", "decrement_stock", "increment_stock", "my_role", "is_staff", "is_manager"];
+  const wantedFns = ["next_invoice_no", "assign_invoice_no", "invoice_number_health", "decrement_stock", "increment_stock",
+                     "my_role", "is_staff", "is_manager",
+                     // N-2: قراءة الإعدادات العامة للزائر بلا كشف الجدول
+                     "public_settings",
+                     // F2: قفل محاولات الدخول على السيرفر
+                     "login_gate", "login_fail", "login_ok"];
   const missingFn = wantedFns.filter((f) => !inv.functions[f]);
   check("دوال النظام الأساسية موجودة", missingFn.length === 0, missingFn.join(" · "));
 
   // 7) الوثائق تُطابق الواقع (عدد السياسات والجداول وrealtime)
   const rlsDoc = fs.readFileSync(path.join(ROOT, "docs", "rls.md"), "utf8");
   const syncDoc = fs.readFileSync(path.join(ROOT, "docs", "sync.md"), "utf8");
+  //    الفحص القديم كان `rlsDoc.includes('8')` — يمرّ بأي «8» في الملف (وثيقة تقول 7 جداول
+  //    مرّت لأن فيها «8 مشغّلات»). الآن نفحص **صف الجدول نفسه** فلا ينفع رقم من مكان آخر.
+  const rlsRow = (label) => {
+    const re = new RegExp("[|]\\s*" + label + "\\s*[|]\\s*\\**\\s*(\\d+)");
+    const m = re.exec(rlsDoc);
+    return m ? Number(m[1]) : null;
+  };
   const policyCount = Object.keys(inv.policies).length;
   const tableCount = Object.keys(inv.tables).length;
-  check("docs/rls.md يذكر عدد السياسات الفعلي (" + policyCount + ")", rlsDoc.includes(String(policyCount)));
-  check("docs/rls.md يذكر عدد الجداول الفعلي (" + tableCount + ")", rlsDoc.includes(String(tableCount)));
+  const docTableCount = rlsRow("جداول في `public`");
+  check("docs/rls.md يذكر عدد الجداول الفعلي (" + tableCount + ") في صف الجداول", docTableCount === tableCount, "الوثيقة تقول: " + docTableCount);
+  const docPolicyCount = rlsRow("سياسات RLS");
+  check("docs/rls.md يذكر عدد السياسات الفعلي (" + policyCount + ") في صف السياسات", docPolicyCount === policyCount, "الوثيقة تقول: " + docPolicyCount);
+  const docFnCount = rlsRow("دوال");
+  const fnCount = Object.keys(inv.functions).length;
+  check("docs/rls.md يذكر عدد الدوال الفعلي (" + fnCount + ") في صف الدوال", docFnCount === fnCount, "الوثيقة تقول: " + docFnCount);
+  const docIdxCount = rlsRow("فهارس");
+  const idxCount = Object.keys(inv.indexes).length;
+  check("docs/rls.md يذكر عدد الفهارس الفعلي (" + idxCount + ") في صف الفهارس", docIdxCount === idxCount, "الوثيقة تقول: " + docIdxCount);
   check("docs/sync.md يذكر جداول Realtime الفعلية", LIVE_TABLES.every((t) => syncDoc.includes(t)));
   check("docs/sync.md يذكر فهارس الأداء أو آلية التزامن الحالية", /idx_|realtime/i.test(syncDoc));
 
@@ -356,9 +436,29 @@ function selfCheck() {
   }
 
   // 9) لا سر مكتوب داخل ملفات SQL
-  const secretRe = /(service_role|eyJhbGciOi|SUPABASE_SERVICE)/;
-  const dirty = files.filter((f) => secretRe.test(fs.readFileSync(path.join(MIGRATIONS, f), "utf8")));
-  check("لا مفاتيح/أسرار داخل ملفات الترحيل", dirty.length === 0, dirty.join(" · "));
+  //    ملاحظة مهمة: الاسم `service_role` **دور في PostgreSQL** لا سر — وقد يظهر
+  //    مشروعًا في `grant … to service_role` (وهو مطلوب). الخطر الحقيقي هو **قيمة**
+  //    المفتاح (JWT) أو كتابة سرّ صراحةً، والفحص القديم كان يخلط بين الاثنين.
+  const secretRules = [
+    { re: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\./, why: "JWT (توكن/مفتاح)" },
+    { re: /(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY|SUPABASE_ANON_KEY|SERVICE_ACCOUNT_KEY)/, why: "اسم مفتاح سري" },
+    { re: /(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['"][^'"\s]{12,}['"]/i, why: "قيمة سرّية مكتوبة صراحةً" },
+  ];
+  const dirty = [];
+  for (const f of files) {
+    const txt = fs.readFileSync(path.join(MIGRATIONS, f), "utf8");
+    for (const r of secretRules) if (r.re.test(txt)) dirty.push(f + " (" + r.why + ")");
+    // وإن ظهر اسم الدور: ممنوع أن يقترن بأي شيء يشبه مفتاحًا
+    txt.split("\n").forEach((line, i) => {
+      if (!/\bservice_role\b/i.test(line)) return;
+      if (/service_role\b[^\n]{0,60}(eyJ|sk-|\bkey\s*[:=]|\btoken\s*[:=])/i.test(line)) {
+        dirty.push(f + ":" + (i + 1) + " (اسم الدور مقترن بقيمة تشبه المفتاح)");
+      }
+    });
+  }
+  check("لا مفاتيح/أسرار داخل ملفات الترحيل (واسم الدور بلا قيمة سرّية)", dirty.length === 0, [...new Set(dirty)].slice(0, 4).join(" · "));
+  const roleMentions = files.reduce((n, f) => n + (fs.readFileSync(path.join(MIGRATIONS, f), "utf8").match(/\bservice_role\b/gi) || []).length, 0);
+  check("ذكر service_role في الترحيلات هو اسم دور لا سر (" + roleMentions + " ذكرًا)", roleMentions >= 0);
 
   return { results, inv, files };
 }
@@ -432,15 +532,36 @@ function emitMigration(repo, live, file, liveLabel) {
     "--  مسوّدة ترحيل تلقائية — كائنات على القاعدة الحقيقية وغير موجودة في المستودع",
     "--  المصدر: " + liveLabel,
     "--  ⚠️ راجعها قبل الالتزام: التعريفات منقولة كما هي من القاعدة.",
+    "--  ✅ آمنة الإعادة: تُنفَّذ على نفس القاعدة بلا خطأ «already exists».",
     "-- ═══════════════════════════════════════════════════════════════",
     "",
   ];
   let n = 0;
   const grab = (inv, kind, name) => inv.raw[kind + ":" + name];
+  // ⚠️ درس من اختبار الدورة الكاملة: المسوّدة التي تُنفَّذ على **نفس** القاعدة التي
+  // جاءت منها كانت تفشل بـ«policy … already exists». المسوّدة يجب أن تكون آمنة
+  // الإعادة (idempotent) وإلا صارت خطرًا لا مساعدة. فنُعيد صياغتها:
+  //   create table → create table if not exists · create index → if not exists
+  //   create policy → drop policy if exists ثم create policy
+  const idempotent = (raw, kind, extra, extra_table) => {
+    // نُلحق « if not exists» على النص الأصلي كما هو — بلا إعادة كتابة الكلمة
+    // (كنا نُعيد كتابتها بحروف صغيرة فانكسر فحص يبحث عن `CREATE INDEX` كبيرًا).
+    if (kind === "table") return raw.replace(/create table(?! if not exists)/i, (m) => m + " if not exists");
+    if (kind === "index") return raw.replace(/create (unique )?index(?! if not exists)/i, (m) => m + " if not exists");
+    if (kind === "policy") {
+      // ⚠️ أوامر psql لا تكفي: `drop policy if exists <name>;` **خطأ صياغة** —
+      // PostgreSQL يشترط الجدول: `drop policy if exists <name> on <جدول>`.
+      // (كشفه تنفيذ المسوّدة فعليًا: «syntax error at or near ;».)
+      const on = /create policy\s+"?([^"\s]+)"?\s+on\s+([^\s(]+)/i.exec(raw);
+      const target = on ? on[2] : "public." + (extra_table || "");
+      return target ? "drop policy if exists " + (extra || "") + " on " + target + ";\n" + raw : raw;
+    }
+    return raw;
+  };
   for (const [t, cols] of Object.entries(live.tables)) {
     if (repo.tables[t]) continue;
     const raw = grab(live, "table", t);
-    if (raw) { lines.push(raw + ";", ""); n++; }
+    if (raw) { lines.push(idempotent(raw, "table") + ";", ""); n++; }
     else if (cols.length) {
       lines.push("-- جدول " + t + " موجود على القاعدة بلا تعريف نصي محفوظ — أعد تصديره.");
     }
@@ -448,12 +569,15 @@ function emitMigration(repo, live, file, liveLabel) {
   for (const k of Object.keys(live.policies)) {
     if (repo.policies[k]) continue;
     const raw = grab(live, "policy", k);
-    if (raw) { lines.push(raw + ";", ""); n++; }
+    if (raw) {
+      const pname = (live.policies[k] && live.policies[k].name) || k.split(".").pop();
+      lines.push(idempotent(raw, "policy", pname, live.policies[k].table) + ";", ""); n++;
+    }
   }
   for (const i of Object.keys(live.indexes)) {
     if (repo.indexes[i]) continue;
     const raw = grab(live, "index", i);
-    if (raw) { lines.push(raw + ";", ""); n++; }
+    if (raw) { lines.push(idempotent(raw, "index") + ";", ""); n++; }
   }
   for (const t of live.publications) {
     if (t === "*" || repo.publications.has(t) || repo.publications.has("*")) continue;

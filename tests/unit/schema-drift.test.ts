@@ -39,6 +39,8 @@ type Inv = {
 type DriftRow = { kind: string; name: string; note: string };
 
 // ── 1) التحليل ─────────────────────────────────────────────────────
+const ROOT = path.resolve(__dirname, "../..");
+
 describe("تحليل SQL إلى جرد", () => {
   it("يستخرج الجداول وأعمدتها", () => {
     const inv = parseSql(`
@@ -164,11 +166,27 @@ describe("المستودع الحقيقي (T3.7)", () => {
     expect(failed).toEqual([]);
   });
 
-  it("سبعة جداول وRLS على كلها", () => {
+  it("ثمانية جداول وRLS على كلها", () => {
     expect(Object.keys(inv.tables).sort()).toEqual(
-      ["audit_log", "categories", "invoice_items", "invoices", "items", "profiles", "settings"]
+      ["audit_log", "categories", "invoice_items", "invoices", "items", "login_attempts", "profiles", "settings"]
     );
     for (const t of Object.keys(inv.tables)) expect(inv.rls.has(t)).toBe(true);
+  });
+
+  it("كل جدول عليه سياسة إلا login_attempts (استثناء موثَّق عن قصد)", () => {
+    const withPolicy = new Set(Object.values(inv.policies).map((p: { table: string }) => p.table));
+    const without = Object.keys(inv.tables).filter((t) => !withPolicy.has(t));
+    // الفاحص يقبل هذا الاستثناء فقط لأنه مكتوب في docs/rls.md — لا لأنه مُدرَج في كود
+    expect(without).toEqual(["login_attempts"]);
+    const doc = fs.readFileSync(path.join(ROOT, "docs", "rls.md"), "utf8");
+    expect(doc).toContain("login_attempts");
+    expect(doc.toLowerCase()).toContain("revoke");
+  });
+
+  it("دوال القفل (F2) وقراءة الزائر (N-2) موجودة", () => {
+    for (const f of ["login_gate", "login_fail", "login_ok", "public_settings"]) {
+      expect(Object.keys(inv.functions)).toContain(f);
+    }
   });
 
   it("دوال الترقيم والمخزون موجودة", () => {
@@ -261,10 +279,67 @@ describe("إصدار مسوّدة ترحيل", () => {
     const file = path.join(os.tmpdir(), "t37-draft-" + Date.now() + ".sql");
     drift.emitMigration(repoInventory().inv, live, file, "dump.sql");
     const written = fs.readFileSync(file, "utf8");
-    expect(written).toContain("CREATE INDEX idx_items_barcode_manual");
-    expect(written.toLowerCase()).toContain("create table public.reports");
+    // المسوّدة **آمنة الإعادة**: تُضاف «if not exists» بلا تغيير حالة الأحرف
+    // (قياسًا على خطأ حقيقي: إعادة كتابة الكلمة بحروف صغيرة كسرت هذا الفحص)
+    expect(written).toMatch(/CREATE INDEX if not exists idx_items_barcode_manual/i);
+    expect(written.toLowerCase()).toContain("create table if not exists public.reports");
     expect(written).toContain("alter publication supabase_realtime add table public.invoice_items;");
     expect(written).toContain("راجعها قبل الالتزام");
     fs.unlinkSync(file);
+  });
+
+  it("السياسة في المسوّدة تُسبَق بـdrop policy … on <جدول> (صياغة صحيحة)", () => {
+    // خطأ حقيقي: `drop policy if exists x;` وحده **خطأ صياغة في PostgreSQL**،
+    // كشفه تنفيذ المسوّدة فعلًا («syntax error at or near ;»)
+    const live = parseSql(
+      "create policy rogue_p on public.items for select using (true);"
+    );
+    const file = path.join(os.tmpdir(), "t37-draft-pol-" + Date.now() + ".sql");
+    drift.emitMigration(repoInventory().inv, live, file, "dump.sql");
+    const written = fs.readFileSync(file, "utf8");
+    expect(written).toContain("drop policy if exists rogue_p on public.items;");
+    expect(written).toContain("create policy rogue_p on public.items");
+    fs.unlinkSync(file);
+  });
+});
+
+// ── 6) عيوب حقيقية اكتشفها اختبار الدورة الكاملة ────────────────────
+describe("دروس الدورة الكاملة (الترحيلات ← الجرد ← المقارنة)", () => {
+  it("كل `add column` في العبارة تُقرأ — لا الأولى فقط", () => {
+    // العطل: `exec` كان يلتقط أول `add column` في العبارة، فضاع updated_at
+    // وكان يظهر للمستخدم «على القاعدة وليس في المستودع» كذبًا
+    const inv = parseSql(
+      "CREATE TABLE public.invoices (id bigint);\n" +
+      "ALTER TABLE public.invoices \nADD COLUMN IF NOT EXISTS status text,\nADD COLUMN IF NOT EXISTS updated_at timestamptz;"
+    );
+    expect(inv.tables["invoices"]).toContain("status");
+    expect(inv.tables["invoices"]).toContain("updated_at");
+  });
+
+  it("الجرد المُسبَّق بـpublic./storage. لا يُنتج فروقًا كاذبة", () => {
+    const live = parseInventoryText(
+      "table|public.items|\n" +
+      "column|barcode|public.items\n" +
+      "index|idx_items_cat|public.items\n" +
+      "policy|items_read|public.items\n" +
+      "policy|products_public_read|storage.objects\n" +
+      "function|next_invoice_no|\n"
+    ).inv;
+    expect(Object.keys(live.tables)).toEqual(["items"]);
+    expect(Object.keys(live.policies)).toEqual(["items.items_read", "objects.products_public_read"]);
+    expect(live.indexes["idx_items_cat"]).toBe("items");
+  });
+
+  it("تعليق في أول العبارة لا يُبتلع داخل النص المحفوظ للمسوّدة", () => {
+    // لو بقي التعليق في النص، صار السطر كله تعليقًا في المسوّدة ⇒ لا تُنفَّذ بصمت
+    const inv = parseSql("-- شرح عربي\ncreate index idx_x on public.items(barcode);");
+    expect(inv.raw["index:idx_x"]).toMatch(/^create index/i);
+    expect(inv.raw["index:idx_x"]).not.toContain("--");
+  });
+
+  it("التعليق داخل نص حرفي لا يُحذف (وإلا تغيّر منطق السياسة)", () => {
+    const inv = parseSql("create policy p_note on public.items for select using (name <> '--ملاحظة');");
+    expect(Object.keys(inv.policies)).toEqual(["items.p_note"]);
+    expect(inv.raw["policy:items.p_note"]).toContain("'--ملاحظة'");
   });
 });

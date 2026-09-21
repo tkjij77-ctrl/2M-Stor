@@ -3928,20 +3928,67 @@
         } catch (e) {}
     }
 
-    // ===== LOGIN LOCK (قفل بعد 5 محاولات فاشلة) =====
+    // ===== LOGIN LOCK =====
+    // 🔒 F2 (2026-09-21): القفل صار **على السيرفر** (login_gate · login_fail ·
+    // login_ok في ترحيل 20260921070000). القديم كان في localStorage وحده:
+    // من يمسح بيانات المتصفح أو يفتح نافذة خاصة يعود كأن شيئًا لم يكن.
+    // ما هنا الآن طبقة احتياطية بلا إنترنت وبمدة متصاعدة (1 · 5 · 15 · 60 دقيقة).
+    const DEVICE_ID = (() => {
+        try {
+            let d = localStorage.getItem('al_sayed_device');
+            if (!d) { d = 'dev-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36).slice(-4); localStorage.setItem('al_sayed_device', d); }
+            return d;
+        } catch (e) { return 'dev-unknown'; }
+    })();
     function lockInfo() { return JSON.parse(localStorage.getItem('al_sayed_lock') || 'null'); }
     function lockedMinutes() {
         const l = lockInfo();
         return l && l.until > Date.now() ? Math.ceil((l.until - Date.now()) / 60000) : 0;
     }
     function failLogin() {
-        const l = lockInfo() || { count: 0 };
+        const l = lockInfo() || { count: 0, strikes: 0 };
         l.count++;
-        if (l.count >= 5) { l.until = Date.now() + 5 * 60 * 1000; l.count = 0; }
-        localStorage.setItem('al_sayed_lock', JSON.stringify(l));
+        if (l.count >= 5) {
+            l.strikes = (l.strikes || 0) + 1;
+            const mins = [1, 5, 15, 60][Math.min(l.strikes - 1, 3)];
+            l.until = Date.now() + mins * 60 * 1000;
+            l.count = 0;
+        }
+        try { localStorage.setItem('al_sayed_lock', JSON.stringify(l)); } catch (e) {}
     }
-    function clearLock() { localStorage.removeItem('al_sayed_lock'); }
+    function clearLock() { try { localStorage.removeItem('al_sayed_lock'); } catch (e) {} }
 
+    /** القفل السيرفري — تُرجِع null لو لا اتصال أو لم يُنفَّذ الترحيل بعد */
+    async function serverGate(username, fn) {
+        if (!username || !cloudReady() || !isOnline() || !sb) return null;
+        try {
+            const { data, error } = await sb.rpc(fn || 'login_gate', { p_username: username, p_device: DEVICE_ID });
+            if (error) return null;
+            const row = Array.isArray(data) ? data[0] : data;
+            if (!row) return null;
+            return { allowed: !!row.allowed, seconds: row.locked_seconds | 0, left: row.attempts_left | 0, scope: row.scope || 'none', online: true };
+        } catch (e) { return null; }
+    }
+    const serverFail = (u) => serverGate(u, 'login_fail');
+    async function serverOk(username) {
+        if (!username || !cloudReady() || !isOnline() || !sb) return;
+        try { await sb.rpc('login_ok', { p_username: username, p_device: DEVICE_ID }); } catch (e) {}
+    }
+    /** رسالة القفل الموحّدة */
+    function lockMessage(seconds, scope) {
+        const mins = Math.max(1, Math.ceil((seconds || 0) / 60));
+        const why = scope === 'device' ? 'هذا الجهاز' : scope === 'ip' ? 'هذه الشبكة' : 'هذا الحساب';
+        return '🔒 قُفل الدخول على ' + why + ' بسبب محاولات فاشلة متكررة — حاول بعد ' + mins + ' دقيقة';
+    }
+    /** فحص قبل المحاولة: سيرفري إن أمكن، وإلا محلي (مع بيان الفرق بصراحة) */
+    async function gateBeforeLogin(username) {
+        const g = await serverGate(username);
+        if (g && !g.allowed) return { block: true, message: lockMessage(g.seconds, g.scope), left: 0, online: true };
+        if (g) return { block: false, left: g.left, online: true };
+        const m = lockedMinutes();
+        if (m > 0) return { block: true, message: '🔒 قفل محلي (بلا اتصال) — حاول بعد ' + m + ' دقيقة', left: 0, online: false };
+        return { block: false, left: null, online: false };
+    }
     let users = JSON.parse(localStorage.getItem('al_sayed_users') || 'null');
     if (!Array.isArray(users)) users = [];
     // 🔒 T0.5 (2026-09-21): أُلغيت الحسابات الافتراضية بكلمات مرور معروفة (admin/admin · Amel/Amel).
@@ -4034,13 +4081,6 @@
         const uEl = document.getElementById('login-user');
         const pEl = document.getElementById('login-pass');
         const err = document.getElementById('loginError');
-        const locked = lockedMinutes();
-        if (locked > 0) {
-            err.textContent = '🔒 تم قفل الدخول مؤقتاً — حاول بعد ' + locked + ' دقيقة';
-            err.style.display = 'block';
-            loginShake();
-            return;
-        }
         const un = uEl.value.trim();
         const pw = pEl.value;
         if (!un || !pw) {
@@ -4049,17 +4089,30 @@
             loginShake();
             return;
         }
+        // 🔒 F2: القفل أولًا — سيرفري إن توفّر الاتصال (لا يُتجاوز بمسح بيانات المتصفح)
+        const gate = await gateBeforeLogin(un);
+        if (gate.block) {
+            err.textContent = gate.message;
+            err.style.display = 'block';
+            loginShake();
+            return;
+        }
         const found = users.find(x => x.u.toLowerCase() === un.toLowerCase());
         const ok = found ? await verifyPass(found, pw) : false;
         if (!found || !ok) {
             failLogin();
-            err.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
+            const g = await serverFail(un);
+            const extra = (g && !g.allowed) ? ' · ' + lockMessage(g.seconds, g.scope)
+                        : (g && typeof g.left === 'number') ? ' — بقي ' + g.left + ' محاولات'
+                        : (gate.left ? ' — بقي ' + gate.left + ' محاولات' : '');
+            err.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة' + extra;
             err.style.display = 'block';
             loginShake();
             pEl.value = '';
             return;
         }
         clearLock();
+        await serverOk(un);
         setUser(found);
         logAction('تسجيل دخول', found.u);
         afterLogin();
@@ -4928,6 +4981,9 @@
       const pw = document.getElementById('cl-pass').value;
       if (!email || !pw) return loginErr('اكتب الإيميل وكلمة المرور');
       if(!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش جاهز — انتظر ثانية وحاول تاني');
+        // 🔒 F2: نفس القفل السيرفري لحسابات السحابة
+        const cloudGate = await gateBeforeLogin(email);
+        if (cloudGate.block) return loginErr(cloudGate.message);
       const btn=document.querySelector('#paneLogin .btn-primary');
       if(btn){ btn.disabled=true; btn.textContent='⏳ جاري الدخول...'; }
       const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
@@ -4937,8 +4993,12 @@
         if(/Invalid login credentials/i.test(msg)) msg='الإيميل أو كلمة المرور غير صحيحة — تأكد أو أنشئ حساب جديد';
         else if(/Email not confirmed/i.test(msg)) msg='الإيميل غير مؤكد — افتح رابط التأكيد في بريدك أو عطّل Confirm email من Supabase';
         else if(/Too many requests/i.test(msg)) msg='محاولات كثيرة — انتظر دقيقة وحاول تاني';
-        return loginErr('❌ '+msg);
+        const g = await serverFail(email);
+        const extra = (g && !g.allowed) ? ' · ' + lockMessage(g.seconds, g.scope)
+                    : (g && typeof g.left === 'number') ? ' — بقي ' + g.left + ' محاولات' : '';
+        return loginErr('❌ '+msg+extra);
       }
+      await serverOk(email);
       await onCloudSession(data.session);
     }
     async function cloudDoRegister() {
