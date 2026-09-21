@@ -1,11 +1,15 @@
-// Service Worker — 2M-Stor v30 (تحديث أمني: إزالة أبواب دخول + سد XSS + إيقاف تسريب بيانات الفواتير)
-const CACHE = 'al-sayed-v30';   // 🔒 T0.5/T1.1/T1.2 — تحديث أمني إلزامي
+// Service Worker — 2M-Stor v31 (مكتبات محلية + CSP + كل تحديثات الأمان)
+const CACHE = 'al-sayed-v31';   // 🔒 T1.3 — المكتبات محلية + CSP
 const URLS = [
   'index.html',
   'manifest.json',
   'icon-192.png',
   'icon-512.png',
-  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'
+  // 🔒 T1.3: مكتبات محلية بدل CDN — تُخزَّن مسبقًا فيعمل التطبيق أوفلاين بالكامل
+  'vendor/jsqr.min.js',
+  'vendor/qrcode.min.js',
+  'vendor/chart.umd.min.js',
+  'vendor/supabase.min.js'
 ];
 
 self.addEventListener('install', e => {
