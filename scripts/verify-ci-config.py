@@ -117,6 +117,30 @@ if ci:
     )
     check("CI: مهمة البناء موجودة", "build" in jobs)
 
+    # ── 4-ب) 🔴 عطل حقيقي: `secrets` داخل `if:` يُبطل ملف الـworkflow كله ──
+    # GitHub يرفض الملف عند الفحص: "Unrecognized named-value: 'secrets'"،
+    # ويفشل التشغيل **قبل إنشاء أي مهمة** (0 jobs · صفر سجلات) — أي CI ميت
+    # بلا أثر يمكن تشخيصه. يجب استخدام بوابة GITHUB_OUTPUT بدلًا منها.
+    # هذا الفحص يمنع عودته إلى أي ملف workflow في المستودع.
+    secret_if = []
+    for f in sorted(WF.glob("*.yml")):
+        for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if re.match(r"\s*(if|elif)\s*:", line) and "secrets." in line:
+                secret_if.append(f"{f.name}:{i}")
+    check(
+        "لا استخدام لـsecrets داخل if (يُبطل الـworkflow كله)",
+        not secret_if,
+        " · ".join(secret_if[:3]),
+    )
+
+    # ── 4-ج) كل بوابة تحتاج مخرجًا فعليًا + خطوة تتخطّى بوضوح ──
+    build_job = jobs.get("build") or {}
+    build_env = (build_job.get("steps") or [{}])[-1].get("env") or {}
+    check(
+        "CI: البناء يمتلك بديلًا لمتغيرات Supabase (لا يفشل بلا أسرار)",
+        any("placeholder" in str(v) for v in build_env.values()),
+    )
+
 # ── 5) تثبيت الإجراءات (لا فرع متغيّر) ──
 bad_refs = []
 for f in sorted(WF.glob("*.yml")):

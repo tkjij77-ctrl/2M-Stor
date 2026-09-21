@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # ✅ تشغيل يدوي من تبويب Actions (يفيد لاختبار الفرع قبل الدمج)
+  workflow_dispatch:
 
 jobs:
   lint-typecheck:
@@ -91,14 +93,24 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npx playwright install --with-deps
+      # ⚠️ لا يمكن استخدام secrets داخل if إطلاقًا — GitHub يرفض الملف كله
+      # عند الفحص ("Unrecognized named-value: secrets") ويفشل التشغيل قبل
+      # إنشاء أي مهمة. الحل المطابق: بوابة تكتب النتيجة في GITHUB_OUTPUT.
+      - id: gate
+        name: هل متغيرات Supabase العامة متاحة؟
+        run: |
+          if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then echo "run=yes" >> "$GITHUB_OUTPUT"; else echo "run=no" >> "$GITHUB_OUTPUT"; fi
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       - run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
-      # لا نُشغّل اختبارات E2E بلا متغيرات حقيقية (ستفشل بلا معنى)
-      - name: اختبارات E2E (تحتاج أسرار Supabase)
-        if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
+      # E2E حقيقي يحتاج قاعدة حيّة — يُتخطّى بوضوح بدل الفشل عند غياب الأسرار
+      - if: steps.gate.outputs.run == 'yes'
         run: npm run test:e2e
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      - if: steps.gate.outputs.run == 'no'
+        run: echo "ℹ️ لا أسرار Supabase — تُخطّيت اختبارات E2E. أضِفها من Settings ← Secrets ← Actions" 
