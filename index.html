@@ -1531,7 +1531,11 @@
             shipping: 20,         // مصاريف الشحن (ج.م)
             freeShip: 200,        // الشحن مجاني فوق المبلغ ده (0 = لا يوجد إعفاء)
             couponCode: '2M10',   // كود الخصم (فاضي = بدون كوبون)
-            couponPct: 10         // نسبة خصم الكوبون %
+            couponPct: 10,        // نسبة خصم الكوبون %
+            // 📦 T3.3 (2026-09-21): نموذج المخزون — كان البيع ينقص «المعروض» فقط
+            // ويترك «إجمالي المخزن» ثابتًا للأبد → الجرد وهمي.
+            stockMode: 'both',    // both = خصم المخزن والمعروض · display = المعروض فقط · off = لا خصم
+            oversell: 'warn'      // warn = تنبيه والسماح · block = منع البيع بلا رصيد
         },
         JSON.parse(localStorage.getItem('al_sayed_settings') || 'null') || {}
     );
@@ -2246,20 +2250,105 @@
         try{ localStorage.setItem('al_sayed_invoices', s); }catch(e){ idbSet('al_sayed_invoices', s); }
         idbSet('al_sayed_invoices', s);
     }
+    // ═══════════════════════════════════════════════════════════════
+    //  📦 T3.3 — خصم المخزون الفعلي عند البيع واسترجاعه عند الإلغاء
+    //  القاعدة: كل بيعة تُخصم من المخزون، وكل إلغاء يُرجّعها — وإلا الجرد وهمي.
+    // ═══════════════════════════════════════════════════════════════
+    function findItemForLine(line) {
+        // الأدق: المعرّف المحلي (mutabile لو حُذف الصنف وأُعيد إنشاؤه)
+        if (line.lid) {
+            for (const c of db) {
+                const hit = (c.items || []).find(it => it.lid === line.lid);
+                if (hit) return { cat: c, item: hit };
+            }
+        }
+        // ثم المعرّف السحابي
+        if (line.itemCid) {
+            for (const c of db) {
+                const hit = (c.items || []).find(it => it.cid === line.itemCid);
+                if (hit) return { cat: c, item: hit };
+            }
+        }
+        // ثم الاسم داخل نفس القسم (للفواتير القديمة)
+        for (const c of db) {
+            if (line.cat && c.name !== line.cat) continue;
+            const hit = (c.items || []).find(it => it.n === line.name);
+            if (hit) return { cat: c, item: hit };
+        }
+        return null;
+    }
+
+    // يعيد عدد الأصناف التي تغيّر مخزونها. dir: +1 خصم · -1 استرجاع
+    function applyStockForInvoice(inv, dir) {
+        const mode = settings.stockMode || 'both';
+        if (mode === 'off') return 0;
+        let n = 0;
+        (inv.items || []).forEach(line => {
+            const hit = findItemForLine(line);
+            if (!hit) return;
+            const { cat, item } = hit;
+            const qty = Math.abs(Number(line.qty) || 0);
+            if (!qty) return;
+
+            // المعروض للبيع دائمًا يتأثر (mode: both أو display)
+            item.qs = Math.max(0, getQs(item) - dir * qty);
+            // إجمالي المخزن — فقط في وضع «both» (البيع يخرج من المحل)
+            if (mode === 'both') item.q = Math.max(0, getQ(item) - dir * qty);
+
+            queue({ t: 'item-upd', lid: item.lid, catLid: cat.lid });
+            n++;
+        });
+        if (n) save();
+        return n;
+    }
+
+    // الحالات التي تعتبر «بيعة قائمة» (المخزون مخصوم فيها)
+    const STOCK_HELD_STATUSES = ['قيد المعالجة', 'في الطريق', 'تم التوصيل'];
+    function isStockHeld(status) { return STOCK_HELD_STATUSES.includes(status); }
+
+    // يُطبَّق عند تغيّر حالة الفاتورة — يمنع الخصم/الاسترجاع المزدوج
+    function syncStockForStatus(inv, prevStatus, newStatus) {
+        const was = isStockHeld(prevStatus), now = isStockHeld(newStatus);
+        if (was && !now) {
+            // إلغاء أو رفض → استرجاع ما خُصم فعليًا
+            const back = applyStockForInvoice(inv, -1);
+            if (back) { inv.stockApplied = false; logAction('استرجاع مخزون', '#' + String(inv.no).padStart(4, '0') + ' — ' + back + ' صنف'); }
+        } else if (!was && now) {
+            // إعادة تنشيط طلب ملغي → خصم مرة أخرى
+            const took = applyStockForInvoice(inv, +1);
+            if (took) { inv.stockApplied = (settings.stockMode || 'both'); logAction('خصم مخزون', '#' + String(inv.no).padStart(4, '0') + ' — ' + took + ' صنف'); }
+        }
+    }
+
     function createInvoiceFromCart() {
         if (!can('invoice')) return toast('⚠️ لا تملك صلاحية إنشاء الفواتير');
         if (invoiceCart.length === 0) return toast('⚠️ السلة فارغة');
         const items = [];
         let total = 0;
+        const shortage = [];
         for (const c of invoiceCart) {
             const cat = db[c.ci];
             const item = cat && cat.items[c.ii];
             if (!item) continue;
             const price = itemPrice(item);
-            items.push({ name: item.n, cat: cat.name, qty: c.qty, price: price });
+            // 📦 T3.3: نحفظ معرّف الصنف مع السطر — بالاسم وحده كان الخصم يضيع
+            items.push({ name: item.n, cat: cat.name, qty: c.qty, price: price,
+                         lid: item.lid, itemCid: item.cid || null });
             total += price * c.qty;
+            // فحص الرصيد المتاح (المعروض للبيع)
+            const avail = getQs(item);
+            if (c.qty > avail) shortage.push({ name: item.n, want: c.qty, avail: avail });
         }
         if (!items.length) return toast('⚠️ السلة فارغة');
+        // 📦 T3.3: بيع أكثر من الرصيد — منع أو تنبيه حسب الإعداد
+        if (shortage.length) {
+            const txt = shortage.map(x => '«' + x.name + '»: مطلوب ' + x.want + ' والمتاح ' + x.avail).join(' · ');
+            if ((settings.oversell || 'warn') === 'block') {
+                return toast('⛔ لا يمكن البيع — الرصيد غير كافٍ: ' + txt, 6000);
+            }
+            logAction('⚠️ بيع بلا رصيد كافٍ', txt);
+            toast('⚠️ تنبيه: ' + txt, 5000);
+        }
         const customerEl = document.getElementById('cart-customer');
         const customer = customerEl && customerEl.value.trim() ? customerEl.value.trim() : 'نقدي';
         const t = cartTotals();
@@ -2323,13 +2412,11 @@
     function confirmSaveInvoice() {
         if (!pendingInvoice) return;
         const inv = pendingInvoice;
-        invoiceCart.forEach(({ci, ii, qty}) => {
-            const item = db[ci] && db[ci].items[ii];
-            if (item) {
-                item.qs = Math.max(0, getQs(item) - qty);
-                queue({ t: 'item-upd', lid: item.lid, catLid: db[ci].lid });
-            }
-        });
+        // 📦 T3.3: خصم المخزون الفعلي (كان يُخصم «المعروض» فقط ويبقى
+        // «إجمالي المخزن» ثابتًا للأبد → جرد وهمي).
+        inv.stockApplied = (settings.stockMode || 'both') === 'off' ? false : (settings.stockMode || 'both');
+        const changed = applyStockForInvoice(inv, +1);
+        if (changed) logAction('خصم مخزون البيع', '#' + String(inv.no).padStart(4, '0') + ' — ' + changed + ' صنف');
         invoices.push(inv);
         queue({ t: 'inv-ins', lid: inv.lid });
         saveInvoices();
@@ -2398,13 +2485,18 @@
     function deleteInvoice(idx) {
         if (!can('dash')) return;
         const removed = invoices.splice(idx, 1)[0];
+        if (!removed) return;
+        // 📦 T3.3: حذف فاتورة = إلغاء البيعة → ترجع الكميات للمخزون
+        const restored = isStockHeld(removed.status) ? applyStockForInvoice(removed, -1) : 0;
         queue({ t: 'inv-del', lid: removed.lid, cid: removed.cid });
         saveInvoices();
-        logAction('حذف فاتورة', removed.no ? '#' + String(removed.no).padStart(4, '0') : idx);
+        logAction('حذف فاتورة', (removed.no ? '#' + String(removed.no).padStart(4, '0') : idx) + (restored ? ' — استُرجعت ' + restored + ' كمية' : ''));
         showInvoiceHistory();
         updateStats();
-        toastUndo('تم حذف الفاتورة (لن تُعاد الكميات للمخزون)', () => {
+        toastUndo('تم حذف الفاتورة' + (restored ? ' واسترجاع الكميات للمخزون' : ''), () => {
             invoices.splice(Math.min(idx, invoices.length), 0, removed);
+            // إعادة البيعة عند التراجع عن الحذف
+            applyStockForInvoice(removed, +1);
             saveInvoices();
             updateStats();
             showInvoiceHistory();
@@ -2416,8 +2508,11 @@
         if(!canManageOrders()) return toast('⚠️ فقط المدير/العامل يمكنه تغيير الحالة');
         if(!ORDER_STATUSES.includes(newStatus)) return;
         if(inv.status===newStatus) return;
+        const prevStatus = inv.status;
         inv.status=newStatus;
         inv.updated_at=new Date().toISOString();
+        // 📦 T3.3: إلغاء/رفض = استرجاع الكميات · إعادة تنشيط = خصمها مرة أخرى
+        syncStockForStatus(inv, prevStatus, newStatus);
         saveInvoices();
         queue({ t:'inv-status', lid: inv.lid, cid: inv.cid, status: newStatus });
         logAction('تحديث حالة طلب', '#'+String(inv.no).padStart(4,'0')+' → '+newStatus);
@@ -2435,8 +2530,11 @@
             return toast('⚠️ لا يمكن إلغاء طلب '+inv.status);
         }
         if(!confirm('هل أنت متأكد من إلغاء الطلب #'+String(inv.no).padStart(4,'0')+'؟')) return;
+        const prevStatus = inv.status;
         inv.status='ملغي';
         inv.updated_at=new Date().toISOString();
+        // 📦 T3.3: الإلغاء يُرجّع الكميات — قبل الإصلاح كانت تضيع للأبد
+        syncStockForStatus(inv, prevStatus, 'ملغي');
         saveInvoices();
         queue({ t:'inv-status', lid: inv.lid, cid: inv.cid, status: 'ملغي' });
         logAction('إلغاء طلب', '#'+String(inv.no).padStart(4,'0'));
@@ -2767,6 +2865,18 @@
             '<div class="form-group"><label>شحن مجاني فوق (ج.م) — 0 = بدون</label><input type="number" id="set-freeship" value="' + (parseFloat(settings.freeShip) || 0) + '" min="0" step="10"></div>' +
             '<div class="form-group"><label>كود الخصم (فاضي = بدون كوبون)</label><input type="text" id="set-coupon" value="' + esc(String(settings.couponCode || '')) + '" style="direction:ltr;text-align:left" placeholder="مثال: 2M10"></div>' +
             '<div class="form-group"><label>نسبة خصم الكوبون %</label><input type="number" id="set-couponpct" value="' + (parseFloat(settings.couponPct) || 0) + '" min="0" max="100" step="1"></div>' +
+            // 📦 T3.3: نموذج المخزون
+            '<div class="form-group"><label>📦 خصم المخزون عند البيع</label>' +
+            '<select id="set-stockmode">' +
+                '<option value="both"' + ((settings.stockMode || 'both') === 'both' ? ' selected' : '') + '>المخزن والمعروض معًا (موصى به — جرد دقيق)</option>' +
+                '<option value="display"' + (settings.stockMode === 'display' ? ' selected' : '') + '>المعروض فقط (الوضع القديم)</option>' +
+                '<option value="off"' + (settings.stockMode === 'off' ? ' selected' : '') + '>لا تخصم تلقائيًا</option>' +
+            '</select></div>' +
+            '<div class="form-group"><label>⚠️ البيع برصيد غير كافٍ</label>' +
+            '<select id="set-oversell">' +
+                '<option value="warn"' + ((settings.oversell || 'warn') === 'warn' ? ' selected' : '') + '>تنبيه والسماح بالبيع</option>' +
+                '<option value="block"' + (settings.oversell === 'block' ? ' selected' : '') + '>منع البيع نهائيًا</option>' +
+            '</select></div>' +
             cloudSectionHtml() +
             '<div class="form-group"><label>🗄️ النسخ الاحتياطية (تلقائية يومياً — آخر 7)</label><div class="user-list">' + backupRows + '</div></div>' +
             '<div class="modal-actions between">' +
@@ -2792,6 +2902,9 @@
         settings.freeShip   = parseFloat(document.getElementById('set-freeship').value) || 0;
         settings.couponCode = String(document.getElementById('set-coupon').value || '').trim().toUpperCase();
         settings.couponPct  = parseFloat(document.getElementById('set-couponpct').value) || 0;
+        // 📦 T3.3: نموذج المخزون
+        settings.stockMode  = document.getElementById('set-stockmode').value || 'both';
+        settings.oversell   = document.getElementById('set-oversell').value || 'warn';
         saveSettings();
         queue({ t: 'set', lid: 's1', key: 'store_name', value: settings.store });
         queue({ t: 'set', lid: 's2', key: 'address', value: settings.address });
@@ -2803,6 +2916,9 @@
         queue({ t: 'set', lid: 's7', key: 'free_shipping_over', value: String(settings.freeShip || 0) });
         queue({ t: 'set', lid: 's8', key: 'coupon_code', value: String(settings.couponCode || '') });
         queue({ t: 'set', lid: 's9', key: 'coupon_pct', value: String(settings.couponPct || 0) });
+        // 📦 T3.3: رفع قواعد المخزون للسحابة (تسري على كل الأجهزة)
+        queue({ t: 'set', lid: 's10', key: 'stock_mode', value: String(settings.stockMode || 'both') });
+        queue({ t: 'set', lid: 's11', key: 'oversell_policy', value: String(settings.oversell || 'warn') });
         logAction('تحديث الإعدادات');
         toast('✅ تم حفظ الإعدادات');
         renderAll();
@@ -4144,7 +4260,9 @@
             invoice_no: invNo, customer_name: inv.customer,
             seller_id: cloudProfile ? cloudProfile.id : null,
             subtotal: inv.subtotal || 0, discount: inv.discount || 0,
-            tax: inv.tax || 0, total: inv.total, status: inv.status || 'قيد المعالجة'
+            tax: inv.tax || 0, total: inv.total, status: inv.status || 'قيد المعالجة',
+            // 📦 T3.3: هل خُصم مخزون هذه الفاتورة؟ (يمنع الخصم/الاسترجاع المزدوج بين الأجهزة)
+            stock_applied: inv.stockApplied || null
           }).select().single();
           if (!error) {
             inv.cid = data.id;
@@ -4172,7 +4290,11 @@
         if (error) throw error;
       } else if (e.t === 'inv-status') {
         if (!e.cid) return;
-        const { error } = await sb.from('invoices').update({ status: e.status, updated_at: new Date().toISOString() }).eq('id', e.cid);
+        const invLoc = invoices.find(x => x.lid === e.lid);
+        const patch = { status: e.status, updated_at: new Date().toISOString() };
+        // 📦 T3.3: نُبلّغ السحابة أن الكميات رُجعت (أو أُعيد خصمها)
+        if (invLoc) patch.stock_applied = invLoc.stockApplied || null;
+        const { error } = await sb.from('invoices').update(patch).eq('id', e.cid);
         if (error) {
           if(/column.*status/i.test(error.message)) return;
           throw error;
@@ -4300,6 +4422,9 @@
             existing.status = ri.status;
           }
           if (ri.updated_at && (!existing.updated_at || ri.updated_at > existing.updated_at)) existing.updated_at = ri.updated_at;
+          if (ri.stock_applied !== undefined && !outbox.some(o => o.t === 'inv-status' && o.cid === ri.id)) {
+            existing.stockApplied = ri.stock_applied || false;
+          }
           if (ri.status && !existing.status) existing.status = ri.status;
           continue;
         }
@@ -4307,7 +4432,8 @@
           id: ri.id, lid: genLid(), cid: ri.id, no: ri.invoice_no, date: ri.created_at,
           customer: ri.customer_name, user: (ri.profiles && ri.profiles.username) || '—',
           items: (ri.invoice_items || []).map(x => ({ name: x.item_name, cat: x.category_name, qty: x.qty, price: x.price })),
-          subtotal: ri.subtotal, discount: ri.discount, tax: ri.tax, total: ri.total, status: ri.status || 'قيد المعالجة', updated_at: ri.updated_at || ri.created_at
+          subtotal: ri.subtotal, discount: ri.discount, tax: ri.tax, total: ri.total, status: ri.status || 'قيد المعالجة', updated_at: ri.updated_at || ri.created_at,
+          stockApplied: ri.stock_applied || false
         });
       }
       const maxNo = remote.reduce((m, r) => Math.max(m, r.invoice_no || 0), 0);
@@ -4318,7 +4444,9 @@
         store_name: 'store', address: 'address', phone: 'phone', footer: 'footer', tax_pct: 'tax',
         // 🔧 T3.5: قواعد البيع من السحابة — تتغير لكل الأجهزة معًا
         shipping_fee: 'shipping', free_shipping_over: 'freeShip',
-        coupon_code: 'couponCode', coupon_pct: 'couponPct'
+        coupon_code: 'couponCode', coupon_pct: 'couponPct',
+        // 📦 T3.3: قواعد المخزون
+        stock_mode: 'stockMode', oversell_policy: 'oversell'
       };
       const numeric = { tax_pct: 1, shipping_fee: 1, free_shipping_over: 1, coupon_pct: 1 };
       for (const rs of remote) {
@@ -4360,6 +4488,9 @@
         queue({ t: 'set', lid: 's7', key: 'free_shipping_over', value: String(settings.freeShip || 0) });
         queue({ t: 'set', lid: 's8', key: 'coupon_code', value: String(settings.couponCode || '') });
         queue({ t: 'set', lid: 's9', key: 'coupon_pct', value: String(settings.couponPct || 0) });
+        // 📦 T3.3: قواعد المخزون في الترحيل الأول أيضًا
+        queue({ t: 'set', lid: 's10', key: 'stock_mode', value: String(settings.stockMode || 'both') });
+        queue({ t: 'set', lid: 's11', key: 'oversell_policy', value: String(settings.oversell || 'warn') });
         if (Object.keys(customPerms).length > 0) queue({ t: 'set', lid: 'rp0', key: 'role_perms', value: JSON.stringify(customPerms) });
         localStorage.setItem('al_sayed_settings_synced', '1');
         n += 5;
