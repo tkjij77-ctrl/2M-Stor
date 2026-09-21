@@ -136,6 +136,34 @@ check(
     ", ".join(bad_refs[:3]),
 )
 
+# ── 6) النوافذ: كل عنصر يُفتح بـclassList.add('open') له قاعدة CSS فعلية ──
+# سبب الفحص: showLegal() كانت تضيف الكلاس 'open' إلى #modal بينما لا وجود
+# لقاعدة .modal-overlay.open في CSS ⇒ المحتوى القانوني لم يكن يظهر إطلاقًا،
+# وفحص النص المرئي لا يكشفه لأن innerText يعيد النص للعنصر غير المُصيَّر.
+IDX = ROOT / "index.html"
+src = IDX.read_text(encoding="utf-8")
+html_part, _, css_js = src.partition("<script>")
+opened = set(re.findall(r"getElementById\('([A-Za-z0-9_-]+)'\)\.classList\.add\('open'\)", src))
+broken = []
+for el_id in sorted(opened):
+    m = re.search(r'<[a-z]+[^>]*id="' + re.escape(el_id) + r'"[^>]*>', html_part)
+    if not m:
+        m = re.search(r'<[a-z]+[^>]*class="[^"]*"[^>]*id="' + re.escape(el_id) + r'"', html_part)
+    classes = re.findall(r'class="([^"]+)"', m.group(0)) if m else []
+    ok = False
+    for cls in classes:
+        for c in cls.split():
+            if re.search(r"\." + re.escape(c) + r"\.open\s*\{", html_part) or \
+               re.search(r"\." + re.escape(c) + r"\.open\s*\{", css_js):
+                ok = True
+    if not ok:
+        broken.append(el_id)
+check(
+    "كل نافذة تُفتح بـ«open» لها قاعدة CSS (وإلا لا تظهر إطلاقًا)",
+    not broken,
+    ", ".join(broken) if broken else f"{len(opened)} نافذة",
+)
+
 # ── التقرير ──
 print("═══════════════════════════════════════════════════════════════")
 print("  T2.3 — فحص إعدادات الحوكمة (Dependabot · CodeQL · CI)")

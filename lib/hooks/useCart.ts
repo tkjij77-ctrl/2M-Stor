@@ -9,6 +9,7 @@ import {
 } from "@/lib/cart/store";
 import { queue } from "@/lib/sync/outbox";
 import { createClient } from "@/lib/supabase/client";
+import type { StoreInfo } from "@/lib/legal/policy";
 
 const EMPTY: CartLine[] = [];
 
@@ -51,6 +52,49 @@ export function useSaleRules(): SaleRules {
   }, []);
 
   return rules;
+}
+
+/** 🏪 T4.2 + ⚖️ T4.3: بيانات المتجر المعروضة للزائر (وصف · تواصل · سياسة إرجاع) */
+export function useStoreInfo(): StoreInfo {
+  const [info, setInfo] = useState<StoreInfo>({});
+
+  useEffect(() => {
+    const apply = (obj: Record<string, unknown>) => {
+      setInfo((prev) => ({
+        ...prev,
+        store: str(obj.store_name ?? obj.store) ?? prev.store,
+        phone: str(obj.phone) ?? prev.phone,
+        address: str(obj.address) ?? prev.address,
+        desc: str(obj.store_desc ?? obj.desc) ?? prev.desc,
+        returnDays: numOr(obj.return_days ?? obj.returnDays, prev.returnDays),
+        returnNote: str(obj.return_note ?? obj.returnNote) ?? prev.returnNote,
+      }));
+    };
+    try {
+      const raw = localStorage.getItem("al_sayed_settings");
+      if (raw) apply(JSON.parse(raw));
+    } catch {}
+    (async () => {
+      try {
+        const sb = createClient();
+        const { data, error } = await sb.from("settings").select("key,value");
+        if (error || !data) return;
+        const obj: Record<string, unknown> = {};
+        data.forEach((r: { key: string; value: string }) => (obj[r.key] = r.value));
+        apply(obj);
+      } catch {}
+    })();
+  }, []);
+
+  return info;
+}
+
+function str(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+function numOr(v: unknown, fallback?: number): number | undefined {
+  const n = parseInt(String(v ?? ""), 10);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 /** مفاتيح السحابة (نفس ما يرفعه التطبيق الرئيسي في T3.5) */

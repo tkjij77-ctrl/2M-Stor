@@ -1214,14 +1214,19 @@
   <div class="footer-grid">
     <div>
       <div style="font-weight:900;font-size:1.3rem;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--primary-dark));border-radius:10px;display:grid;place-items:center">2M</span>2M<b style="color:var(--accent-2)">-Stor</b></div>
-      <p style="opacity:.85">منصتك المتكاملة للكتب والقرطاسية والأدوات المكتبية بأعلى جودة وأفضل الأسعار.</p>
-      <div style="display:flex;gap:10px;margin-top:12px"><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">f</a><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">◎</a><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">𝕏</a><a style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);display:grid;place-items:center">✆</a></div>
+      <p style="opacity:.85" id="landing-desc"></p>
     </div>
     <div><h4>روابط</h4><a onclick="setView('home')">الرئيسية</a><a onclick="setView('shop')">المتجر</a><a onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</a><a onclick="document.getElementById('landing-footer').scrollIntoView({behavior:'smooth'})">تواصل</a></div>
     <div><h4>حسابي</h4><a onclick="can('history')&&showInvoiceHistory()">طلباتي</a><a onclick="openCart()">السلة</a><a onclick="toggleDashboard()">لوحة التحكم</a><a onclick="openSettingsModal()">الإعدادات</a></div>
-    <div><h4>تواصل معنا</h4><p>📞 0500000000</p><p>✉️ info@2m-stor.com</p><p>📍 الرياض، السعودية</p></div>
+    <!-- 🏪 T4.2: بيانات التواصل من الإعدادات — كانت أرقامًا ومعلومات مخترعة -->
+    <div><h4>تواصل معنا</h4><div id="landing-contact"></div></div>
+    <div><h4>قانوني</h4>
+      <a onclick="showLegal('privacy')">🔒 الخصوصية</a>
+      <a onclick="showLegal('terms')">📄 شروط الاستخدام</a>
+      <a onclick="showLegal('returns')">↩️ سياسة الإرجاع</a>
+    </div>
   </div>
-  <div class="footer-bottom">© 2025 2M-Stor. جميع الحقوق محفوظة.</div>
+  <div class="footer-bottom"><span id="landing-copyright"></span> جميع الحقوق محفوظة.</div>
 </footer>
 <button class="to-top" id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 <div class="toast-container" id="toastContainer"></div>
@@ -1526,6 +1531,14 @@
     let settings = Object.assign(
         {
             store: '2M-Stor', address: '', phone: '', footer: 'شكراً لتسوقكم معنا',
+            // 🏪 T4.2 (2026-09-21): وصف المتجر من الإعدادات — كان مكتوبًا
+            // «كتب وقرطاسية» بلا أي أساس (المخزون الفعلي أدوات كهربائية).
+            // الافتراضي لا يدّعي أي نشاط: يُحرّره المالك من الإعدادات.
+            desc: 'تصفّح الأصناف المتوفرة فعليًا في المخزن وأضفها للسلة.',
+            // ⚖️ T4.3: سياسة الإرجاع — يحددها المالك. 0 = لم تُحدَّد بعد
+            // (والصفحة تقول ذلك بصراحة بدل اختراع مدة إرجاع).
+            returnDays: 0,
+            returnNote: '',
             tax: 0,
             // 🔧 T3.5 (2026-09-21): قواعد البيع صارت في الإعدادات بدل أرقام مكتوبة في الكود
             shipping: 20,         // مصاريف الشحن (ج.م)
@@ -1582,6 +1595,92 @@
     }
 
     // ===== VIEWS (مع home لاندنج + account) =====
+    // 🏪 T4.2: يُملأ التذييل من الإعدادات الحقيقية — ما يظهر فقط ما نعرفه فعلًا
+    // ═══ ⚖️ T4.3: المحتوى القانوني — مبني على ما يفعله النظام فعلًا ═══
+    // قاعدة صارمة: لا نكتب وعدًا لا ينفّذه النظام. سياسة الإرجاع يحددها
+    // المالك في الإعدادات؛ وإن لم يحددها نقول ذلك بصراحة.
+    function legalReturnText() {
+        const days = parseInt(settings.returnDays, 10) || 0;
+        const note = String(settings.returnNote || '').trim();
+        if (days <= 0 && !note) {
+            return 'لم تُحدَّد سياسة إرجاع بعد. تواصل مع المتجر قبل الشراء لمعرفة الشروط.';
+        }
+        // صياغة عربية سليمة: «يوم واحد» · «يومان» · «7 أيام» · «14 يومًا»
+        const word = days === 1 ? 'يوم واحد' : days === 2 ? 'يومان'
+                   : (days >= 3 && days <= 10) ? days + ' أيام'
+                   : (days >= 11 && days <= 99) ? days + ' يومًا' : days + ' يوم';
+        const parts = [];
+        // «ملاحظة المالك» تُدمج في الجملة نفسها بدل جملة مقتطعة بعد نقطة
+        if (days > 0) return 'يمكن الإرجاع خلال ' + word + ' من تاريخ الفاتورة' + (note ? '، ' + note : '، بشرط أن يكون الصنف بحالته الأصلية.');
+        return note;
+    }
+
+    function legalContent(kind) {
+        const store = esc(settings.store || 'المتجر');
+        const contact = settings.phone ? (' — للتواصل: ' + esc(settings.phone)) : '';
+        if (kind === 'privacy') return {
+            title: '🔒 الخصوصية — ما نجمعه فعلًا',
+            html: '<p>نجمع الحد الأدنى فقط لتشغيل المتجر:</p>' +
+                  '<ul style="line-height:2;padding-inline-start:20px">' +
+                  '<li><b>بيانات الفواتير:</b> اسم العميل، الأصناف، الكميات، الأسعار، اسم البائع والوقت.</li>' +
+                  '<li><b>حساب الدخول:</b> البريد الإلكتروني وكلمة مرور مشفّرة (للعاملين والمدير).</li>' +
+                  '<li><b>محليًا على جهازك:</b> نسخة من البيانات تعمل بلا إنترنت، وتبقى عليه.</li>' +
+                  '</ul>' +
+                  '<p><b>أين تُحفظ:</b> في قاعدة بيانات المتجر السحابية (Supabase) ومن يستطيع قراءتها هم العاملون المسجّلون فقط بحسب صلاحياتهم — سياسات القراءة تُطبَّق على مستوى قاعدة البيانات لا على مستوى الواجهة.</p>' +
+                  '<p><b>ما لا نفعله:</b> لا نبيع بياناتك ولا نشاركها مع أي طرف ثالث، ولا نرسل تفاصيل فواتيرك إلى أي خدمة خارجية.</p>' +
+                  '<p><b>جهازك:</b> يمكنك مسح البيانات المحلية من إعدادات المتصفح' + contact + '.</p>'
+        };
+        if (kind === 'terms') return {
+            title: '📄 شروط الاستخدام',
+            html: '<p>باستخدامك ' + store + ' فإنك توافق على ما يلي:</p>' +
+                  '<ul style="line-height:2;padding-inline-start:20px">' +
+                  '<li>الأسعار المعروضة هي أسعار البيع الحالية، وتشمل ما يظهر في السلة قبل التأكيد.</li>' +
+                  '<li>مصاريف الشحن (إن وُجدت) تُحسب عند إتمام الطلب، والإعفاء حسب المبلغ المحدَّد في الإعدادات.</li>' +
+                  '<li>الأرقام المعروضة (عدد الأصناف والمخزون) تتحدّث تلقائيًا من مخزن المتجر الفعلي.</li>' +
+                  '<li>الطلب يُسجَّل باسمك وبيانات تواصلك، ويبقى محفوظًا لدى المتجر لمتابعة التسليم.</li>' +
+                  '<li>لا يُسمح باستخدام النظام لغير أغراض البيع والشراء المشروعة.</li>' +
+                  '</ul>' +
+                  '<p>الأسعار والمخزون قد يتغيّران؛ يُعتمد ما يظهر لحظة تأكيد الطلب' + contact + '.</p>'
+        };
+        return {
+            title: '↩️ سياسة الإرجاع والاستبدال',
+            html: '<p>' + esc(legalReturnText()) + '</p>' +
+                  '<p><b>كيف يُنفَّذ الإرجاع:</b> بعد إلغاء الفاتورة في النظام <b>يُرجَع المخزون تلقائيًا</b> إلى الرصيد المعروض — فلا تبقى الكميات المُرْجَعة ناقصة من الجرد.</p>' +
+                  '<p><b>ما يُستثنى عادةً:</b> الأصناف المستخدمة أو التالفة، والأصناف المقطوعة أو المصنّعة حسب الطلب — إلا إن كان بها عيب.</p>' +
+                  '<p>أي إرجاع يتم بالتواصل المباشر مع المتجر' + contact + '.</p>'
+        };
+    }
+
+    /** نفس النص المستخدم في الصفحة القانونية — ليكون مصدرًا واحدًا للحقيقة */
+    function properReturnText() { return legalReturnText(); }
+
+    function showLegal(kind) {
+        const c = legalContent(kind);
+        const body = document.getElementById('modalBody');
+        if (!body) return;
+        body.innerHTML =
+            '<h2>' + c.title + '</h2>' +
+            '<div style="font-size:.92rem;line-height:1.9">' + c.html + '</div>' +
+            '<div style="margin-top:14px;font-size:.78rem;opacity:.75">آخر تحديث: ' + new Date().toLocaleDateString('ar-EG') + '</div>' +
+            '<div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">فهمت</button></div>';
+        // 🐞 كان classList.add('open') بلا قاعدة CSS مقابلة ⇒ النافذة لا تظهر إطلاقًا.
+        // بقية التطبيق يفتحها بـstyle.display='flex' — نوحّد على نفس الطريقة.
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    function renderLanding() {
+        const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+        set('landing-desc', settings.desc || '');
+        set('landing-copyright', '© ' + new Date().getFullYear() + ' ' + (settings.store || '2M-Stor') + '.');
+        const c = document.getElementById('landing-contact');
+        if (c) {
+            const rows = [];
+            if (settings.phone) rows.push('<p>📞 ' + esc(settings.phone) + '</p>');
+            if (settings.address) rows.push('<p>📍 ' + esc(settings.address) + '</p>');
+            c.innerHTML = rows.length ? rows.join('') : '<p style="opacity:.7">لم تُضَف بيانات تواصل بعد — أضفها من الإعدادات.</p>';
+        }
+    }
+
     function setView(v) {
         currentView = v;
         animateNextRender = true;
@@ -1643,6 +1742,7 @@
     // ===== RENDER ENGINE =====
     function renderAll() {
         updateStats();
+        renderLanding();   // 🏪 T4.2: وصف المتجر وبيانات التواصل من الإعدادات
         renderCats();
         if(currentView==='home'){ renderHome(); return; }
         if(currentView==='account'){ renderAccount(); return; }
@@ -1685,7 +1785,8 @@
             <div>
               <!-- 🔒 T4.1: حُذفت شارة تفضيلية غير قابلة للإثبات (ادعاء تميّز بلا دليل) -->
               <h1>منصة <span class="grad">2M-Stor</span><br>كل ما تحتاجه في مكان واحد</h1>
-              <p>كتب، قرطاسية، وأدوات مكتبية بأعلى جودة وأفضل الأسعار. تصفّح، اطلب، وتابع طلبك بسهولة — مع مزامنة فورية على كل أجهزتك.</p>
+              <!-- 🏪 T4.2: الوصف من الإعدادات — لا ادعاء نشاط غير موجود -->
+              <p>${esc(settings.desc || '')} مع مزامنة فورية على كل أجهزتك.</p>
               <div class="hero-actions">
                 <button class="btn" onclick="setView('shop')">تصفّح المتجر ←</button>
                 <button class="btn btn-ghost" onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</button>
@@ -2012,7 +2113,19 @@
       if (!item) return;
       let qs = getQs(item), q = getQ(item), price = itemPrice(item), isAvail = qs>0;
       let availBadge = isAvail ? '<span style="color:#067D62;font-weight:800">\u2705 متوفر</span>' : '<span style="color:var(--danger);font-weight:800">\u274C غير متوفر</span>';
-      let stars = '\u2B50\u2B50\u2B50\u2B50\u2606 <span style="color:var(--text-muted);font-size:0.82rem">4.3 ('+(q+qs+7)+' تقييم)</span>';
+      // 🔴 T4.1: كان هنا تقييم «4.3» مبنيًا على (q+qs+7) — رقم مخترع يتغيّر
+      // مع تغيّر المخزون. النظام لا يجمع تقييمات، فنقول ذلك بدل تلفيق رقم.
+      const ratingNote = '<span style="color:var(--text-muted);font-size:0.82rem">💬 لا تُعرض تقييمات — النظام لا يجمعها</span>';
+      // 🏪 T4.2: الشحن والضريبة من الإعدادات (كانا «500 ج.م» و«يشمل الضريبة» ثابتين)
+      const shipFee = parseFloat(settings.shipping) || 0;
+      const freeOver = parseFloat(settings.freeShip) || 0;
+      const taxPct = parseFloat(settings.tax) || 0;
+      const shipLine = freeOver > 0
+        ? '🚚 شحن مجاني فوق ' + fmt(freeOver) + ' ج.م' + (shipFee > 0 ? ' — وإلا ' + fmt(shipFee) + ' ج.م' : '')
+        : (shipFee > 0 ? '🚚 مصاريف الشحن ' + fmt(shipFee) + ' ج.م' : '🚚 بلا مصاريف شحن');
+      const taxLine = taxPct > 0 ? '🧾 تُضاف ضريبة ' + taxPct + '% عند إتمام الطلب' : '🧾 لا ضريبة مضافة';
+      // ⚖️ T4.3: نفس نص سياسة الإرجاع المعروض في الصفحات القانونية
+      const returnLine = properReturnText();
       let mainImg = item.img ? '<img src="'+esc(item.img)+'" alt="" loading="eager" decoding="async" id="amzMainImg">' : '<span style="font-size:4rem">\uD83D\uDCE6</span>';
       // thumbnails من نفس الصنف + الصورة الرئيسية
       let thumbs = [item].concat(cat.items.filter((_,idx)=>idx!==ii).slice(0,4));
@@ -2023,7 +2136,7 @@
        let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" onclick="amzSetMain('+idx+')">'+(t.img?'<img src="'+esc(t.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
       let bullets = '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b> — كود #'+(item.cid||'—')+'</li><li>السعر الرقمي: <b>'+price+' ج.م</b> — النص: '+esc(item.p)+'</li><li>المخزن: <b>'+q+'</b> · المعروض: <b>'+qs+'</b> · تنبيه عند <b>'+getMin(item)+'</b></li>'+(item.b?'<li>باركود: <b>'+esc(item.b)+'</b></li>':'')+'<li>قيمة المخزن: <b>'+fmt(q*price)+' ج.م</b> · المعروض: <b>'+fmt(qs*price)+' ج.م</b></li></ul>';
       let qtyOpts = Array.from({length: Math.min(10, Math.max(1,qs))}, (_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
-      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?'✅ متاح — '+qs+' قطعة جاهزة للشحن':'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🔒 عملية شراء آمنة — دفع عند الاستلام متاح</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">المتاح '+qs+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
+      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?'✅ متاح — '+qs+' قطعة جاهزة للشحن':'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🧾 يُحسب الإجمالي والشحن في السلة قبل التأكيد — بلا دفع إلكتروني في النظام</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">المتاح '+qs+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
       let related = cat.items.filter((_,idx)=> idx!==ii).slice(0,6);
        let relatedHtml = related.length ? '<div class="product-related-title">📦 منتجات من نفس الصنف — '+esc(cat.name)+'</div><div class="product-related">'+related.map(r=>{ let rIdx=cat.items.indexOf(r); let rImg=r.img?'<img src="'+r.img+'" loading="lazy" decoding="async">':'📦'; let rQs=getQs(r); return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+(rQs>0?'✅ متاح '+rQs:'❌ غير متوفر')+'</div></div></div>'; }).join('')+'</div>' : '';
       document.getElementById('productDetailCard').innerHTML =
@@ -2031,7 +2144,7 @@
         '<div class="breadcrumb" style="padding:10px 18px;color:var(--text-muted);font-size:.88rem;background:var(--bg-soft);border-bottom:1px solid var(--border)"><a onclick="setView(\'home\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">الرئيسية</a> / <a onclick="setView(\'shop\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">المتجر</a> / '+esc(item.n)+'</div>' +
         '<div class="amz-layout">' +
           '<div class="amz-gallery"><div class="amz-main-img" id="amzMainWrap">'+mainImg+'</div><div class="amz-thumbs">'+thumbsHtml+'</div></div>' +
-          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')+'</div><div class="amz-rating">'+stars+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">السعر يشمل الضريبة — شحن مجاني فوق 500 ج.م</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700"><div>🚚 توصيل خلال 24 ساعة</div><div>📦 المتوفر: '+qs+' قطعة · المخزن: '+q+'</div><div>🔄 إرجاع مجاني خلال 14 يوم</div></div><div class="amz-secure">✅ إرجاع مجاني خلال 14 يوم · 🔒 دفع آمن</div></div>' +
+          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')+'</div><div class="amz-rating">'+ratingNote+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">'+shipLine+' · '+taxLine+'</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700">'+shipLine+'<div>📦 المتوفر الآن: '+qs+' قطعة · إجمالي المخزن: '+q+'</div><div>↩️ '+esc(returnLine)+' <a onclick="closeProductDetail();showLegal(\'returns\')" style="color:var(--primary);cursor:pointer;text-decoration:underline">التفاصيل</a></div></div><div class="amz-secure">ℹ️ الطلب يُسجَّل داخل نظام المتجر — وبعد إلغاء أي فاتورة يُرجَع المخزون تلقائيًا</div></div>' +
           buyBox +
           '<div class="amz-details"><div style="background:var(--bg-soft); padding:14px; border-radius:12px; font-size:0.85rem; line-height:1.8"><b>تفاصيل إضافية:</b><br>🏷️ الفئة: '+esc(cat.name)+'<br>💰 السعر الرقمي: '+price+' ج.م<br>📦 المخزن: '+q+' · المعروض: '+qs+'<br>⚠️ تنبيه عند: '+getMin(item)+'</div>'+relatedHtml+'</div>' +
         '</div>';
@@ -2892,6 +3005,11 @@
             '<div class="form-group"><label>العنوان</label><input type="text" id="set-address" value="' + esc(settings.address) + '"></div>' +
             '<div class="form-group"><label>الهاتف</label><input type="text" id="set-phone" value="' + esc(settings.phone) + '" style="direction:ltr;text-align:left"></div>' +
             '<div class="form-group"><label>نص تذييل الإيصال</label><input type="text" id="set-footer" value="' + esc(settings.footer) + '"></div>' +
+            // 🏪 T4.2: وصف المتجر — يظهر للزائر (كان مكتوبًا «كتب وقرطاسية» بلا أساس)
+            '<div class="form-group"><label>وصف المتجر (يظهر للزائر في الرئيسية)</label><input type="text" id="set-desc" value="' + esc(settings.desc || '') + '" placeholder="مثال: أدوات ومستلزمات كهربائية"></div>' +
+            // ⚖️ T4.3: سياسة الإرجاع — لا نُصدر وعدًا نيابة عنك
+            '<div class="form-group"><label>⚖️ مدة الإرجاع (أيام) — 0 = لم تُحدَّد بعد</label><input type="number" id="set-returndays" value="' + (parseInt(settings.returnDays, 10) || 0) + '" min="0" max="365" step="1"></div>' +
+            '<div class="form-group"><label>شروط الإرجاع الإضافية (اختياري)</label><input type="text" id="set-returnnote" value="' + esc(settings.returnNote || '') + '" placeholder="مثال: بشرط الفاتورة الأصلية"></div>' +
             '<div class="form-group"><label>نسبة الضريبة % (0 = بدون)</label><input type="number" id="set-tax" value="' + settings.tax + '" min="0" max="100" step="0.5"></div>' +
             '<div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:800;font-size:.85rem">🛒 قواعد البيع (تنطبق على كل الأجهزة)</div>' +
             '<div class="form-group"><label>مصاريف الشحن (ج.م)</label><input type="number" id="set-shipping" value="' + (parseFloat(settings.shipping) || 0) + '" min="0" step="1"></div>' +
@@ -2937,6 +3055,12 @@
         settings.couponCode = String(document.getElementById('set-coupon').value || '').trim().toUpperCase();
         settings.couponPct  = parseFloat(document.getElementById('set-couponpct').value) || 0;
         // 📦 T3.3: نموذج المخزون
+        const descEl = document.getElementById('set-desc');
+        if (descEl) settings.desc = descEl.value.trim();
+        const rdEl = document.getElementById('set-returndays');
+        if (rdEl) settings.returnDays = parseInt(rdEl.value, 10) || 0;
+        const rnEl = document.getElementById('set-returnnote');
+        if (rnEl) settings.returnNote = rnEl.value.trim();
         settings.stockMode  = document.getElementById('set-stockmode').value || 'both';
         settings.oversell   = document.getElementById('set-oversell').value || 'warn';
         saveSettings();
@@ -2953,6 +3077,10 @@
         // 📦 T3.3: رفع قواعد المخزون للسحابة (تسري على كل الأجهزة)
         queue({ t: 'set', lid: 's10', key: 'stock_mode', value: String(settings.stockMode || 'both') });
         queue({ t: 'set', lid: 's11', key: 'oversell_policy', value: String(settings.oversell || 'warn') });
+        // 🏪 T4.2 + ⚖️ T4.3: الوصف وسياسة الإرجاع تسريان على كل الأجهزة
+        queue({ t: 'set', lid: 's12', key: 'store_desc', value: String(settings.desc || '') });
+        queue({ t: 'set', lid: 's13', key: 'return_days', value: String(settings.returnDays || 0) });
+        queue({ t: 'set', lid: 's14', key: 'return_note', value: String(settings.returnNote || '') });
         logAction('تحديث الإعدادات');
         toast('✅ تم حفظ الإعدادات');
         renderAll();
@@ -4659,6 +4787,7 @@
       const map = {
         store_name: 'store', address: 'address', phone: 'phone', footer: 'footer', tax_pct: 'tax',
         // 🔧 T3.5: قواعد البيع من السحابة — تتغير لكل الأجهزة معًا
+        store_desc: 'desc', return_days: 'returnDays', return_note: 'returnNote',
         shipping_fee: 'shipping', free_shipping_over: 'freeShip',
         coupon_code: 'couponCode', coupon_pct: 'couponPct',
         // 📦 T3.3: قواعد المخزون
@@ -4707,6 +4836,10 @@
         // 📦 T3.3: قواعد المخزون في الترحيل الأول أيضًا
         queue({ t: 'set', lid: 's10', key: 'stock_mode', value: String(settings.stockMode || 'both') });
         queue({ t: 'set', lid: 's11', key: 'oversell_policy', value: String(settings.oversell || 'warn') });
+        // 🏪 T4.2 + ⚖️ T4.3: الوصف وسياسة الإرجاع تسريان على كل الأجهزة
+        queue({ t: 'set', lid: 's12', key: 'store_desc', value: String(settings.desc || '') });
+        queue({ t: 'set', lid: 's13', key: 'return_days', value: String(settings.returnDays || 0) });
+        queue({ t: 'set', lid: 's14', key: 'return_note', value: String(settings.returnNote || '') });
         if (Object.keys(customPerms).length > 0) queue({ t: 'set', lid: 'rp0', key: 'role_perms', value: JSON.stringify(customPerms) });
         localStorage.setItem('al_sayed_settings_synced', '1');
         n += 5;

@@ -229,3 +229,8 @@ h1,h2,h3,.logo{ font-family: 'Cairo',sans-serif; }
 .user-row.line{
   display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
 }
+
+/* ⚖️ T4.3: روابط التذييل القانونية */
+.app-footer-links{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+.app-footer-links a{ color:var(--primary); font-weight:800; text-decoration:none; }
+.app-footer-links a:hover{ text-decoration:underline; }

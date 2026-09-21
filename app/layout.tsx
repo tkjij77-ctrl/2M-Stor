@@ -35,6 +35,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="app-footer">
           <span>آل السيد — نظام إدارة المخزون والمبيعات</span>
           <span style={{ opacity: 0.7 }}>· المزامنة تلقائية كل تعديل</span>
+          {/* ⚖️ T4.3: روابط قانونية — كانت الصفحات غير موجودة إطلاقًا */}
+          <span className="app-footer-links">
+            <a href="/privacy">🔒 الخصوصية</a>
+            <a href="/terms">📄 الشروط</a>
+            <a href="/returns">↩️ الإرجاع</a>
+          </span>
         </footer>
       </body>
     </html>
