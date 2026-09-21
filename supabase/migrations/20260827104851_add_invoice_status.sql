@@ -25,6 +25,7 @@ BEGIN
       SELECT 1 FROM pg_policies 
       WHERE tablename = 'invoices' AND policyname = 'inv_update'
    ) THEN
+drop policy if exists "inv_update" on public.invoices;   -- يمنع «already exists» عند إعادة التشغيل
       CREATE POLICY "inv_update" ON public.invoices
          FOR UPDATE
          USING (auth.uid() IS NOT NULL)

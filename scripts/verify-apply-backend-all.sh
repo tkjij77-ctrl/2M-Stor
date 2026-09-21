@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# ═══════════════════════════════════════════════════════════════════
+#  التحقق من scripts/apply-backend-all.sql — الملف الذي يُلصق مرة واحدة
+#
+#  نُقلّد حالة القاعدة الحيّة بالضبط كما قيست عن بُعد (21 سبتمبر 2026):
+#     baseline + add_invoice_status + **سياسات مفتوحة** ⇒ الزائر يقرأ الفواتير ويكتب عليها
+#  ثم نُطبّق الملف ونتحقق:
+#     1) يُنفَّذ بلا خطأ على قاعدة مماثلة للحيّة
+#     2) يُغلق التسريب فعلًا — بالقياس **بالأثر** لا برسالة الخطأ
+#        (سياسة RLS لا تُصدر خطأً: تُصفّر عدد الصفوف المتأثرة فقط)
+#     3) ينشئ كل الكائنات (8 جداول · الدوال · الحارس · Realtime)
+#     4) تقريره النهائي يطبع أحكامًا ✅ (لا صفوف غامضة)
+#     5) ثابت idempotency في الملف نفسه + تشغيله مرتين بلا خطأ
+#
+#  ⚠️ أول تشغيل لهذا الملف كشف **ثلاثة عيوب حقيقية** أُصلحت:
+#     • ملف الترحيلات لم يكن idempotent (فشل «policy already exists») — وهو ما
+#       يناقض وعدنا للمستخدم «أعد التشغيل بلا خوف»
+#     • لم يكن يحذف السياسات المفتوحة المُنشأة يدويًا في اللوحة
+#     • اختبارنا نفسه كان يقيس الخطأ لا الأثر، فأعطى «نجاحًا/فشلًا» مضلِّلًا
+#
+#  الاستخدام: bash scripts/verify-apply-backend-all.sh
+# ═══════════════════════════════════════════════════════════════════
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+DB="t_apply_$$"
+PSQL_SU="sudo -n -u postgres psql"
+FILE="scripts/apply-backend-all.sql"
+PASS=0; FAIL=0
+ok()  { echo "  ✅ $1"; PASS=$((PASS+1)); }
+bad() { echo "  ❌ $1${2:+  → $2}"; FAIL=$((FAIL+1)); }
+cleanup() { $PSQL_SU -q -c "drop database if exists $DB" >/dev/null 2>&1; }
+trap cleanup EXIT
+Q() { $PSQL_SU -d "$DB" -tAc "$1" 2>&1 | tr -d '\r' | grep -viE '^(begin|set|commit|rollback|do)$' | sed '/^$/d'; }
+
+# تنفيذ باستخدام دور معيّن + هوية JWT (كما يفعل PostgREST)
+as_role() { # as_role <دور> <uid|-> <sql>
+  local role="$1" uid="$2" sql="$3" claims
+  if [ "$uid" = "-" ]; then claims='{"role":"'"$role"'"}'
+  else claims='{"role":"'"$role"'","sub":"'"$uid"'"}'; fi
+  $PSQL_SU -d "$DB" -tA -c "begin;" -c "set local role $role;" \
+    -c "set local request.jwt.claims = '$claims';" -c "$sql" -c "commit;" 2>&1 |
+    grep -viE '^(begin|set|commit|rollback)$'
+}
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "  apply-backend-all.sql — تحقق على قاعدة تشبه الحيّة ($DB)"
+echo "═══════════════════════════════════════════════════════════════"
+
+$PSQL_SU -q -c "create database $DB" >/dev/null 2>&1 || { echo "تعذّر إنشاء قاعدة الاختبار"; exit 1; }
+# محاكي Supabase + الأساس + حالة الفاتورة  = حالة القاعدة الحيّة اليوم
+for f in scripts/supabase-stub.sql supabase/migrations/20260826200407_baseline.sql supabase/migrations/20260827104851_add_invoice_status.sql; do
+  $PSQL_SU -d "$DB" -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "❌ فشل تنفيذ $f"; exit 1; }
+done
+
+echo ""
+echo "【0】 نُقلّد التسريب الموجود على القاعدة الحيّة"
+Q "insert into auth.users(id,email) values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','x@y.com')" >/dev/null
+# ⚠️ لا نُمرّر id: إنه identity GENERATED ALWAYS (وقد فشل البذر أول مرة بسبب ذلك)
+Q "insert into public.invoices(invoice_no, customer_name, total) values
+     (1, 'sayed', 575), (2, 'نقدي', 112), (3, 'sayed', 135)" >/dev/null
+# على الحيّة يمكن للزائر القراءة والكتابة على invoices (قاسها الفحص عن بُعد)
+Q "create policy leak_probe_read on public.invoices for select using (true);
+   create policy leak_probe_write on public.invoices for update using (true);
+   create policy leak_probe_delete on public.invoices for delete using (true)" >/dev/null
+ROWS=$(Q "select count(*) from public.invoices")
+[ "$ROWS" = "3" ] && echo "  ✅ بذرنا 3 فواتير (كما على القاعدة الحيّة)" || echo "  ⚠️ البذر أنتج $ROWS صفًا"
+BEFORE=$(as_role anon - "select count(*) from public.invoices" | tail -1)
+[ "$BEFORE" = "3" ] && ok "الزائر يقرأ الفواتير فعليًا (3 صفوف) — نفس الحالة الحيّة" || bad "لم أستطع محاكاة التسريب (قرأ $BEFORE)"
+
+echo ""
+echo "【1】 تنفيذ الملف كاملًا كما سيفعل المستخدم"
+$PSQL_SU -d "$DB" -v ON_ERROR_STOP=1 -f "$FILE" > /tmp/apply-run.txt 2>&1
+if [ $? -eq 0 ]; then ok "نُفِّذ بلا خطأ ($(grep -c '' /tmp/apply-run.txt) سطر ناتج)"; else bad "فشل التنفيذ" "$(grep -iE 'error|خطأ' /tmp/apply-run.txt | head -2 | tr '\n' ' ')"; fi
+
+echo ""
+echo "【2】 هل أُغلق التسريب فعلًا؟"
+AFTER=$(as_role anon - "select count(*) from public.invoices" | tail -1)
+[ "$AFTER" = "0" ] && ok "الزائر يقرأ صفر فواتير" || bad "ما زال يقرأ $AFTER فاتورة"
+# ⚠️ نقيس **الأثر** لا رسالة الخطأ: سياسة RLS لا تُصدر خطأً، بل تُصفّر عدد الصفوف
+#    المتأثرة — فالاعتماد على ظهور «permission denied» هنا كان سيُعطي نتيجة مضلِّلة.
+TOTAL_BEFORE=$(Q "select total from public.invoices order by id limit 1")
+as_role anon - "update public.invoices set total = 1 where id = (select min(id) from public.invoices)" >/dev/null 2>&1
+TOTAL_AFTER=$(Q "select total from public.invoices order by id limit 1")
+[ "$TOTAL_BEFORE" = "$TOTAL_AFTER" ] && ok "الزائر لا يعدّل الفواتير (القيمة لم تتغيّر: $TOTAL_AFTER)" || bad "الزائر عدّل فاتورة! ($TOTAL_BEFORE → $TOTAL_AFTER)"
+as_role anon - "delete from public.invoices where id = (select min(id) from public.invoices)" >/dev/null 2>&1
+STILL=$(Q "select count(*) from public.invoices")
+[ "$STILL" = "3" ] && ok "الزائر لا يحذف الفواتير (العدد ما زال 3)" || bad "الزائر حذف فاتورة! صار $STILL"
+as_role anon - "insert into public.invoices(invoice_no, customer_name, total) values (9999, 'زائر', 1)" >/dev/null 2>&1
+STILL2=$(Q "select count(*) from public.invoices")
+[ "$STILL2" = "3" ] && ok "الزائر لا يُنشئ فاتورة" || bad "الزائر أنشأ فاتورة! صار $STILL2"
+
+echo ""
+echo "【3】 الكائنات أُنشئت"
+T=$(Q "select count(*) from pg_tables where schemaname='public' and tablename not like 'spatial%'")
+[ "$T" = "8" ] && ok "8 جداول (منها login_attempts)" || bad "عدد الجداول $T"
+FN=$(Q "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('next_invoice_no','assign_invoice_no','decrement_stock','increment_stock','public_settings','login_gate','login_fail','login_ok')")
+[ "$FN" = "8" ] && ok "الدوال الثمانية الجديدة موجودة" || bad "عددها $FN بدل 8"
+TR=$(Q "select count(*) from pg_trigger where tgname='trg_profiles_no_escalation'")
+[ "$TR" = "1" ] && ok "حارس تصعيد الصلاحيات مُفعَّل" || bad "الحارس مفقود"
+RT=$(Q "select count(*) from pg_publication_tables where pubname='supabase_realtime' and schemaname='public'")
+[ "$RT" = "4" ] && ok "Realtime على 4 جداول حيّة" || bad "Realtime على $RT جدول"
+LP=$(Q "select count(*) from pg_policies where schemaname='public' and tablename='login_attempts'")
+[ "$LP" = "0" ] && ok "login_attempts بلا سياسات (الوصول بالدوال فقط)" || bad "له $LP سياسة"
+
+echo ""
+echo "【4】 تقرير الملف النهائي يقول ✅"
+# ملاحظة: psql لا يُظهر أسطر التعليقات (-- …) في ناتجه، فنتحقّق من **صفوف التقرير**
+grep -q "① الجداول" /tmp/apply-run.txt && ok "التقرير مطبوع في ناتج التنفيذ" || bad "لا تقرير في الناتج"
+grep -qE "صحيح|كلها موجودة|لا شيء|مُفعَّل|سليمة" /tmp/apply-run.txt && ok "صفوف التقرير تحمل أحكامًا ✅" || bad "التقرير بلا أحكام"
+grep -qE "❌" /tmp/apply-run.txt && bad "التقرير يحتوي ❌" "$(grep -E '❌' /tmp/apply-run.txt | head -1)" || ok "لا ❌ في التقرير"
+
+echo ""
+echo "【5】 ثابت idempotency: كل create policy مسبوق بـdrop policy if exists"
+MISSING=$(python3 - <<'PYEOF'
+import re, pathlib
+txt = pathlib.Path("scripts/apply-backend-all.sql").read_text(encoding="utf-8")
+seen, missing = set(), []
+for ln in txt.split("\n"):
+    m = re.search(r'create policy\s+"?([^"\s]+)"?\s+on\s+([a-zA-Z_.]+)', ln, re.I)
+    if m:
+        name, tbl = m.group(1), m.group(2)
+        if (name.lower(), tbl.lower()) not in seen:
+            missing.append(name + " on " + tbl)   # لم يسبقه drop
+    d = re.search(r'drop policy if exists\s+"?([^"\s]+)"?\s+on\s+([a-zA-Z_.]+)', ln, re.I)
+    if d:
+        seen.add((d.group(1).lower(), d.group(2).lower()))
+print(" · ".join(missing[:4]))
+PYEOF
+)
+[ -z "$MISSING" ] && ok "كل سياسة تُحذف قبل إنشائها (لا «already exists» أبدًا)" || bad "سياسات بلا drop قبلها" "$MISSING"
+
+echo "【6】 آمن الإعادة: تشغيل ثانٍ بلا خطأ"
+$PSQL_SU -d "$DB" -v ON_ERROR_STOP=1 -f "$FILE" > /tmp/apply-run2.txt 2>&1
+if [ $? -eq 0 ]; then ok "التشغيل الثاني نجح (المستخدم يعيده بلا خوف)"; else bad "التشغيل الثاني فشل" "$(grep -iE 'error' /tmp/apply-run2.txt | head -2 | tr '\n' ' ')"; fi
+T2=$(Q "select count(*) from pg_tables where schemaname='public' and tablename not like 'spatial%'")
+[ "$T2" = "8" ] && ok "لا ازدواج كائنات بعد الإعادة (8 جداول)" || bad "الجداول صارت $T2"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "  النتيجة: $PASS ناجح · $FAIL فاشل"
+if [ "$FAIL" -eq 0 ]; then echo "  ✅ الملف جاهز للصق في SQL Editor"; else echo "  ❌ يحتاج إصلاحًا — لا تُسلّمه بعد"; fi
+echo "═══════════════════════════════════════════════════════════════"
+exit $(( FAIL > 0 ? 1 : 0 ))

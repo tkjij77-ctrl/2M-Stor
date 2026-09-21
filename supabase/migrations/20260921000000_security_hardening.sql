@@ -81,6 +81,13 @@ drop policy if exists "products_public_read" on storage.objects;
 create policy "products_public_read" on storage.objects
   for select using (bucket_id = 'products');
 
+-- ⚠️ لا بد من حذف سياسات الفريق قبل إنشائها: بلا هذه الأسطر يفشل **إعادة تشغيل**
+--    هذا الترحيل بـ«policy … already exists» — وقد كشفه اختبار التشغيل مرتين
+--    (scripts/verify-apply-backend-all.sh) وكان سيمنع المستخدم من إعادة التنفيذ.
+drop policy if exists "products_staff_insert" on storage.objects;
+drop policy if exists "products_staff_update" on storage.objects;
+drop policy if exists "products_staff_delete" on storage.objects;
+
 create policy "products_staff_insert" on storage.objects
   for insert with check (
     bucket_id = 'products' and public.my_role() in ('admin', 'worker')
@@ -147,6 +154,7 @@ create policy "inv_delete" on public.invoices
 
 -- 3.6 بنود الفاتورة: إنشاء لأي مسجَّل، تعديل/حذف للإدارة فقط
 drop policy if exists "iitems_rw" on public.invoice_items;
+drop policy if exists "iitems_insert" on public.invoice_items;   -- يمنع «already exists» عند إعادة التشغيل
 create policy "iitems_insert" on public.invoice_items
   for insert with check (auth.uid() is not null);
 drop policy if exists "iitems_update" on public.invoice_items;

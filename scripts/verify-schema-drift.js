@@ -343,6 +343,24 @@ function selfCheck() {
     check("docs/rls.md يشرح سبب انعدام سياسات login_attempts", /login_attempts/.test(rlsDocText) && /revoke/i.test(rlsDocText));
   }
 
+  // 2-ب) كل `create policy` مسبوق بـ`drop policy if exists` ⇒ الملف آمن الإعادة
+  //      (اكتُشف باختبار تشغيل الملف المركّب مرتين: فشل بـ«policy … already exists»
+  //       ويتعارض مع وعد «أعد التشغيل بلا خوف» الذي نعطيه للمستخدم)
+  const notIdempotent = [];
+  for (const f of files) {
+    const txt = fs.readFileSync(path.join(MIGRATIONS, f), "utf8");
+    const seen = new Set();
+    for (const line of txt.split("\n")) {
+      const d = /drop policy if exists\s+"?([^"\s]+)"?\s+on\s+([a-z_.]+)/i.exec(line);
+      if (d) seen.add(d[1].toLowerCase() + " on " + d[2].toLowerCase());
+      const c = /create policy\s+"?([^"\s]+)"?\s+on\s+([a-z_.]+)/i.exec(line);
+      if (c && !seen.has(c[1].toLowerCase() + " on " + c[2].toLowerCase())) {
+        notIdempotent.push(f + " → " + c[1] + " on " + c[2]);
+      }
+    }
+  }
+  check("كل سياسة تُحذف قبل إنشائها (ترحيلات آمنة الإعادة)", notIdempotent.length === 0, notIdempotent.slice(0, 3).join(" · "));
+
   // 3) الجداول التي يقرأها التطبيق موجودة في المخطط
   const appTables = new Set();
   const appRpcs = new Set();
