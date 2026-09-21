@@ -1655,7 +1655,7 @@
         <section class="hero">
           <div class="hero-grid">
             <div>
-              <span class="badge-hero">⭐ المنصة الأولى في خدمة عملائها</span>
+              <!-- 🔒 T4.1: حُذفت شارة تفضيلية غير قابلة للإثبات (ادعاء تميّز بلا دليل) -->
               <h1>منصة <span class="grad">2M-Stor</span><br>كل ما تحتاجه في مكان واحد</h1>
               <p>كتب، قرطاسية، وأدوات مكتبية بأعلى جودة وأفضل الأسعار. تصفّح، اطلب، وتابع طلبك بسهولة — مع مزامنة فورية على كل أجهزتك.</p>
               <div class="hero-actions">
@@ -1671,8 +1671,9 @@
             <div class="hero-visual">
               <div class="blob">📚</div>
               <div class="float-card fc1"><span class="ic">🚚</span><div><b>توصيل سريع</b><small>خلال 24 ساعة</small></div></div>
-              <div class="float-card fc2"><span class="ic">⭐</span><div><b>4.9 تقييم</b><small>+5000 عميل</small></div></div>
-            </div>
+            <!-- 🔒 T4.1: حُذفت بطاقة تقييمات وعملاء بأرقام غير حقيقية.
+                 الأرقام الحقيقية موجودة في hero-stats وهي محسوبة من بياناتك. -->
+
           </div>
         </section>
         <section class="landing-section" id="landing-features">
@@ -1689,14 +1690,11 @@
           <div class="shop-grid" style="max-width:1200px;margin:0 auto;padding:0 20px">${featHtml}</div>
           <div style="text-align:center;margin-top:28px"><button class="btn" onclick="setView('shop')">عرض كل المنتجات ←</button></div>
         </section>
-        <section class="landing-section" style="padding-top:0">
-          <div class="landing-head"><span class="tag">آراء العملاء</span><h2>ماذا يقولون عنا</h2></div>
-          <div class="testimonials">
-            <div class="testimonial"><div class="quote">"</div><p>خدمة رائعة وتوصيل سريع. المنتجات وصلت بحالة ممتازة وأسعارها منافسة.</p><div class="who"><div class="avatar">أح</div><div><b>أحمد العتيبي</b><span>عميل دائم</span></div></div></div>
-            <div class="testimonial"><div class="quote">"</div><p>تشكيلة الكتب مذهلة ووجدت كل ما أبحث عنه. فريق الدعم متعاون جداً.</p><div class="who"><div class="avatar">سا</div><div><b>سارة القحطاني</b><span>معلمة</span></div></div></div>
-            <div class="testimonial"><div class="quote">"</div><p>أطلب كل مستلزمات مكتبي من هنا. الجودة ممتازة والتوصيل دائماً في الموعد.</p><div class="who"><div class="avatar">خا</div><div><b>خالد المطيري</b><span>صاحب شركة</span></div></div></div>
-          </div>
-        </section>`;
+        <!-- 🔒 T4.1 (2026-09-21): حُذف قسم «آراء العملاء» بالكامل — كان يحتوي آراء مفبركة
+             بأسماء أشخاص لا وجود لهم، وهو مخالف لقوانين حماية المستهلك ويُفقد الثقة عند
+             اكتشافه. لإعادته بشكل قانوني: اجمع آراء عملاء حقيقيين بإذنهم، ثم أعد بناءه بنفس
+             البنية (class="testimonials" > class="testimonial" > .quote + p + .who). -->
+`;
         // عدادات متحركة
         hv.querySelectorAll('[data-count]').forEach(el=>{const t=+el.dataset.count;let c=0;const step=Math.ceil(t/60)||1;const tick=()=>{c+=step;if(c>=t) el.textContent=t.toLocaleString('ar-EG')+'+'; else{el.textContent=c.toLocaleString('ar-EG'); requestAnimationFrame(tick);}}; requestAnimationFrame(tick);});
     }
