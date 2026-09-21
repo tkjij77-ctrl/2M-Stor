@@ -1524,10 +1524,34 @@
 
     // ===== SETTINGS (بيانات المحل والإيصال) =====
     let settings = Object.assign(
-        { store: '2M-Stor', address: '', phone: '', footer: 'شكراً لتسوقكم معنا', tax: 0 },
+        {
+            store: '2M-Stor', address: '', phone: '', footer: 'شكراً لتسوقكم معنا',
+            tax: 0,
+            // 🔧 T3.5 (2026-09-21): قواعد البيع صارت في الإعدادات بدل أرقام مكتوبة في الكود
+            shipping: 20,         // مصاريف الشحن (ج.م)
+            freeShip: 200,        // الشحن مجاني فوق المبلغ ده (0 = لا يوجد إعفاء)
+            couponCode: '2M10',   // كود الخصم (فاضي = بدون كوبون)
+            couponPct: 10         // نسبة خصم الكوبون %
+        },
         JSON.parse(localStorage.getItem('al_sayed_settings') || 'null') || {}
     );
     function saveSettings() { localStorage.setItem('al_sayed_settings', JSON.stringify(settings)); }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  🗑️ سلة المحذوفات (T3.4) — الحذف ناعم وله رجعة
+    //  تُخزَّن نسخة من كل عنصر محذوف محليًا (بديل شبكة آمن عند فقد الاتصال)،
+    //  وتُقرأ النسخة السحابية عبر deleted_at عند توفّر الاتصال.
+    // ═══════════════════════════════════════════════════════════════
+    function trashList() { try { return JSON.parse(localStorage.getItem('al_sayed_trash') || '[]'); } catch (e) { return []; } }
+    function trashSave(arr) { try { localStorage.setItem('al_sayed_trash', JSON.stringify(arr.slice(-200))); } catch (e) {} }
+    function trashPush(rec) {
+        const arr = trashList();
+        arr.push(Object.assign({ deletedAt: new Date().toISOString() }, rec));
+        trashSave(arr);
+    }
+    function trashRemove(lid) {
+        trashSave(trashList().filter(x => x.lid !== lid));
+    }
 
     // ===== INVOICE NUMBER (ترقيم متسلسل) =====
     let invCounter = parseInt(localStorage.getItem('al_sayed_invno') || '0', 10) || 0;
@@ -2055,8 +2079,9 @@
         const inp=document.getElementById('couponCode');
         const v=inp?inp.value.trim():'';
         const dEl=document.getElementById('cart-discount');
-        if(v==='2M10'){
-            localStorage.setItem('al_sayed_coupon','2M10');
+        const _cc = String(settings.couponCode || '').trim().toUpperCase();
+        if(_cc && v === _cc){
+            localStorage.setItem('al_sayed_coupon', _cc);
             if(dEl) dEl.value='10%';
             toast('✅ كوبون 10% تم تطبيقه');
         } else if(v===''){
@@ -2064,7 +2089,7 @@
             if(dEl) dEl.value='';
             toast('تم إزالة الكوبون');
         } else {
-            toast('⚠️ كود غير صحيح — جرب 2M10');
+            toast(_cc ? ('⚠️ كود غير صحيح — جرب ' + _cc) : '⚠️ لا يوجد كوبون مُفعّل حاليًا');
             return;
         }
         recalcCart();
@@ -2078,13 +2103,21 @@
             if (dv.endsWith('%')) discount = subtotal * (parseFloat(dv) || 0) / 100;
             else discount = parseFloat(dv) || 0;
         }
-        // كوبون 2M10 يعطي 10% إذا لم يكتب خصم يدوي
-        const coupon=document.getElementById('couponCode');
-        if(coupon && coupon.value.trim()==='2M10' && (!dEl || !dEl.value.trim())) discount = subtotal*0.10;
-        else if(localStorage.getItem('al_sayed_coupon')==='2M10' && (!dEl || !dEl.value.trim())) discount = subtotal*0.10;
+        // 🔧 T3.5: الكوبون ونسبته من الإعدادات (كانا مكتوبين في الكود)
+        const cCode = String(settings.couponCode || '').trim().toUpperCase();
+        const cPct = parseFloat(settings.couponPct) || 0;
+        const coupon = document.getElementById('couponCode');
+        const usedCoupon = !!cCode && cPct > 0 && (
+            (coupon && coupon.value.trim().toUpperCase() === cCode) ||
+            (localStorage.getItem('al_sayed_coupon') || '').toUpperCase() === cCode
+        );
+        if (usedCoupon && (!dEl || !dEl.value.trim())) discount = subtotal * cPct / 100;
         discount = Math.max(0, Math.min(discount, subtotal));
         const tax = (subtotal - discount) * (settings.tax || 0) / 100;
-        const shipping = subtotal > 200 ? 0 : (subtotal>0?20:0);
+        // 🔧 T3.5: الشحن من الإعدادات بدل 200/20 المكتوبتين
+        const shipFee = (parseFloat(settings.shipping) || 0);
+        const freeOver = (parseFloat(settings.freeShip) || 0);
+        const shipping = subtotal <= 0 ? 0 : (freeOver > 0 && subtotal >= freeOver ? 0 : shipFee);
         return { subtotal: subtotal, discount: discount, tax: tax, shipping: shipping, total: subtotal - discount + tax + shipping };
     }
     function recalcCart() {
@@ -2157,8 +2190,11 @@
                     '<button class="cart-remove" onclick="removeFromCart(' + i + ')">✕</button>' +
                 '</div>';
         });
-        let shipping = total > 200 ? 0 : 20;
-        let _couponApplied = localStorage.getItem('al_sayed_coupon')==='2M10';
+        // 🔧 T3.5: من الإعدادات
+        const _shipFee = (parseFloat(settings.shipping) || 0);
+        const _freeOver = (parseFloat(settings.freeShip) || 0);
+        let shipping = (total > 0 && !(_freeOver > 0 && total >= _freeOver)) ? _shipFee : 0;
+        let _couponApplied = !!settings.couponCode && (localStorage.getItem('al_sayed_coupon') || '').toUpperCase() === String(settings.couponCode).toUpperCase();
         let linesHtml = html;
         // نبني ملخص الطلب مع شحن وكوبون
         let summaryHtml='';
@@ -2169,7 +2205,7 @@
                     '<div class="form-group" style="margin-top:6px"><label>👤 اسم العميل</label>' +
                         '<input type="text" id="cart-customer" placeholder="نقدي" value="' + esc(prevCustomer || '') + '">' +
                     '</div>' +
-                    '<div class="coupon"><input id="couponCode" placeholder="كود الخصم (جرب 2M10)" value="'+(_couponApplied?'2M10':'')+'"><button class="btn btn-outline" style="padding:11px 16px;white-space:nowrap" onclick="applyCoupon()">تطبيق</button></div>' +
+                    '<div class="coupon"><input id="couponCode" placeholder="'+(settings.couponCode?('كود الخصم (جرب '+esc(String(settings.couponCode))+')'):'لا يوجد كوبون مُفعّل')+'" value="'+(_couponApplied?esc(String(settings.couponCode)):'')+'"><button class="btn btn-outline" style="padding:11px 16px;white-space:nowrap" onclick="applyCoupon()">تطبيق</button></div>' +
                     '<div class="cart-totals">' +
                         '<div class="ct-row"><span>المجموع الفرعي</span><span id="cart-subtotal">—</span></div>' +
                         '<div class="ct-row"><span>الخصم</span><span id="cart-discount-val">—</span></div>' +
@@ -2685,6 +2721,9 @@
             if (!db[target]) target = 0;
             cat.items.forEach(item => db[target].items.push(item));
         }
+        // 🗑️ T3.4: نحفظ القسم كاملًا (مع أصنافه) قبل الحذف
+        trashPush({ type: 'cat', lid: cat.lid, cid: cat.cid || null,
+                    name: cat.name, itemsCount: moved, snapshot: cat });
         db.splice(ci, 1);
         queue({ t: 'cat-del', lid: cat.lid, cid: cat.cid });
         if (moved > 0 && hasTarget) {
@@ -2723,10 +2762,18 @@
             '<div class="form-group"><label>الهاتف</label><input type="text" id="set-phone" value="' + esc(settings.phone) + '" style="direction:ltr;text-align:left"></div>' +
             '<div class="form-group"><label>نص تذييل الإيصال</label><input type="text" id="set-footer" value="' + esc(settings.footer) + '"></div>' +
             '<div class="form-group"><label>نسبة الضريبة % (0 = بدون)</label><input type="number" id="set-tax" value="' + settings.tax + '" min="0" max="100" step="0.5"></div>' +
+            '<div style="border-top:1px solid var(--border);margin:14px 0 8px;padding-top:10px;font-weight:800;font-size:.85rem">🛒 قواعد البيع (تنطبق على كل الأجهزة)</div>' +
+            '<div class="form-group"><label>مصاريف الشحن (ج.م)</label><input type="number" id="set-shipping" value="' + (parseFloat(settings.shipping) || 0) + '" min="0" step="1"></div>' +
+            '<div class="form-group"><label>شحن مجاني فوق (ج.م) — 0 = بدون</label><input type="number" id="set-freeship" value="' + (parseFloat(settings.freeShip) || 0) + '" min="0" step="10"></div>' +
+            '<div class="form-group"><label>كود الخصم (فاضي = بدون كوبون)</label><input type="text" id="set-coupon" value="' + esc(String(settings.couponCode || '')) + '" style="direction:ltr;text-align:left" placeholder="مثال: 2M10"></div>' +
+            '<div class="form-group"><label>نسبة خصم الكوبون %</label><input type="number" id="set-couponpct" value="' + (parseFloat(settings.couponPct) || 0) + '" min="0" max="100" step="1"></div>' +
             cloudSectionHtml() +
             '<div class="form-group"><label>🗄️ النسخ الاحتياطية (تلقائية يومياً — آخر 7)</label><div class="user-list">' + backupRows + '</div></div>' +
             '<div class="modal-actions between">' +
-                '<button class="btn btn-outline" onclick="manualBackup()">💾 نسخة الآن</button>' +
+                '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                    '<button class="btn btn-outline" onclick="openTrash()">🗑️ سلة المحذوفات</button>' +
+                    '<button class="btn btn-outline" onclick="manualBackup()">💾 نسخة الآن</button>' +
+                '</div>' +
                 '<div style="display:flex;gap:8px">' +
                     '<button class="btn btn-outline" onclick="closeModal()">إغلاق</button>' +
                     '<button class="btn btn-primary" onclick="saveSettingsForm()">💾 حفظ</button>' +
@@ -2740,16 +2787,132 @@
         settings.phone = document.getElementById('set-phone').value.trim();
         settings.footer = document.getElementById('set-footer').value.trim();
         settings.tax = parseFloat(document.getElementById('set-tax').value) || 0;
+        // 🔧 T3.5: قواعد البيع
+        settings.shipping   = parseFloat(document.getElementById('set-shipping').value) || 0;
+        settings.freeShip   = parseFloat(document.getElementById('set-freeship').value) || 0;
+        settings.couponCode = String(document.getElementById('set-coupon').value || '').trim().toUpperCase();
+        settings.couponPct  = parseFloat(document.getElementById('set-couponpct').value) || 0;
         saveSettings();
         queue({ t: 'set', lid: 's1', key: 'store_name', value: settings.store });
         queue({ t: 'set', lid: 's2', key: 'address', value: settings.address });
         queue({ t: 'set', lid: 's3', key: 'phone', value: settings.phone });
         queue({ t: 'set', lid: 's4', key: 'footer', value: settings.footer });
         queue({ t: 'set', lid: 's5', key: 'tax_pct', value: String(settings.tax) });
+        // 🔧 T3.5: رفع قواعد البيع عند الحفظ
+        queue({ t: 'set', lid: 's6', key: 'shipping_fee', value: String(settings.shipping || 0) });
+        queue({ t: 'set', lid: 's7', key: 'free_shipping_over', value: String(settings.freeShip || 0) });
+        queue({ t: 'set', lid: 's8', key: 'coupon_code', value: String(settings.couponCode || '') });
+        queue({ t: 'set', lid: 's9', key: 'coupon_pct', value: String(settings.couponPct || 0) });
         logAction('تحديث الإعدادات');
         toast('✅ تم حفظ الإعدادات');
         renderAll();
     }
+    // ═══════════════════════════════════════════════════════════════
+    //  🗑️ واجهة سلة المحذوفات (T3.4) — استعادة أو حذف نهائي
+    // ═══════════════════════════════════════════════════════════════
+    async function openTrash() {
+        if (!can('del')) return toast('⚠️ سلة المحذوفات للمدير فقط');
+        const body = document.getElementById('modalBody');
+        const modal = document.getElementById('modal');
+        modal.style.display = 'flex';
+        body.innerHTML = '<h2>🗑️ سلة <span class="accent">المحذوفات</span></h2><div style="text-align:center;padding:30px;color:var(--text-muted);font-weight:700">⏳ جاري التحميل...</div>';
+
+        let local = trashList();
+        let cloud = { items: [], cats: [] };
+        if (cloudReady()) {
+            try {
+                const [ci, cc] = await Promise.all([
+                    sb.from('items').select('id, name, deleted_at, category_id').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(100),
+                    sb.from('categories').select('id, name, deleted_at').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(50)
+                ]);
+                cloud.items = ci.data || [];
+                cloud.cats = cc.data || [];
+            } catch (e) {}
+        }
+
+        const fmtD = (d) => { try { return new Date(d).toLocaleString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return d || ''; } };
+        let rows = '';
+
+        cloud.cats.forEach(c => {
+            rows += '<div class="user-row"><div><div class="user-name">📂 ' + esc(c.name) + '</div>' +
+                '<div class="user-meta">قسم سحابي · حُذف ' + esc(fmtD(c.deleted_at)) + '</div></div>' +
+                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" onclick="restoreCloudTrash(\'cat\',' + c.id + ')">↩️ استعادة</button></div>';
+        });
+        cloud.items.forEach(i => {
+            rows += '<div class="user-row"><div><div class="user-name">📦 ' + esc(i.name) + '</div>' +
+                '<div class="user-meta">صنف سحابي · حُذف ' + esc(fmtD(i.deleted_at)) + '</div></div>' +
+                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" onclick="restoreCloudTrash(\'item\',' + i.id + ')">↩️ استعادة</button></div>';
+        });
+        local.forEach(t => {
+            const isCat = t.type === 'cat';
+            rows += '<div class="user-row"><div><div class="user-name">' + (isCat ? '📂 ' : '📦 ') + esc(t.name || '—') + '</div>' +
+                '<div class="user-meta">' + (isCat ? 'قسم محلي' : 'صنف محلي') + ' · حُذف ' + esc(fmtD(t.deletedAt)) + (isCat && t.itemsCount ? (' · ' + t.itemsCount + ' صنف') : '') + '</div></div>' +
+                '<div style="display:flex;gap:6px">' +
+                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" onclick="restoreLocalTrash(\'' + t.lid + '\')">↩️ استعادة</button>' +
+                '<button class="btn btn-danger" style="padding:6px 12px;font-size:.75rem" onclick="purgeLocalTrash(\'' + t.lid + '\')">🗑️ نهائي</button>' +
+                '</div></div>';
+        });
+
+        body.innerHTML =
+            '<h2>🗑️ سلة <span class="accent">المحذوفات</span></h2>' +
+            '<p style="font-size:.78rem;color:var(--text-muted);font-weight:700;margin-bottom:10px">' +
+            'الحذف الآن <b>ناعم</b> — أي عنصر محذوف يمكن استعادته من هنا بدل أن يضيع نهائيًا.</p>' +
+            (rows ? '<div class="user-list">' + rows + '</div>' : '<div class="empty-state"><div class="icon">✨</div>السلة فارغة — لا يوجد محذوفات</div>') +
+            '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal();openSettingsModal()">🔙 الإعدادات</button></div>';
+    }
+
+    async function restoreCloudTrash(kind, id) {
+        if (!cloudReady()) return toast('⚠️ استعادة السحابي تحتاج اتصال');
+        const table = kind === 'cat' ? 'categories' : 'items';
+        const { error } = await sb.from(table).update({ deleted_at: null }).eq('id', id);
+        if (error) return toast('❌ ' + (error.message || 'فشل الاستعادة'));
+        logAction('استعادة من المحذوفات', kind + ' #' + id);
+        toast('✅ تمت الاستعادة — ستظهر بعد المزامنة');
+        await pullAll().catch(() => {});
+        openTrash();
+    }
+
+    function restoreLocalTrash(lid) {
+        const arr = trashList();
+        const t = arr.find(x => x.lid === lid);
+        if (!t) return toast('⚠️ العنصر غير موجود');
+        if (t.type === 'cat') {
+            if (!t.snapshot) return toast('⚠️ لا توجد نسخة محفوظة لهذا القسم');
+            // حذف القسم ينقل أصنافه لقسم آخر (لا يمحوها)، لذا نستعيد الأصناف
+            // المفقودة فقط — وإلا صار لدينا نسخ مكرّرة من نفس الصنف.
+            const clone = JSON.parse(JSON.stringify(t.snapshot));
+            const alive = new Set();
+            db.forEach(c => (c.items || []).forEach(it => { alive.add(it.lid); if (it.cid) alive.add('c' + it.cid); }));
+            clone.items = (clone.items || []).filter(it => !alive.has(it.lid) && !(it.cid && alive.has('c' + it.cid)));
+            db.push(clone);
+            clone.items.forEach(it => queue({ t: it.cid ? 'item-upd' : 'item-ins', lid: it.lid, catLid: clone.lid }));
+            if (!clone.cid) queue({ t: 'cat-ins', lid: clone.lid, so: db.length - 1 });
+        } else {
+            if (!t.snapshot) return toast('⚠️ لا توجد نسخة محفوظة لهذا الصنف');
+            // لا نُكريّر صنفًا ما زال موجودًا
+            const dup = db.some(c => (c.items || []).some(it => it.lid === lid));
+            if (dup) { trashRemove(lid); toast('ℹ️ الصنف موجود بالفعل'); closeModal(); return renderAll(); }
+            let cat = db.find(c => c.lid === t.catLid) || db[0];
+            if (!cat) return toast('⚠️ لا يوجد قسم لاستعادة الصنف إليه');
+            cat.items.push(t.snapshot);
+            if (t.snapshot.cid) queue({ t: 'item-upd', lid: t.snapshot.lid, catLid: cat.lid });
+            else queue({ t: 'item-ins', lid: t.snapshot.lid, catLid: cat.lid });
+        }
+        trashRemove(lid);
+        save();
+        logAction('استعادة من المحذوفات (محلي)', t.name || lid);
+        toast('✅ تمت استعادة «' + (t.name || '') + '»');
+        closeModal();
+        renderAll();
+    }
+
+    function purgeLocalTrash(lid) {
+        if (!confirm('حذف نهائي؟ لا يمكن الرجوع بعد هذه الخطوة.')) return;
+        trashRemove(lid);
+        toast('🗑️ تم الحذف النهائي');
+        openTrash();
+    }
+
     function manualBackup() {
         localStorage.removeItem('al_sayed_last_backup');
         autoBackup();
@@ -2905,6 +3068,10 @@
         if (!can('del')) return toast('⚠️ حذف الأصناف للمدير فقط');
         const ci = editingCat, ii = editingIdx;
         const removed = db[ci].items.splice(ii, 1)[0];
+        // 🗑️ T3.4: نحفظ نسخة كاملة قبل الحذف حتى يمكن الاستعادة
+        trashPush({ type: 'item', lid: removed.lid, cid: removed.cid || null,
+                    name: removed.n, catName: (db[ci] && db[ci].name) || '', catLid: db[ci] && db[ci].lid,
+                    snapshot: removed });
         queue({ t: 'item-del', lid: removed.lid, cid: removed.cid });
         invoiceCart = invoiceCart.filter(c => !(c.ci === ci && c.ii === ii));
         invoiceCart.forEach(c => { if (c.ci === ci && c.ii > ii) c.ii--; });
@@ -3933,7 +4100,10 @@
         if (error) throw error;
       } else if (e.t === 'cat-del') {
         if (!e.cid) return;
-        const { error } = await sb.from('categories').delete().eq('id', e.cid);
+        // 🔒 T3.4 (2026-09-21): حذف ناعم للأقسام — كان الحذف النهائي يمحو
+        // كل أصناف القسم تلقائيًا (references ... on delete cascade) بلا رجعة.
+        const { error } = await sb.from('categories')
+          .update({ deleted_at: new Date().toISOString() }).eq('id', e.cid);
         if (error) throw error;
       } else if (e.t === 'item-ins') {
         const it = findLocalItem(e.lid); if (!it || it.cid) return;
@@ -3957,7 +4127,12 @@
         if (error) throw error;
       } else if (e.t === 'item-del') {
         if (!e.cid) return;
-        const { error } = await sb.from('items').delete().eq('id', e.cid);
+        // 🔒 T3.4 (2026-09-21): حذف ناعم بدل الحذف النهائي.
+        // السبب: الحذف النهائي لا رجعة فيه (ولا يوجد Versioning على الخطة المجانية)،
+        // وحذف قسم بالخطأ كان يمحو كل أصنافه عبر ON DELETE CASCADE.
+        // الآن: deleted_at = وقت الحذف، ويمكن الاستعادة من «سلة المحذوفات».
+        const { error } = await sb.from('items')
+          .update({ deleted_at: new Date().toISOString() }).eq('id', e.cid);
         if (error) throw error;
       } else if (e.t === 'inv-ins') {
         const inv = invoices.find(x => x.lid === e.lid);
@@ -4055,8 +4230,11 @@
           sb.from('settings').select('*')
         ]);
         if (catsR.error) throw catsR.error;
-        mergeCats(catsR.data || []);
-        mergeItems(itemsR.data || []);
+        // 🗑️ T3.4: نستبعد المحذوف ناعمًا — وإلا عاد للظهور بعد كل مزامنة
+        const aliveCats = (catsR.data || []).filter(r => !r.deleted_at);
+        const aliveItems = (itemsR.data || []).filter(r => !r.deleted_at);
+        mergeCats(aliveCats);
+        mergeItems(aliveItems);
         mergeInvoices(invsR.data || []);
         mergeSettings(setsR.data || []);
         lastSync = Date.now();
@@ -4136,7 +4314,13 @@
       if (maxNo > invCounter) { invCounter = maxNo; localStorage.setItem('al_sayed_invno', String(invCounter)); }
     }
     function mergeSettings(remote) {
-      const map = { store_name: 'store', address: 'address', phone: 'phone', footer: 'footer', tax_pct: 'tax' };
+      const map = {
+        store_name: 'store', address: 'address', phone: 'phone', footer: 'footer', tax_pct: 'tax',
+        // 🔧 T3.5: قواعد البيع من السحابة — تتغير لكل الأجهزة معًا
+        shipping_fee: 'shipping', free_shipping_over: 'freeShip',
+        coupon_code: 'couponCode', coupon_pct: 'couponPct'
+      };
+      const numeric = { tax_pct: 1, shipping_fee: 1, free_shipping_over: 1, coupon_pct: 1 };
       for (const rs of remote) {
         if (rs.key === 'role_perms') {
           try {
@@ -4149,7 +4333,7 @@
           continue;
         }
         if (map[rs.key] === undefined) continue;
-        settings[map[rs.key]] = rs.key === 'tax_pct' ? (parseFloat(rs.value) || 0) : rs.value;
+        settings[map[rs.key]] = numeric[rs.key] ? (parseFloat(rs.value) || 0) : rs.value;
       }
     }
 
@@ -4171,6 +4355,11 @@
         queue({ t: 'set', lid: 's3', key: 'phone', value: settings.phone });
         queue({ t: 'set', lid: 's4', key: 'footer', value: settings.footer });
         queue({ t: 'set', lid: 's5', key: 'tax_pct', value: String(settings.tax) });
+        // 🔧 T3.5: رفع قواعد البيع في الترحيل الأول أيضًا
+        queue({ t: 'set', lid: 's6', key: 'shipping_fee', value: String(settings.shipping || 0) });
+        queue({ t: 'set', lid: 's7', key: 'free_shipping_over', value: String(settings.freeShip || 0) });
+        queue({ t: 'set', lid: 's8', key: 'coupon_code', value: String(settings.couponCode || '') });
+        queue({ t: 'set', lid: 's9', key: 'coupon_pct', value: String(settings.couponPct || 0) });
         if (Object.keys(customPerms).length > 0) queue({ t: 'set', lid: 'rp0', key: 'role_perms', value: JSON.stringify(customPerms) });
         localStorage.setItem('al_sayed_settings_synced', '1');
         n += 5;

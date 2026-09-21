@@ -12,3 +12,8 @@ test-results
 tsconfig.tsbuildinfo
 .next.cache
 next-env.d.ts
+
+# مخرجات next-pwa (تتولّد عند كل بناء — لا تُرفع)
+public/sw.js
+public/workbox-*.js
+public/fallback-*.js
