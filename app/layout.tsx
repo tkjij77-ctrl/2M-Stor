@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Link from "next/link";
+import { CartBadge } from "@/components/cart-badge";
 
 export const metadata: Metadata = {
   title: "2M-Stor — آل السيد",
   description: "نظام متكامل لإدارة المخزون والفواتير والمبيعات",
   manifest: "/manifest.json",
-  themeColor: "#0ca678",
 };
+
+export const viewport = { themeColor: "#0ca678" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,7 +17,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
       </head>
-      <body>{children}</body>
+      <body>
+        {/* ═══ رأس التطبيق (T2.4/T2.5) — كان الموقع بلا هيدر إطلاقًا ═══ */}
+        <header className="app-header">
+          <Link href="/" className="app-logo" style={{ textDecoration: "none", color: "inherit" }}>
+            <span style={{ fontSize: "1.3rem" }}>🛍️</span>
+            <span>2M-Stor</span>
+          </Link>
+          <nav className="app-nav">
+            <Link href="/" className="app-nav-link">المتجر</Link>
+            <Link href="/stock" className="app-nav-link">المخزن</Link>
+            <Link href="/admin" className="app-nav-link">الإدارة</Link>
+            <CartBadge />
+          </nav>
+        </header>
+        {children}
+        <footer className="app-footer">
+          <span>آل السيد — نظام إدارة المخزون والمبيعات</span>
+          <span style={{ opacity: 0.7 }}>· المزامنة تلقائية كل تعديل</span>
+        </footer>
+      </body>
     </html>
   );
 }

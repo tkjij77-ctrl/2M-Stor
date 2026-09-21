@@ -31,3 +31,201 @@ h1,h2,h3,.logo{ font-family: 'Cairo',sans-serif; }
 .btn:hover{ transform: translateY(-2px) scale(1.02); box-shadow: 0 14px 34px rgba(0,201,167,0.45); }
 .btn-ghost{ background: transparent; border:2px solid var(--accent); color:var(--accent); box-shadow:none; }
 .btn-ghost:hover{ background: var(--accent); color:#04262c; }
+
+/* ══════════════════════════════════════════════════════════════
+   شبكة المتجر وبطاقة المنتج
+   منقولة من index.html — حتى تكون الواجهتان متطابقتين بصريًا
+   ══════════════════════════════════════════════════════════════ */
+/* ===== SHOP GRID (صفحة العرض) ===== */         .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
+.shop-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.shop-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.shop-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.shop-grid { grid-template-columns: repeat(4, 1fr); }
+.shop-grid { grid-template-columns: repeat(5, 1fr); }
+[data-theme="dark"] .product-card, [data-theme="dark"] .shop-card { background: rgba(26,34,28,0.85); }
+.shop-card {             background: rgba(255,255,255,0.85);             -webkit-backdrop-filter: blur(6px);             backdrop-filter: blur(6px);             border: 1px solid var(--border-light);             border-radius: var(--radius);             overflow: hidden; cursor: pointer;             box-shadow: var(--shadow-sm);             transition: all 0.2s;             display: flex; flex-direction: column;         }
+.shop-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.product-card, .shop-card { animation: riseIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.no-anim .product-card, .no-anim .shop-card { animation: none; }
+/* ===== تحسين الأداء: content-visibility للكروت الكثيرة ===== */         .product-card, .shop-card, .related-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+.shop-card { contain-intrinsic-size: auto 280px; }
+.shop-img {             height: 110px; background: var(--bg-soft);             display: flex; align-items: center; justify-content: center;             font-size: 2.6rem; overflow: hidden; flex-shrink: 0;         }
+.shop-img img { width: 100%; height: 100%; object-fit: cover; }
+.shop-img { height: 88px; }
+.shop-img { height: 95px; }
+.shop-body { padding: 10px 12px 4px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.shop-name { font-size: 0.82rem; font-weight: 800; line-height: 1.4; min-height: 2.6em; color: var(--text-main); }
+.shop-name { font-size: 0.76rem; }
+.shop-price { font-size: 1.1rem; font-weight: 900; color: var(--primary); }
+.shop-price span { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); }
+.shop-price { font-size: 0.95rem; }
+[data-theme="dark"] .shop-avail.ok { color: #2dd4a0; }
+.shop-avail {             font-size: 0.68rem; font-weight: 800;             padding: 2px 10px; border-radius: 20px; align-self: flex-start;         }
+.shop-avail.ok { background: var(--primary-light); color: var(--primary); }
+.shop-avail.no { background: var(--danger-soft); color: var(--danger); }
+.shop-cartbar {             margin: 8px 10px 10px;             display: flex; align-items: center; gap: 6px;             background: var(--primary-light);             border: 2px solid var(--primary);             border-radius: 10px; padding: 4px;         }
+.shop-cartbar .cart-badge-icon {             flex: 1; text-align: center; font-weight: 900; font-size: 0.95rem;             color: var(--primary); background: var(--bg-card);             border-radius: 8px; padding: 4px 0;         }
+.cart-add {             margin: 8px 10px 10px; padding: 10px;             border: none; border-radius: 10px;             background: var(--btn-bg); color: var(--btn-fg);             font-weight: 800; font-size: 0.85rem; cursor: pointer;             transition: 0.15s; font-family: inherit;         }
+.cart-add:hover { background: var(--primary-dark); }
+.cart-add:active { transform: scale(0.97); }
+.cart-add.disabled { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; }
+/* ===== STOCK GRID (صفحة المخزن) ===== */         .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.product-grid { grid-template-columns: 1fr; gap: 14px; }
+.product-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.product-grid { grid-template-columns: repeat(3, 1fr); }
+[data-theme="dark"] .product-card, [data-theme="dark"] .shop-card { background: rgba(26,34,28,0.85); }
+.product-card {             background: rgba(255,255,255,0.85);             -webkit-backdrop-filter: blur(6px);             backdrop-filter: blur(6px);             border-radius: var(--radius);             padding: 18px 20px;             cursor: pointer; position: relative;             box-shadow: var(--shadow-sm);             border: 1px solid var(--border-light);             border-right: 4px solid var(--primary);             display: flex; flex-direction: column;             min-height: 200px;             transition: all 0.25s cubic-bezier(0.16,1,0.3,1);         }
+.product-card:hover {             box-shadow: var(--shadow-md);             transform: translateY(-3px) scale(1.01);             border-color: var(--border);         }
+.product-card, .shop-card { animation: riseIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.no-anim .product-card, .no-anim .shop-card { animation: none; }
+/* ===== تحسين الأداء: content-visibility للكروت الكثيرة ===== */         .product-card, .shop-card, .related-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+.product-card { padding: 16px; min-height: auto; }
+.product-name {             font-size: 1.05rem; font-weight: 800; color: var(--text-main);             display: flex; align-items: center; gap: 8px; flex-wrap: wrap;             line-height: 1.4;         }
+.product-name .cat {             font-size: 0.65rem; color: var(--primary);             background: var(--primary-light); padding: 3px 12px;             border-radius: 20px; font-weight: 700;         }
+.product-name .qr-badge {             font-size: 0.6rem; color: var(--text-muted); background: var(--bg-hover);             padding: 2px 8px; border-radius: 20px; font-weight: 600;         }
+.product-name { font-size: 1rem; }
+.product-price { font-size: 1.1rem; font-weight: 800; color: var(--primary); }
+.product-price small { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
+.card-thumb {             width: 56px; height: 56px; border-radius: 10px; object-fit: cover;             flex-shrink: 0; border: 1px solid var(--border);         }
+.card-thumb-fb {             display: flex; align-items: center; justify-content: center;             font-size: 1.6rem; background: var(--bg-soft);         }
+.search-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.search-row input {             flex: 1; padding: 15px 20px;             border: 2px solid var(--border); border-radius: var(--radius);             font-size: 0.95rem; font-weight: 600;             background: var(--bg-card); color: var(--text-main);             outline: none; transition: all 0.2s; box-shadow: var(--shadow-sm);         }
+.search-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(12,166,120,0.12); }
+.search-row .icon-btn {             width: 56px; border: none; border-radius: var(--radius);             background: var(--btn-bg); color: var(--btn-fg);             font-size: 1.3rem; cursor: pointer; transition: 0.2s;             box-shadow: 0 4px 12px rgba(12,166,120,0.25);         }
+.search-row .icon-btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+.search-row { gap: 6px; }
+.search-row input { padding: 12px 14px; font-size: 0.88rem; }
+.search-row .icon-btn { width: 48px; }
+.empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); font-weight: 600; font-size: 1rem; }
+.empty-state .icon { font-size: 3.5rem; margin-bottom: 16px; opacity: 0.6; }
+
+/* ══════════════════════════════════════════════════════════════
+   لوحة الإدارة
+   منقولة من index.html — حتى تكون الواجهتان متطابقتين بصريًا
+   ══════════════════════════════════════════════════════════════ */
+.dash-card { background: var(--bg-card); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light); }
+.dash-card h3 { font-size: 1rem; color: var(--text-muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.dash-card canvas { width: 100% !important; max-height: 200px; }
+.dash-stat { flex: 1; min-width: 100px; text-align: center; padding: 16px 8px; background: var(--primary-light); border-radius: var(--radius-sm); }
+.dash-stat .num { font-size: 1.5rem; font-weight: 900; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-stat .lbl { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; }
+.dash-stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.dash-top-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-soft); border-radius: 8px; font-size: 0.85rem; }
+.dash-top-item .rank { width: 28px; height: 28px; border-radius: 50%; background: var(--btn-bg); color: var(--btn-fg); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 900; flex-shrink: 0; }
+.dash-top-item .name { flex: 1; font-weight: 700; margin: 0 10px; }
+.dash-top-item .val { font-weight: 800; color: var(--primary); }
+.dash-top-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ══════════════════════════════════════════════════════════════
+   صفحة المنتج (تخطيط أمازون)
+   منقولة من index.html — حتى تكون الواجهتان متطابقتين بصريًا
+   ══════════════════════════════════════════════════════════════ */
+.amz-layout{ display:grid; grid-template-columns: 380px 1fr 280px; gap:24px; padding:22px 18px; align-items:start; }
+.amz-gallery{ position: relative; }
+.amz-gallery, .amz-buybox{ position: static; }
+.amz-main-img { height: 280px; }
+.amz-main-img{ width:100%; height:380px; background: var(--bg-soft); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:4rem; overflow:hidden; border:1px solid var(--border); }
+.amz-main-img img{ width:100%; height:100%; object-fit:contain; background:#fff; }
+.amz-thumbs{ display:flex; gap:8px; margin-top:10px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px; }
+.amz-thumb{ width:60px; height:60px; border-radius:10px; border:2px solid var(--border); overflow:hidden; flex-shrink:0; cursor:pointer; background:var(--bg-soft); display:flex; align-items:center; justify-content:center; }
+.amz-thumb.active{ border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.amz-buybox{ border:1px solid var(--border); border-radius:14px; padding:16px; background: var(--bg-card); position: relative; box-shadow: var(--shadow); }
+.amz-gallery, .amz-buybox{ position: static; }
+.amz-title { font-size: 1.15rem; }
+.amz-title{ font-size:1.55rem; font-weight:900; line-height:1.35; margin-bottom:8px; }
+.amz-price { font-size: 1.5rem; }
+.amz-price{ font-size:2rem; font-weight:900; color: #0F1111; margin-bottom:4px; }
+[data-theme="dark"] .amz-price{ color: var(--text-main); }
+.amz-price small{ font-size:0.85rem; color:var(--text-muted); font-weight:700; }
+.amz-meta{ font-size:0.85rem; color:var(--text-muted); font-weight:700; margin-bottom:10px; }
+.amz-rating{ color: var(--gold); font-size:0.9rem; margin-bottom:10px; }
+.amz-bullets{ font-size:0.88rem; line-height:1.9; color:var(--text-main); margin:12px 0 14px; padding-right:18px; }
+.amz-bullets li{ margin-bottom:4px; }
+.amz-btn-buy{ width:100%; background: #FFA41C; color:#0F1111; border:1px solid #FF8F00; border-radius:50px; padding:12px; font-weight:800; cursor:pointer; }
+.amz-btn-buy:hover{ background:#FA8900; }
+.amz-btn-cart{ width:100%; background: #FFD814; color:#0F1111; border:1px solid #FCD200; border-radius:50px; padding:12px; font-weight:800; cursor:pointer; margin-bottom:8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.amz-btn-cart:hover{ background:#F7CA00; }
+
+/* ══════════════════════════════════════════════════════════════
+   منتجات مشابهة
+   منقولة من index.html — حتى تكون الواجهتان متطابقتين بصريًا
+   ══════════════════════════════════════════════════════════════ */
+.product-related{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap:12px; }
+.product-related-title{ font-size:1.1rem; font-weight:900; margin: 18px 0 12px; display:flex; align-items:center; gap:8px; }
+/* ===== تحسين الأداء: content-visibility للكروت الكثيرة ===== */         .product-card, .shop-card, .related-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+.related-card{ background: var(--bg-card); border:1px solid var(--border); border-radius:14px; overflow:hidden; cursor:pointer; transition: transform 0.2s, box-shadow 0.2s; }
+.related-card:hover{ transform: translateY(-3px); box-shadow: var(--shadow); }
+.related-card-img{ height:110px; background: var(--bg-soft); display:flex; align-items:center; justify-content:center; font-size:1.8rem; overflow:hidden; }
+.related-card-img img{ width:100%; height:100%; object-fit:cover; }
+.related-card-body{ padding:10px; }
+.related-card-name{ font-size:0.82rem; font-weight:800; line-height:1.3; min-height:2.4em; }
+.related-card-price{ font-size:0.95rem; font-weight:900; color:var(--primary); margin-top:4px; }
+
+/* ══════════════════════════════════════════════════════════════
+   المخزون والتبويبات
+   منقولة من index.html — حتى تكون الواجهتان متطابقتين بصريًا
+   ══════════════════════════════════════════════════════════════ */
+/* ===== VIEW TABS ===== */         .view-tabs {             display: grid; grid-template-columns: 1fr 1fr; gap: 8px;             margin-bottom: 16px; background: var(--bg-card); padding: 6px;             border-radius: var(--radius); box-shadow: var(--shadow-sm);             border: 1px solid var(--border-light);         }
+.view-tabs { gap: 6px; padding: 4px; }
+.view-tab {             border: none; padding: 13px; border-radius: 10px;             font-size: 1.05rem; font-weight: 800; cursor: pointer;             background: transparent; color: var(--text-muted);             transition: 0.15s; font-family: inherit;         }
+.view-tab.active { background: var(--btn-bg); color: var(--btn-fg); box-shadow: 0 4px 14px rgba(12,166,120,0.35); }
+.view-tab { padding: 11px; font-size: 0.95rem; }
+.stock-card-top { display: flex; gap: 12px; align-items: flex-start; flex: 1; }
+.stock-card-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stock-qs { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════════════════
+   أزرار وعناوين
+   منقولة من index.html — حتى تكون الواجهتان متطابقتين بصريًا
+   ══════════════════════════════════════════════════════════════ */
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--primary-dark)); color: #fff; }
+.btn-primary:hover { transform: translateY(-3px) scale(1.02); }
+.btn-outline { background: transparent; border: 2px solid var(--border); color: var(--text-main); }
+.btn-outline:hover { border-color: var(--text-muted); }
+.section-title {             font-size: 0.95rem; font-weight: 700; color: var(--text-muted);             margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;         }
+.section-title .total-val { font-size: 1.1rem; font-weight: 800; color: var(--primary); }
+.cart-step {             width: 40px; height: 40px; border: none; border-radius: 8px;             background: var(--bg-card); color: var(--primary);             font-size: 1.1rem; font-weight: 900; cursor: pointer;             display: flex; align-items: center; justify-content: center;         }
+.cart-step:active { transform: scale(0.9); }
+
+/* ══════════════════════════════════════════════════════════════
+   هيكل الصفحة (T2.4) — الرأس والتذييل والحاوية
+   ══════════════════════════════════════════════════════════════ */
+.content { max-width: 1200px; margin: 0 auto; padding: 18px 16px 40px; }
+.app-header {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 18px; background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
+}
+.app-logo { display: inline-flex; align-items: center; gap: 8px; font-family: 'Cairo', sans-serif; font-weight: 900; font-size: 1.15rem; }
+.app-nav { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.app-nav-link { text-decoration: none; color: var(--text-main); font-weight: 800; font-size: 0.88rem; opacity: 0.85; }
+.app-nav-link:hover { opacity: 1; color: var(--primary); }
+.app-footer {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  padding: 22px 16px; margin-top: 30px; border-top: 1px solid var(--border);
+  font-size: 0.76rem; font-weight: 700; color: var(--text-muted);
+}
+@media (max-width: 720px) {
+  .app-nav { gap: 10px; font-size: 0.8rem; }
+  .cart-layout { grid-template-columns: 1fr !important; }
+}
+
+/* ── T2.4: كلاسات كانت تُستخدم بلا تعريف (sum-row · user-row) ── */
+.sum-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:6px 0; font-weight:800; font-size:.88rem;
+}
+.sum-row b{ font-variant-numeric:tabular-nums; }
+.sum-row.total{
+  font-size:1.15rem; border-top:2px dashed var(--border);
+  padding-top:10px; margin-top:6px;
+}
+.user-row{
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:14px; padding:14px; margin-bottom:10px;
+}
+.user-row.tight{ border-radius:12px; padding:12px; margin-bottom:8px; }
+.user-row.line{
+  display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}

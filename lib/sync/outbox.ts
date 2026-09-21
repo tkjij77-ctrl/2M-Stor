@@ -37,6 +37,8 @@ export type OutboxEntry = {
     items?: { name: string; cat?: string | null; qty: number; price: number }[];
   };
   status?: string;
+  /** كمية الخصم من المخزون (stock-dec) */
+  qty?: number;
   // ── إدارة الطابور ──
   id?: string;
   ts?: number;
@@ -74,6 +76,7 @@ function dedupeKey(e: OutboxEntry): string | null {
   if (e.t === "cat-upd" || e.t === "cat-ins") return "c:" + e.lid;
   if (e.t === "set") return "s:" + e.key;
   if (e.t === "inv-status") return "v:" + e.lid;
+  // stock-dec لا يُدمج: كل خصم يمثّل قطعًا فعلية خرجت من المخزن
   return null; // الحذف والإدراج لا يُنظَّفان (ترتيبهم مهم)
 }
 
@@ -142,6 +145,7 @@ export function describeEntry(e: OutboxEntry): string {
     "item-del": "حذف صنف",
     "inv-ins": "فاتورة جديدة",
     "inv-status": "حالة طلب",
+    "stock-dec": "خصم مخزون",
     set: "إعداد",
   };
   return (names[e.t] || e.t) + (e.key ? ` (${e.key})` : "");
@@ -391,6 +395,16 @@ async function applyEntry(e: OutboxEntry, db: DbCategory[], sb: ReturnType<typeo
       if (/column.*status/i.test(error.message || "")) return;
       throw error;
     }
+  } else if (e.t === "stock-dec") {
+    // 📦 T3.3/T2.5: خصم ذرّي على السيرفر (greatest(0, ...)) — لا يعتمد على
+    // بيانات قديمة في المتصفح، ولا يمكن أن ينزل تحت الصفر.
+    if (!e.cid || !e.qty) return;
+    const { error } = await sb.rpc("decrement_stock", {
+      p_item_id: e.cid,
+      p_qty: e.qty,
+      p_both: e.so === 1,
+    });
+    if (error) throw error;
   } else if (e.t === "set") {
     const { error } = await sb.from("settings").upsert({ key: e.key!, value: e.value! });
     if (error) throw error;

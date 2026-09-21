@@ -13,7 +13,7 @@ export default function StockPage(){
       <div className="search-row"><input placeholder="🔍 بحث..." value={q} onChange={e=>setQ(e.target.value)} /></div>
       {loading ? <p className="empty-state">⏳ تحميل...</p> : (
         <div className="product-grid">
-          {filtered.map(it=> <ProductCard key={it.lid} item={it} cat={(it as any).catName||''} onEdit={()=>{}} />)}
+          {filtered.map(it=> <ProductCard key={it.lid} item={it} cat={(it as {catName?:string}).catName||''} />)}
         </div>
       )}
     </main>

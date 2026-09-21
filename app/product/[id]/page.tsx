@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { ProductActions } from "@/components/add-to-cart";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -8,6 +9,20 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   if (!item) return <main className="content"><p>المنتج غير موجود</p><Link href="/" className="btn btn-outline">رجوع للمتجر</Link></main>;
   const qs = item.display_qs ?? 0;
   const available = qs > 0;
+
+  // قواعد البيع من إعدادات المتجر (T3.5) — لا أرقام مكتوبة في الكود
+  let r: { shipping?: number; freeShip?: number; tax?: number } = {};
+  try {
+    const { data: sets } = await sb.from("settings").select("key,value");
+    const map: Record<string, string> = {};
+    (sets || []).forEach((x: { key: string; value: string }) => (map[x.key] = x.value));
+    const num = (k: string) => (Number.isFinite(parseFloat(map[k])) ? parseFloat(map[k]) : undefined);
+    r = { shipping: num("shipping_fee"), freeShip: num("free_shipping_over"), tax: num("tax_pct") };
+  } catch {}
+  const shippingNote =
+    r.freeShip && r.freeShip > 0
+      ? `الشحن ${r.shipping ?? 0} ج.م — ومجاني للطلبات فوق ${r.freeShip} ج.م`
+      : `الشحن ${r.shipping ?? 0} ج.م`;
   // منتجات من نفس الصنف
   const { data: related } = await sb.from("items").select("id, name, price_text, display_qs, image_url").eq("category_id", item.category_id).neq("id", item.id).eq("deleted_at", null).limit(6);
   return (
@@ -25,23 +40,36 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <div>
           <h1 className="amz-title" style={{fontSize:"1.55rem", fontWeight:900}}>{item.name}</h1>
           <div className="amz-meta" style={{fontSize:"0.85rem", color:"var(--text-muted)", fontWeight:700}}>📂 {(item as any).categories?.name || "—"} · 🔢 #{item.id} {item.barcode ? `· 🔳 ${item.barcode}`: ""}</div>
-          <div className="amz-rating" style={{color:"var(--gold)", fontSize:"0.9rem"}}>⭐⭐⭐⭐☆ <span style={{color:"var(--text-muted)", fontSize:"0.82rem"}}>4.3 ({(item.stock_q||0)+(qs||0)+7} تقييم)</span></div>
+          {/* 🔴 T2.5: أُزيل تقييم مفبرك كان يُحسب من المخزون نفسه!
+              «⭐⭐⭐⭐☆ 4.3 (X تقييم)» حيث X = stock + display + 7 — رقم لا علاقة له
+              بأي تقييم حقيقي. لا نعرض تقييمات حتى تتوفر تقييمات فعلية من العملاء. */}
+          {(item.stock_q ?? 0) > 0 && <div style={{fontSize:"0.82rem", fontWeight:800, color:"#067D62"}}>✅ متوفر في المخزن</div>}
           <div className="amz-price" style={{fontSize:"2rem", fontWeight:900}}>{item.price_text} <small style={{fontSize:"0.85rem", color:"var(--text-muted)"}}>ج.م</small></div>
-          <div style={{fontSize:"0.8rem", color:"var(--text-muted)"}}>السعر يشمل الضريبة — شحن مجاني فوق 500 ج.م</div>
+          {/* 🔴 T2.5: كان مكتوبًا «شحن مجاني فوق 500» بينما التطبيق الرئيسي يستخدم
+              قيمة من الإعدادات (200) — رقمين مختلفين في نفس المتجر (E5). */}
+          <div style={{fontSize:"0.8rem", color:"var(--text-muted)"}}>
+            {shippingNote}
+          </div>
           <ul className="amz-bullets" style={{fontSize:"0.88rem", lineHeight:1.9, margin:"12px 0", paddingRight:18}}>
             <li>الصنف: <b>{(item as any).categories?.name}</b> — كود #{item.id}</li>
             <li>السعر الرقمي: <b>{item.price_num} ج.م</b> — النص: {item.price_text}</li>
             <li>المخزن: <b>{item.stock_q}</b> · المعروض: <b>{qs}</b></li>
           </ul>
-          <div style={{fontSize:"0.75rem", color:"var(--text-muted)"}}>✅ إرجاع مجاني 14 يوم · 🔒 دفع آمن</div>
+          {/* 🔴 T2.5: أُزيلت ادعاءات غير مؤكدة («إرجاع مجاني 14 يوم» · «دفع آمن»)
+              لا سياسة إرجاع منشورة بعد (T4.3) ولا دفع أونلاين مفعّل (T4.4). */}
+          <div style={{fontSize:"0.75rem", color:"var(--text-muted)"}}>💵 الدفع عند الاستلام — الطلب يُسجَّل ويُتواصل معك للتأكيد</div>
         </div>
         <div className="amz-buybox" style={{border:"1px solid var(--border)", borderRadius:14, padding:16, background:"var(--bg-card)", position:"sticky", top:18, boxShadow:"var(--shadow)"}}>
           <div style={{fontSize:"1.6rem", fontWeight:900, color:"var(--primary)"}}>{item.price_text} <small>ج.م</small></div>
           <div style={{fontSize: "0.78rem", color:"var(--text-muted)"}}>+ مصاريف الشحن</div>
           <div style={{fontSize:"0.85rem", fontWeight:800, margin:"8px 0", color: available ? "#067D62" : "var(--danger)"}}>{available ? `✅ متاح — ${qs} قطعة` : "❌ غير متوفر"}</div>
           <div style={{fontSize:"0.75rem", color:"var(--text-muted)", display:"flex", gap:6}}>🔒 عملية شراء آمنة</div>
-          <button className="amz-btn-cart" style={{width:"100%", background:"#FFD814", color:"#0F1111", border:"1px solid #FCD200", borderRadius:50, padding:12, fontWeight:800, marginTop:10}} disabled={!available}>🛒 إضافة إلى السلة</button>
-          <button className="amz-btn-buy" style={{width:"100%", background:"#FFA41C", color:"#0F1111", border:"1px solid #FF8F00", borderRadius:50, padding:12, fontWeight:800, marginTop:8}} disabled={!available}>⚡ شراء الآن</button>
+          <ProductActions
+            item={{ n: item.name, p: item.price_text, pn: item.price_num, q: item.stock_q ?? 0, qs: qs, min: item.min_alert ?? 0,
+                    b: item.barcode || "", img: item.image_url || "", imgUrl: item.image_url || "",
+                    lid: String(item.id), cid: item.id }}
+            catName={(item as any).categories?.name}
+          />
         </div>
       </div>
       {related && related.length>0 && (
