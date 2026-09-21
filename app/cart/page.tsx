@@ -132,7 +132,14 @@ export default function CartPage() {
             {orders.slice(0, 5).map((o) => (
               <div key={o.at} className="user-row tight">
                 <div>
-                  <div style={{ fontWeight: 800 }}>طلب #{String(o.no).padStart(4, "0")} — {o.total.toLocaleString("en-EG")} ج.م</div>
+                  <div style={{ fontWeight: 800 }}>
+                    طلب #{String(o.no).padStart(4, "0")} — {o.total.toLocaleString("en-EG")} ج.م
+                    {(o as { noTemp?: boolean }).noTemp && (
+                      <span style={{ color: "var(--warning, #b45309)", fontSize: "0.7rem", marginInlineStart: 6 }}>
+                        ⏳ رقم مؤقت
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 700 }}>
                     {o.items.length} صنف · {new Date(o.at).toLocaleString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     {!o.synced && " · ⏳ لم يُرفع بعد (يحتاج دخول)"}

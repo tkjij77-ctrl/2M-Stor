@@ -2354,9 +2354,27 @@
         const t = cartTotals();
         invCounter++;
         localStorage.setItem('al_sayed_invno', String(invCounter));
-        pendingInvoice = { id: Date.now(), date: new Date().toISOString(), customer: customer, items: items, total: t.total, subtotal: t.subtotal, discount: t.discount, tax: t.tax, user: sessionUser || '—', no: invCounter, lid: genLid(), status: 'قيد المعالجة' };
+        // 🔢 T3.1: الرقم هنا مؤقّت — يُستبدل بالرقم الرسمي عند الحفظ
+        pendingInvoice = { id: Date.now(), date: new Date().toISOString(), customer: customer, items: items, total: t.total, subtotal: t.subtotal, discount: t.discount, tax: t.tax, user: sessionUser || '—', no: invCounter, noTemp: true, lid: genLid(), status: 'قيد المعالجة' };
         showReceiptPreview(pendingInvoice, true);
     }
+    // ── 🔢 T3.1: الرقم الرسمي للفاتورة من السيرفر ─────────────────────
+    // الثغرة D1: كان الرقم يُولَّد محليًا في كل جهاز، فجهازان يُنتجان
+    // «فاتورة #7» مرتين. الآن التسلسل مركزي في القاعدة.
+    // إن تعذّر الوصول (بلا شبكة) نكمل برقم مؤقت، والسيرفر يُثبّته عند الرفع.
+    async function fetchOfficialInvoiceNo() {
+        try {
+            if (!sb || !navigator.onLine) return null;
+            const call = sb.rpc('next_invoice_no');
+            // مهلة قصيرة: الكاشير لا ينتظر 30 ثانية أمام العميل
+            const timeout = new Promise(res => setTimeout(() => res({ error: 'timeout' }), 2500));
+            const { data, error } = await Promise.race([call, timeout]);
+            if (error) return null;
+            const no = parseInt(data, 10);
+            return (Number.isFinite(no) && no > 0) ? no : null;
+        } catch (e) { return null; }
+    }
+
     function showReceiptPreview(inv, backToCart) {
         const body = document.getElementById('modalBody');
         const rows = inv.items.map(it =>
@@ -2409,9 +2427,24 @@
             }catch{}
         }, 120);
     }
-    function confirmSaveInvoice() {
+    async function confirmSaveInvoice() {
         if (!pendingInvoice) return;
         const inv = pendingInvoice;
+        // 🔢 T3.1: نطلب الرقم الرسمي قبل الحفظ — فيُطبع على ورق العميل
+        // رقم صحيح لا يتكرّر مع أي جهاز آخر.
+        if (inv.noTemp) {
+            const saveBtn = document.querySelector('#modalBody .btn-primary');
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ جاري تثبيت الرقم…'; }
+            const official = await fetchOfficialInvoiceNo();
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 حفظ'; }
+            if (official) {
+                inv.no = official; inv.noTemp = false;
+                if (official > invCounter) { invCounter = official; localStorage.setItem('al_sayed_invno', String(invCounter)); }
+            } else {
+                inv.noTemp = true;
+                toast('⚠️ رقم مؤقت (تعذّر الاتصال) — سيُثبَّت الرقم الرسمي عند المزامنة', 4500);
+            }
+        }
         // 📦 T3.3: خصم المخزون الفعلي (كان يُخصم «المعروض» فقط ويبقى
         // «إجمالي المخزن» ثابتًا للأبد → جرد وهمي).
         inv.stockApplied = (settings.stockMode || 'both') === 'off' ? false : (settings.stockMode || 'both');
@@ -4359,6 +4392,14 @@
           }).select().single();
           if (!error) {
             inv.cid = data.id;
+            // 🔢 T3.1: السيرفر قد يصحّح الرقم إن كان محجوزًا على جهاز آخر
+            if (data.invoice_no && data.invoice_no !== inv.no) {
+              logAction('تصحيح رقم فاتورة', '#' + inv.no + ' → #' + data.invoice_no);
+              inv.no = data.invoice_no;
+              if (inv.no > invCounter) { invCounter = inv.no; localStorage.setItem('al_sayed_invno', String(invCounter)); }
+            }
+            inv.noTemp = false;
+            saveInvoices();
             if (inv.items && inv.items.length > 0) {
               const rows = inv.items.map(it => ({
                 invoice_id: data.id,

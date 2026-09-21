@@ -44,16 +44,16 @@ const SEED = [{
   console.log('═══════════════════════════════════════════════════════════════');
 
   // ── التهيئة: نضع الإعدادات الافتراضية المعروفة ──
-  await page.evaluate(() => { settings.stockMode = 'both'; settings.oversell = 'warn'; saveSettings(); });
+  await page.evaluate(async () => { settings.stockMode = 'both'; settings.oversell = 'warn'; saveSettings(); });
 
   // ═══ 1) البيع يخصم المخزن والمعروض معًا ═══
-  let r = await page.evaluate(() => {
+  let r = await page.evaluate(async () => {
     invoiceCart = [];
     addToCart(0, 0);                       // منتج أ
     invoiceCart[0].qty = 3;
     const before = { q: getQ(db[0].items[0]), qs: getQs(db[0].items[0]) };
     createInvoiceFromCart();
-    confirmSaveInvoice();
+    await confirmSaveInvoice();
     const it = db[0].items[0];
     return { before, after: { q: getQ(it), qs: getQs(it) }, invNo: invoices[0].no,
              stockApplied: invoices[0].stockApplied, lines: invoices[0].items.length,
@@ -65,7 +65,7 @@ const SEED = [{
   check('الفاتورة مُعلَّمة بأن المخزون مخصوم', r.stockApplied === 'both', `stockApplied=${r.stockApplied}`);
 
   // ═══ 2) الإلغاء يُرجّع الكميات ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     const inv = invoices[0];
     updateOrderStatus(0, 'ملغي');
     const it = db[0].items[0];
@@ -75,7 +75,7 @@ const SEED = [{
   check('ويُرجّع المعروض (7 → 10)', r.qs === 10, `qs=${r.qs}`);
 
   // ═══ 3) إعادة التنشيط تخصم مرة أخرى (بلا خصم مزدوج) ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     updateOrderStatus(0, 'قيد المعالجة');
     const it = db[0].items[0];
     const afterReactivate = { q: getQ(it), qs: getQs(it) };
@@ -88,7 +88,7 @@ const SEED = [{
   check('لا خصم مزدوج عند تكرار نفس الحالة', r.afterNoop.qs === 7, `qs=${r.afterNoop.qs}`);
 
   // ═══ 4) تم التوصيل ثم الحذف → استرجاع + تراجع ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     updateOrderStatus(0, 'تم التوصيل');
     const it = db[0].items[0];
     const delivered = { q: getQ(it) };
@@ -98,7 +98,7 @@ const SEED = [{
   });
   check('حذف فاتورة مُسلَّمة يُرجّع الكميات (7 → 10)', r.afterDelete.q === 10, `q=${r.afterDelete.q}`);
 
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     lastUndo();                            // التراجع عن الحذف
     const it = db[0].items[0];
     return { q: getQ(it), invoices: invoices.length, status: invoices[0] && invoices[0].status };
@@ -106,7 +106,7 @@ const SEED = [{
   check('التراجع عن الحذف يعيد خصم الكميات', r.q === 7 && r.invoices === 1, `q=${r.q} · فواتير ${r.invoices}`);
 
   // ═══ 5) منع البيع بلا رصيد ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     settings.oversell = 'block'; saveSettings();
     invoiceCart = [];
     addToCart(0, 1);                       // منتج ب (المتاح 5)
@@ -119,7 +119,7 @@ const SEED = [{
   });
   check('وضع «منع»: لا تُنشأ فاتورة برصيد غير كافٍ', r.blocked && !r.pending, `pending=${r.pending}`);
 
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     invoiceCart = [];
     addToCart(0, 1);
     invoiceCart[0].qty = 99;
@@ -129,7 +129,7 @@ const SEED = [{
   check('وضع «تنبيه»: تُنشأ الفاتورة مع تحذير', r.pending === true, `pending=${r.pending}`);
 
   // ═══ 6) الوضع display: يخصم المعروض فقط (السلوك القديم) ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     settings.stockMode = 'display'; saveSettings();
     invoiceCart = []; pendingInvoice = null;
     addToCart(0, 0);
@@ -137,14 +137,14 @@ const SEED = [{
     const it = db[0].items[0];
     const before = { q: getQ(it), qs: getQs(it) };
     createInvoiceFromCart();
-    confirmSaveInvoice();
+    await confirmSaveInvoice();
     return { before, q: getQ(it), qs: getQs(it) };
   });
   check('وضع «المعروض فقط»: المخزن لا يتغير', r.q === r.before.q, `q ${r.before.q} → ${r.q} (ثابت)`);
   check('والمعروض يُخصم بمقدار البيع', r.qs === r.before.qs - 2, `qs ${r.before.qs} → ${r.qs}`);
 
   // ═══ 7) الوضع off: لا خصم إطلاقًا ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     settings.stockMode = 'off'; saveSettings();
     invoiceCart = []; pendingInvoice = null;
     addToCart(0, 1);
@@ -152,7 +152,7 @@ const SEED = [{
     const it = db[0].items[1];
     const before = { q: getQ(it), qs: getQs(it) };
     createInvoiceFromCart();
-    confirmSaveInvoice();
+    await confirmSaveInvoice();
     return { before, q: getQ(it), qs: getQs(it), applied: invoices[invoices.length - 1].stockApplied };
   });
   check('وضع «لا تخصم»: المخزون ثابت تمامًا',
@@ -160,7 +160,7 @@ const SEED = [{
   check('وتُعلَّم الفاتورة بأنها لم تخصم', r.applied === false, `stockApplied=${r.applied}`);
 
   // ═══ 8) الأصناف القديمة (بلا lid) تُطابَق بالاسم ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     settings.stockMode = 'both'; saveSettings();
     // فاتورة قديمة: بلا lid — كما في البيانات الموجودة فعلًا
     const legacy = { no: 9999, lid: 'Lold', cid: null, status: 'تم التوصيل', stockApplied: 'both',
@@ -174,7 +174,7 @@ const SEED = [{
   check('فاتورة قديمة بلا معرّف تُطابَق بالاسم وتُسترجع', r.after === r.before + 1, `${r.before} → ${r.after}`);
 
   // ═══ 9) الأمان: الجرد لا يصير سالبًا ═══
-  r = await page.evaluate(() => {
+  r = await page.evaluate(async () => {
     const it = db[0].items[0];
     it.q = 1; it.qs = 1;
     const inv = { no: 8888, lid: 'Lneg', status: 'قيد المعالجة', items: [{ name: 'منتج أ', cat: 'قسم الاختبار', qty: 50, price: 60, lid: 'La' }] };

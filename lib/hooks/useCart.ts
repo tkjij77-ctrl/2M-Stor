@@ -112,6 +112,9 @@ export function useCheckout() {
 
       const invoice = {
         no,
+        // 🔢 T3.1: الرقم المحلي مؤقّت — التسلسل الرسمي مركزي على السيرفر
+        // (assign_invoice_no يستبدله تلقائيًا إن كان محجوزًا على جهاز آخر)
+        noTemp: true,
         customer: opts.customer.trim(),
         subtotal: totals.subtotal,
         discount: totals.discount,

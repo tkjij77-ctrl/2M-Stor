@@ -16,6 +16,19 @@ import type { DbItem, DbCategory } from "@/lib/db/types";
 import { getQ, getQs, getMin, firstNum } from "@/lib/db/lid";
 import { saveDB } from "@/lib/db/indexedDB";
 
+// 🔢 T3.1: بعد رفع الطلب، السيرفر قد يُسند رقمًا رسميًا مختلفًا (لأن التسلسل
+// مركزي وتصادم الأرقام المحلية بين الأجهزة وارد). نُثبّت الرقم في السجل
+// المحلي حتى لا يبقى رقم مؤقت أمام العميل للأبد.
+export function adoptServerInvoiceNo<T extends { no?: number; noTemp?: boolean }>(
+  orders: T[],
+  localNo: number,
+  serverNo: number
+): T[] {
+  return orders.map((o) =>
+    o.no === localNo ? { ...o, no: serverNo, noTemp: false } : o
+  );
+}
+
 export type OutboxEntry = {
   t: string;
   lid: string;
@@ -27,6 +40,8 @@ export type OutboxEntry = {
   // ── للفواتير (inv-ins / inv-status) ──
   inv?: {
     no?: number;
+    /** 🔢 T3.1: رقم مؤقت بانتظار التسلسل الرسمي على السيرفر */
+    noTemp?: boolean;
     customer?: string;
     subtotal?: number;
     discount?: number;
@@ -374,6 +389,18 @@ async function applyEntry(e: OutboxEntry, db: DbCategory[], sb: ReturnType<typeo
       .single();
     if (error) throw error;
     e.cid = data.id;
+    // 🔢 T3.1: اعتماد الرقم الرسمي الذي أسنده السيرفر
+    if (data.invoice_no && v.no && data.invoice_no !== v.no) {
+      try {
+        const orders = JSON.parse(localStorage.getItem("al_sayed_orders_next") || "[]");
+        localStorage.setItem(
+          "al_sayed_orders_next",
+          JSON.stringify(adoptServerInvoiceNo(orders, v.no, data.invoice_no))
+        );
+      } catch {}
+      v.no = data.invoice_no;
+    }
+    v.noTemp = false;
     if (v.items && v.items.length) {
       const rows = v.items.map((it) => ({
         invoice_id: data.id,
