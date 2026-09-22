@@ -9,7 +9,11 @@ const compat = new FlatCompat({ baseDirectory: __dirname });
 
 const config = [
   // المخرجات والمكتبات المحلية المنسوخة لا تُفحص
-  { ignores: ["out/**", "public/lib/**", "vendor/**", "public/**", ".next/**", "node_modules/**", "public/workbox-*.js", "public/sw.js", "next-env.d.ts"] },
+  { ignores: ["out/**", "public/lib/**", "vendor/**", "public/**", ".next/**", "node_modules/**", "public/workbox-*.js", "public/sw.js", "next-env.d.ts",
+    // 🧩 T5.1: كود التطبيق مفكوك في web/*.js — سكربتات كلاسيكية تعمل في النطاق العام
+    // (لا import/export، تعتمد على ترتيب التحميل)، فلا تصلح لها قواعد الوحدات.
+    // تُفحص نحويًا وتزامنيًا عبر tests/unit/web-split.test.ts + node --check.
+    "web/**"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 
   // ملفات CommonJS حقًّا (سكربتات Node · next.config.js · service worker):

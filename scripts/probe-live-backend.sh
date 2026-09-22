@@ -17,7 +17,7 @@ BASE="https://$REF.supabase.co"
 if [ -f /tmp/anon.key ]; then
   KEY="$(cat /tmp/anon.key)"
 else
-  KEY="$(grep -oE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html 2>/dev/null | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
+  KEY="$(grep -hoE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html web/cloud.js 2>/dev/null | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
 fi
 if [ -z "${KEY:-}" ]; then
   echo "❌ لم أجد مفتاح anon — لا ملف /tmp/anon.key ولا مفتاح منشور في index.html"; exit 1

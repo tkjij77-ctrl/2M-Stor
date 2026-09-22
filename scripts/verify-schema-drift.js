@@ -33,7 +33,23 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const MIGRATIONS = path.join(ROOT, "supabase", "migrations");
-const APPS = ["index.html", "app", "lib"]; // مصادر التطبيق لاستخراج ما يستدعيه فعلًا
+// 🧩 T5.1 (2026-09-22): كود التطبيق انتقل من داخل index.html إلى web/*.js —
+// ولو بقيت القائمة بلا "web" لصار الاستخراج صفرًا ومرّ الفحص فراغًا (وهو ما
+// كشفه فحص الإعدادات العامة فعلًا بعد التفكيك مباشرة).
+const APPS = ["index.html", "web", "app", "lib"]; // مصادر التطبيق لاستخراج ما يستدعيه فعلًا
+
+/** كل مصادر التطبيق مدموجة في نص واحد (للبحث عن دوال/خرائط في الواجهة) */
+function readAppSources() {
+  const out = [];
+  const walk = (target) => {
+    if (!fs.existsSync(target)) return;
+    const st = fs.statSync(target);
+    if (st.isDirectory()) { for (const f of fs.readdirSync(target).sort()) walk(path.join(target, f)); return; }
+    if (/\.(ts|tsx|js|jsx|html|mjs)$/.test(target)) out.push(fs.readFileSync(target, "utf8"));
+  };
+  for (const rel of APPS) walk(path.join(ROOT, rel));
+  return out.join("\n");
+}
 
 // ── أدوات نصية ─────────────────────────────────────────────────────
 // ⚠️ النسخة السابقة كانت `replace(/--[^\n]*/g, " ")` — تحذف أي `--` حتى داخل
@@ -374,7 +390,7 @@ function selfCheck() {
   //      باسم `store_phone` غير الموجود، وأُغفل `footer` و`coupon_code`، فكانت
   //      واجهة الزائر ستفقد التذييل والكوبون بعد الترحيل بلا أي رسالة خطأ.
   {
-    const app = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    const app = readAppSources();
     const appKeys = new Set();
     const mergeBlock = /function mergeSettings[\s\S]*?\n    \}/.exec(app);
     if (mergeBlock) {

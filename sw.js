@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v31 (مكتبات محلية + CSP + كل تحديثات الأمان)
-const CACHE = 'al-sayed-v31';   // 🔒 T1.3 — المكتبات محلية + CSP
+// Service Worker — 2M-Stor v32 (مكتبات محلية + CSP + كود التطبيق مفكوك في web/)
+const CACHE = 'al-sayed-v32';   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
 const URLS = [
   'index.html',
   'manifest.json',
@@ -9,7 +9,16 @@ const URLS = [
   'vendor/jsqr.min.js',
   'vendor/qrcode.min.js',
   'vendor/chart.umd.min.js',
-  'vendor/supabase.min.js'
+  'vendor/supabase.min.js',
+  // 🧩 T5.1 (2026-09-22): كود التطبيق انفصل عن index.html إلى ملفات بحسب المسؤولية —
+  // تُخزَّن مسبقًا كلها وإلا عمل التطبيق ناقصًا بلا إنترنت.
+  'web/core.js',
+  'web/views.js',
+  'web/ui.js',
+  'web/ops.js',
+  'web/admin.js',
+  'web/cloud.js',
+  'web/boot.js'
 ];
 
 self.addEventListener('install', e => {

@@ -14,7 +14,7 @@
 set -uo pipefail
 REF="uzzxhbotbshsgpdnbrmd"
 BASE="https://$REF.supabase.co/rest/v1"
-KEY="$(grep -oE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html 2>/dev/null | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
+KEY="$(grep -hoE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html web/cloud.js 2>/dev/null | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
 [ -z "$KEY" ] && { echo "❌ لم أجد مفتاح anon في index.html"; exit 1; }
 H=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY")
 

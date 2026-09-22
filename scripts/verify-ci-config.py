@@ -171,8 +171,12 @@ check(
 # لقاعدة .modal-overlay.open في CSS ⇒ المحتوى القانوني لم يكن يظهر إطلاقًا،
 # وفحص النص المرئي لا يكشفه لأن innerText يعيد النص للعنصر غير المُصيَّر.
 IDX = ROOT / "index.html"
-src = IDX.read_text(encoding="utf-8")
-html_part, _, css_js = src.partition("<script>")
+# 🧩 T5.1: كود التطبيق انتقل من داخل index.html إلى web/*.js — الفحص يجب أن يقرأ
+# الاثنين معًا، وإلا صار يمرّ فراغًا (لا يجد أي classList.add فينعدم الفحص فعلًا).
+WEB = ROOT / "web"
+src = IDX.read_text(encoding="utf-8") + "".join(f.read_text(encoding="utf-8") for f in sorted(WEB.glob("*.js"))) if WEB.is_dir() else IDX.read_text(encoding="utf-8")
+html_part_keep, _, _ = IDX.read_text(encoding="utf-8").partition("<script")
+html_part, _, css_js = src.partition("<script>")  # css_js بلا معنى الآن؛ يُستخدم src كمصدر كامل للبحث
 opened = set(re.findall(r"getElementById\('([A-Za-z0-9_-]+)'\)\.classList\.add\('open'\)", src))
 broken = []
 for el_id in sorted(opened):

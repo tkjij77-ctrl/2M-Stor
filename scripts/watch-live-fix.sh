@@ -5,7 +5,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 MIN="${1:-60}"
 END=$(( $(date +%s) + MIN*60 ))
-KEY="$(grep -oE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
+KEY="$(grep -hoE "key: 'eyJ[A-Za-z0-9_.-]+'" index.html web/cloud.js | head -1 | sed -E "s/.*'([^']+)'.*/\1/")"
 B="https://uzzxhbotbshsgpdnbrmd.supabase.co/rest/v1"
 n=0
 while [ "$(date +%s)" -lt "$END" ]; do
