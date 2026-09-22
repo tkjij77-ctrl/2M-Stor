@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v32 (مكتبات محلية + CSP + كود التطبيق مفكوك في web/)
-const CACHE = 'al-sayed-v32';   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
+// Service Worker — 2M-Stor v33 (مكتبات محلية + CSP + كود التطبيق مفكوك في web/)
+const CACHE = 'al-sayed-v33';   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
 const URLS = [
   'index.html',
   'manifest.json',
@@ -17,6 +17,7 @@ const URLS = [
   'web/ui.js',
   'web/ops.js',
   'web/admin.js',
+  'web/lock.js',
   'web/cloud.js',
   'web/boot.js'
 ];

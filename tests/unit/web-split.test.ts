@@ -18,7 +18,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const html = readFileSync(path.join(ROOT, "index.html"), "utf8");
 
 /** ترتيب التحميل الملزم — تغييره يكسر التطبيق (كل ملف يعتمد على ما قبله) */
-const ORDER = ["core", "views", "ui", "ops", "admin", "cloud", "boot"];
+const ORDER = ["core", "views", "ui", "ops", "admin", "lock", "cloud", "boot"];
 
 /** الملفات التي لا تدخل في هذا الفحص (مكتبات خارجية محلية) */
 const VENDOR = /^vendor\//;

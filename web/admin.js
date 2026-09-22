@@ -388,6 +388,8 @@
         setItemDisplay('burger-pass', signedIn ? 'flex' : 'none');
         setItemDisplay('burger-logout', signedIn ? 'flex' : 'none');
         setItemDisplay('burger-quicklock', signedIn ? 'flex' : 'none');
+        // 🔒 T-A7: زر القفل في الهيدر كان مخفيًا دائمًا (لا أحد يظهره) — يظهر للعاملين والمدير
+        { const lb = document.getElementById('lockBtn'); if (lb) lb.style.display = (signedIn && p.stock) ? 'inline-flex' : 'none'; }
         const av = document.getElementById('sideAvatar'); if (av) av.textContent = icons[sessionRole] || '👤';
         const sn = document.getElementById('sideName'); if (sn) sn.textContent = me ? (me.display_name || me.name || me.u || '') : (sessionUser || '—');
         const sr = document.getElementById('sideRole'); if (sr) sr.textContent = roleLabels[sessionRole] || '';
@@ -470,6 +472,7 @@
             '<div class="form-group"><label>كلمة المرور الحالية</label><input type="password" id="pass-cur" placeholder="••••••" autocomplete="current-password"></div>' +
             '<div class="form-group"><label>الجديدة (6 أحرف على الأقل)</label><input type="password" id="pass-new" placeholder="••••••" autocomplete="new-password"></div>' +
             '<div class="form-group"><label>تأكيد الجديدة</label><input type="password" id="pass-conf" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')savePass()"></div>' +
+            counterPinSectionHtml() +
             '<div class="modal-actions">' +
                 '<button class="btn btn-outline" onclick="closeModal()">إلغاء</button>' +
                 '<button class="btn btn-primary" id="btnSavePass" onclick="savePass()">💾 حفظ</button>' +

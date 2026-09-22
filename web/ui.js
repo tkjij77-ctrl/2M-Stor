@@ -340,6 +340,7 @@
                 '<option value="block"' + (settings.oversell === 'block' ? ' selected' : '') + '>منع البيع نهائيًا</option>' +
             '</select></div>' +
             cloudSectionHtml() +
+            counterPinSectionHtml() +
             '<div class="form-group"><label>🗄️ النسخ الاحتياطية (تلقائية يومياً — آخر 7)</label><div class="user-list">' + backupRows + '</div></div>' +
             '<div class="modal-actions between">' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
@@ -392,6 +393,7 @@
         queue({ t: 'set', lid: 's12', key: 'store_desc', value: String(settings.desc || '') });
         queue({ t: 'set', lid: 's13', key: 'return_days', value: String(settings.returnDays || 0) });
         queue({ t: 'set', lid: 's14', key: 'return_note', value: String(settings.returnNote || '') });
+        saveCounterPin();   // 🔒 T-A7: رمز PIN لقفل الكاونتر (إن كُتب)
         logAction('تحديث الإعدادات');
         toast('✅ تم حفظ الإعدادات');
         renderAll();
