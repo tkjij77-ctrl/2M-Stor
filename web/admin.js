@@ -43,7 +43,13 @@
         });
         let topSellers = Object.entries(sellerStats).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
 
+        // 🚨 T-A8: إن غاب رقم واتساب فلن يستطيع الزائر إيصال طلبه — تنبيه صريح في اللوحة
+        const phoneWarn = (typeof waNumber === 'function' && waNumber(settings.phone)) ? '' :
+            '<div style="background:rgba(220,38,38,.10);border:1px solid var(--danger);border-radius:12px;padding:10px 12px;font-weight:800;font-size:.82rem;line-height:1.7">' +
+            '🚨 رقم واتساب الطلبات غير مضبوط — طلبات الزوار (بلا حساب) لا تصل للسحابة وحدها، فبدون الرقم لا تصلك طلباتهم إلكترونيًا.<br>' +
+            'اضبطه من «الإعدادات ← الهاتف / واتساب الطلبات».</div>';
         body.innerHTML =
+            phoneWarn +
             '<div class="dash-stat-row">' +
                 '<div class="dash-stat"><div class="num">' + totalItems + '</div><div class="lbl">📦 إجمالي المنتجات</div></div>' +
                 '<div class="dash-stat"><div class="num">' + fmt(totalStock) + '</div><div class="lbl">🧮 إجمالي القطع</div></div>' +

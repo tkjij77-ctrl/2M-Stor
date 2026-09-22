@@ -116,6 +116,8 @@
                 const d=new Date(o.date);
                 const st=o.status||'قيد المعالجة';
                 const sc=statusClass(st);
+                // ⚠️ T-A8: طلب لم يُرفع للسحابة (زائر أو بلا اتصال) — نقولها صراحةً
+                const notSent = !o.cid;
                 const canCancel = (o.user===sessionUser || o.customer===sessionUser) && st!=='تم التوصيل' && st!=='تم رفض الطلب' && st!=='ملغي';
                 let actions='';
                 if(isMgr){
@@ -132,7 +134,8 @@
                     if(waNumber(settings.phone)) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices['+idx+'])">📲 متابعة على واتساب</button>';
                     if(btns) actions='<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+btns+'</div>';
                 }
-                return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status '+sc+'">'+esc(st)+'</span></div>'
+                return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status '+sc+'">'+esc(st)+'</span>'
+                    +(notSent?'<span style="background:rgba(245,182,44,.15);color:#8a6100;font-weight:900;font-size:.7rem;padding:3px 8px;border-radius:8px;margin-right:auto">⏳ لم يصل للمحل بعد</span>':'')+'</div>'
                     +'<div class="oc-items">'+o.items.map(i=>esc(i.name)+' ×'+i.qty).join(' • ')+'</div>'
                     +'<div class="ct-row" style="margin-top:10px;font-weight:900"><span>'+d.toLocaleDateString('ar-EG')+' · '+(isMgr?esc(o.user||o.customer):'')+'</span><span style="color:var(--primary)">'+fmt(o.total)+' ج.م</span></div>'+actions+'</div>';
             }).join('');
@@ -937,7 +940,15 @@
     function showOrderConfirm(inv) {
         const no = inv.no ? String(inv.no).padStart(4, '0') : (inv.noTemp ? 'مؤقت' : '—');
         const hasWa = !!waNumber(settings.phone);
+        const guestOrder = !sessionUser && !cloudProfile;
         const body = document.getElementById('modalBody');
+        // ⚠️ T-A8: تنبيه صريح للزائر — طلبه لم يُرفع للمحل بعد، وما يفعله ليصل
+        const reachNote = guestOrder
+            ? '<div style="background:rgba(245,182,44,.12);border:1px solid var(--warn,#f5b62c);border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:.8rem;font-weight:800;line-height:1.7">' +
+                '⚠️ أنت تطلب <b>كزائر</b>: الطلب محفوظ على هذا الجهاز ولم يصل للمحل بعد.<br>' +
+                (hasWa ? '📲 اضغط «أرسل تفاصيل الطلب على واتساب» ليعرف المحل بطلبك فورًا.' : '') +
+                '<br>👤 أو أنشئ حسابًا (زر «إنشاء حساب») ليُرفع طلبك تلقائيًا ولتتابعه من «طلباتي».</div>'
+            : '';
         body.innerHTML =
             '<h2>✅ تم استلام <span class="accent">طلبك</span></h2>' +
             '<div style="text-align:center;font-size:3rem;line-height:1;margin:8px 0 4px">🎉</div>' +
@@ -946,6 +957,7 @@
             '<div class="ct-row"><span>الحالة</span><span class="status ' + statusClass(inv.status || 'قيد المعالجة') + '">' + esc(inv.status || 'قيد المعالجة') + '</span></div>' +
             '<div class="ct-row"><span>الدفع</span><span>💵 عند التسليم</span></div>' +
             '<p style="font-size:.82rem;font-weight:700;color:var(--text-muted);margin:12px 0 0">سنتواصل معك لتأكيد الطلب ووقت التوصيل. يمكنك متابعته في «طلباتي».</p>' +
+            reachNote +
             (hasWa
                 ? '<button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="sendOrderWhatsApp(pendingOrderForWa())">📲 أرسل تفاصيل الطلب على واتساب</button>'
                 : '<p style="font-size:.78rem;font-weight:700;color:var(--warn,#f5b62c);margin-top:10px">ℹ️ لتفعيل الإرسال على واتساب: أضف «رقم المحل» في الإعدادات.</p>') +
@@ -996,10 +1008,20 @@
         closeModal();
         closeCart();
         logAction('حفظ فاتورة', '#' + String(inv.no).padStart(4, '0') + ' — ' + fmt(inv.total) + ' ج.م');
-        toast('✅ تم حفظ الفاتورة #' + String(inv.no).padStart(4, '0') + '! الإجمالي: ' + fmt(inv.total) + ' ج.م', 3500);
+        // ⚠️ T-A8 (جولة المدير): الزائر بلا حساب لا يستطيع رفع الطلب للسحابة
+        // (سياسة RLS ترفض الإدراج بلا جلسة) — كان التطبيق يقول «تم حفظ الفاتورة» فقط،
+        // فيظن العميل أن طلبه وصل للمحل وهو لم يصل. الآن نقول الحقيقة ونوجّهه.
+        const guestOrder = !sessionUser && !cloudProfile;
+        if (guestOrder) {
+            toast('⚠️ طلبك #' + String(inv.no).padStart(4, '0') + ' محفوظ على جهازك — أرسله للمحل من الشاشة التالية ليصله', 6000);
+        } else {
+            toast('✅ تم حفظ الفاتورة #' + String(inv.no).padStart(4, '0') + '! الإجمالي: ' + fmt(inv.total) + ' ج.م', 3500);
+        }
         // 📲 T4.4: العميل يجب أن يعرف ما بعد الطلب (رقم/حالة/دفع عند التسليم) —
         //، والعامل/المدير يكفيه إشعار الحفظ لأنه هو من يسجّل البيع في المحل.
-        if (sessionRole === 'customer') setTimeout(() => showOrderConfirm(inv), 350);
+        // ⚠️ T-A8: كانت الشاشة تظهر لحساب «عميل» فقط — أما الزائر (أكثر الزوار!)
+        // فلم يكن يرى أي تأكيد. الآن تظهر لكل من ليس مديرًا/عاملًا.
+        if (!isStaff()) setTimeout(() => showOrderConfirm(inv), 350);
     }
     function printReceipt() { window.print(); }
 

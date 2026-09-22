@@ -315,6 +315,7 @@
             '<div class="form-group"><label>العنوان</label><input type="text" id="set-address" value="' + esc(settings.address) + '"></div>' +
             // 📲 T4.4: نفس الرقم يُستخدم لزر «أرسل الطلب على واتساب» في تأكيد الطلب
             '<div class="form-group"><label>الهاتف / واتساب الطلبات <span style="font-weight:400;color:var(--text-muted)">(يستقبل رسائل الطلبات)</span></label><input type="text" id="set-phone" placeholder="01xxxxxxxxx" value="' + esc(settings.phone) + '" style="direction:ltr;text-align:left"></div>' +
+            '<div id="set-phone-warn" style="' + (waNumber(settings.phone) ? 'display:none;' : '') + 'font-size:.78rem;font-weight:800;color:var(--danger);margin:-6px 0 6px">⚠️ بدون رقم واتساب لن تصل طلبات الزوار — طلب الزائر بلا حساب لا يُرفع للسحابة، فواتساب هو قناة وصوله.</div>' +
             '<div class="form-group"><label>نص تذييل الإيصال</label><input type="text" id="set-footer" value="' + esc(settings.footer) + '"></div>' +
             // 🏪 T4.2: وصف المتجر — يظهر للزائر (كان مكتوبًا «كتب وقرطاسية» بلا أساس)
             '<div class="form-group"><label>وصف المتجر (يظهر للزائر في الرئيسية)</label><input type="text" id="set-desc" value="' + esc(settings.desc || '') + '" placeholder="مثال: أدوات ومستلزمات كهربائية"></div>' +
