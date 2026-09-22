@@ -168,9 +168,10 @@ describe("المستودع الحقيقي (T3.7)", () => {
     expect(failed).toEqual([]);
   });
 
-  it("ثمانية جداول وRLS على كلها", () => {
+  // 🐞 T5.3: صار تسعة جداول بإضافة client_errors (سجل أخطاء متصفحات المستخدمين)
+  it("تسعة جداول وRLS على كلها", () => {
     expect(Object.keys(inv.tables).sort()).toEqual(
-      ["audit_log", "categories", "invoice_items", "invoices", "items", "login_attempts", "profiles", "settings"]
+      ["audit_log", "categories", "client_errors", "invoice_items", "invoices", "items", "login_attempts", "profiles", "settings"]
     );
     for (const t of Object.keys(inv.tables)) expect(inv.rls.has(t)).toBe(true);
   });

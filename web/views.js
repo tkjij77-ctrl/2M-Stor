@@ -125,8 +125,12 @@
                         +'</select>'
                         +(st!=='ملغي'&&st!=='تم التوصيل'?'<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">إلغاء</button>':'')
                         +'</div>';
-                } else if(canCancel){
-                    actions='<div style="margin-top:10px"><button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">❌ إلغاء الطلب</button></div>';
+                } else {
+                    let btns='';
+                    if(canCancel) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">❌ إلغاء الطلب</button>';
+                    // 📲 T4.4: متابعة الطلب مع المحل على واتساب بنفس التفاصيل
+                    if(waNumber(settings.phone)) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices['+idx+'])">📲 متابعة على واتساب</button>';
+                    if(btns) actions='<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+btns+'</div>';
                 }
                 return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status '+sc+'">'+esc(st)+'</span></div>'
                     +'<div class="oc-items">'+o.items.map(i=>esc(i.name)+' ×'+i.qty).join(' • ')+'</div>'
@@ -879,6 +883,87 @@
           }catch(e){}
         }, 120);
     }
+    // ═══════════════════════════════════════════════════════════════════
+    //  📲 T4.4 (2026-09-22): إغلاق رحلة الطلب — تأكيد للعميل + واتساب المحل
+    //  السبب: كان الطلب يُحفظ ثم لا يعرف العميل ماذا يحدث بعده، وكان المحل
+    //  يعرف بالطلب فقط إن فتح سجل الفواتير. الآن: بعد الحفظ تظهر للعميل
+    //  بطاقة تأكيد برقم الطلب و«الدفع عند التسليم»، وزر يرسل التفاصيل للمحل
+    //  على واتساب (رقم المحل من الإعدادات — enabled فقط إن كان مضبوطًا).
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** أرقام واتساب: نحذف كل غير الأرقام ونحوّل المصري المحلي (01…) إلى +20 */
+    function waNumber(raw) {
+        let d = String(raw || '').replace(/\D/g, '');
+        if (!d) return '';
+        if (d.startsWith('00')) d = d.slice(2);
+        else if (d.startsWith('0')) d = '20' + d.slice(1);
+        return d.length >= 9 ? d : '';
+    }
+
+    /** نص الطلب كما سيصل للمحل على واتساب */
+    function orderWaText(inv) {
+        if (!inv) return '';
+        const no = inv.no ? String(inv.no).padStart(4, '0') : (inv.noTemp ? 'مؤقت' : '—');
+        const lines = [
+            '🧾 طلب جديد #' + no + ' — ' + (settings.store || '2M-Stor'),
+            '👤 ' + (inv.customer || inv.user || 'عميل'),
+            inv.phone ? ('📞 ' + inv.phone) : '',
+            // العميل يرسل من واتسابه ⇒ رقمه يوصل للمحل مع الرسالة، فيكتب العنوان هنا
+            '📍 العنوان: ' + (inv.address || ''),
+            '',
+        ].filter(Boolean);
+        (inv.items || []).forEach(i => lines.push('• ' + i.name + ' ×' + i.qty));
+        lines.push('');
+        if (inv.discount) lines.push('الخصم: ' + fmt(inv.discount) + ' ج.م');
+        if (inv.tax) lines.push('الضريبة: ' + fmt(inv.tax) + ' ج.م');
+        lines.push('الإجمالي: ' + fmt(inv.total) + ' ج.م');
+        lines.push('💵 الدفع: عند التسليم');
+        return lines.join('\n');
+    }
+
+    function orderWaLink(inv) {
+        const num = waNumber(settings.phone);
+        if (!num) return '';
+        return 'https://wa.me/' + num + '?text=' + encodeURIComponent(orderWaText(inv));
+    }
+
+    function sendOrderWhatsApp(inv) {
+        const link = orderWaLink(inv);
+        if (!link) return toast('⚠️ رقم المحل غير مضبوط — اطلب من المحل إضافته في الإعدادات');
+        window.open(link, '_blank', 'noopener');
+    }
+
+    /** بطاقة تأكيد الطلب للعميل بعد الحفظ (فيها الرقم والحالة وزر واتساب) */
+    function showOrderConfirm(inv) {
+        const no = inv.no ? String(inv.no).padStart(4, '0') : (inv.noTemp ? 'مؤقت' : '—');
+        const hasWa = !!waNumber(settings.phone);
+        const body = document.getElementById('modalBody');
+        body.innerHTML =
+            '<h2>✅ تم استلام <span class="accent">طلبك</span></h2>' +
+            '<div style="text-align:center;font-size:3rem;line-height:1;margin:8px 0 4px">🎉</div>' +
+            '<div class="ct-row"><span>رقم الطلب</span><span><b>#' + no + '</b></span></div>' +
+            '<div class="ct-row"><span>الإجمالي</span><span style="color:var(--primary);font-weight:900">' + fmt(inv.total) + ' ج.م</span></div>' +
+            '<div class="ct-row"><span>الحالة</span><span class="status ' + statusClass(inv.status || 'قيد المعالجة') + '">' + esc(inv.status || 'قيد المعالجة') + '</span></div>' +
+            '<div class="ct-row"><span>الدفع</span><span>💵 عند التسليم</span></div>' +
+            '<p style="font-size:.82rem;font-weight:700;color:var(--text-muted);margin:12px 0 0">سنتواصل معك لتأكيد الطلب ووقت التوصيل. يمكنك متابعته في «طلباتي».</p>' +
+            (hasWa
+                ? '<button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="sendOrderWhatsApp(pendingOrderForWa())">📲 أرسل تفاصيل الطلب على واتساب</button>'
+                : '<p style="font-size:.78rem;font-weight:700;color:var(--warn,#f5b62c);margin-top:10px">ℹ️ لتفعيل الإرسال على واتساب: أضف «رقم المحل» في الإعدادات.</p>') +
+            '<div class="modal-actions">' +
+                '<button class="btn btn-outline" onclick="closeModal();setView(\'shop\')">🛍️ متابعة التسوق</button>' +
+                '<button class="btn btn-outline" onclick="closeModal();accTab=\'orders\';setView(\'account\');renderAccount()">📦 طلباتي (' + myOrdersCount() + ')</button>' +
+            '</div>';
+        lastPlacedOrder = inv;
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    /** الطلب الأخير المحفوظ (يزرّه واتساب في بطاقة التأكيد) */
+    let lastPlacedOrder = null;
+    function pendingOrderForWa() { return lastPlacedOrder; }
+    function myOrdersCount() {
+        return invoices.filter(o => o.user === sessionUser || o.customer === sessionUser || o.email === sessionUser).length;
+    }
+
     async function confirmSaveInvoice() {
         if (!pendingInvoice) return;
         const inv = pendingInvoice;
@@ -912,6 +997,9 @@
         closeCart();
         logAction('حفظ فاتورة', '#' + String(inv.no).padStart(4, '0') + ' — ' + fmt(inv.total) + ' ج.م');
         toast('✅ تم حفظ الفاتورة #' + String(inv.no).padStart(4, '0') + '! الإجمالي: ' + fmt(inv.total) + ' ج.م', 3500);
+        // 📲 T4.4: العميل يجب أن يعرف ما بعد الطلب (رقم/حالة/دفع عند التسليم) —
+        //، والعامل/المدير يكفيه إشعار الحفظ لأنه هو من يسجّل البيع في المحل.
+        if (sessionRole === 'customer') setTimeout(() => showOrderConfirm(inv), 350);
     }
     function printReceipt() { window.print(); }
 

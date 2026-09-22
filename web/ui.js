@@ -313,7 +313,8 @@
             '<h2>⚙️ <span class="accent">الإعدادات</span></h2>' +
             '<div class="form-group"><label>اسم المحل (بيظهر على الإيصال)</label><input type="text" id="set-store" value="' + esc(settings.store) + '"></div>' +
             '<div class="form-group"><label>العنوان</label><input type="text" id="set-address" value="' + esc(settings.address) + '"></div>' +
-            '<div class="form-group"><label>الهاتف</label><input type="text" id="set-phone" value="' + esc(settings.phone) + '" style="direction:ltr;text-align:left"></div>' +
+            // 📲 T4.4: نفس الرقم يُستخدم لزر «أرسل الطلب على واتساب» في تأكيد الطلب
+            '<div class="form-group"><label>الهاتف / واتساب الطلبات <span style="font-weight:400;color:var(--text-muted)">(يستقبل رسائل الطلبات)</span></label><input type="text" id="set-phone" placeholder="01xxxxxxxxx" value="' + esc(settings.phone) + '" style="direction:ltr;text-align:left"></div>' +
             '<div class="form-group"><label>نص تذييل الإيصال</label><input type="text" id="set-footer" value="' + esc(settings.footer) + '"></div>' +
             // 🏪 T4.2: وصف المتجر — يظهر للزائر (كان مكتوبًا «كتب وقرطاسية» بلا أساس)
             '<div class="form-group"><label>وصف المتجر (يظهر للزائر في الرئيسية)</label><input type="text" id="set-desc" value="' + esc(settings.desc || '') + '" placeholder="مثال: أدوات ومستلزمات كهربائية"></div>' +

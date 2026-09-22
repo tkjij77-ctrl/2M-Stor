@@ -62,6 +62,8 @@
                     '<button class="btn btn-primary" style="padding:10px 16px;font-size:0.85rem" onclick="dailyReport()">🖨️ تقرير نهاية اليوم</button>' +
                     '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem" onclick="downloadCsv(makeCsvInvoices(),\'invoices.csv\')">📊 فواتير CSV</button>' +
                     '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem" onclick="downloadCsv(makeCsvStock(),\'stock.csv\')">📦 مخزون CSV</button>' +
+                    // 🐞 T5.3: أخطاء متصفحات المستخدمين — لا تُرى من أي مكان آخر
+                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem' + (errLogCount() ? ';color:var(--danger);border-color:var(--danger)' : '') + '" onclick="showErrorsModal()">🐞 أخطاء المستخدمين' + (errLogCount() ? ' (' + errLogCount() + ')' : '') + '</button>' +
                 '</div></div>' +
             '<div class="dash-card"><h3>📊 توزيع المخزون حسب الأقسام</h3><canvas id="chartStock"></canvas></div>' +
             '<div class="dash-card"><h3>📈 مبيعات آخر 7 أيام</h3><canvas id="chartSales"></canvas></div>' +

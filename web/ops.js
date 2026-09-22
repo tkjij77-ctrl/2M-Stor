@@ -420,3 +420,96 @@
         event.target.value = '';
     }
 
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  🐞 T5.3 (2026-09-22) — مراقبة الأخطاء
+    //  المشكلة: أي خطأ في متصفح الزبون كان يختفي بلا أثر — لا نعرف أن شيئًا
+    //  تعطّل إلا إذا اشتكى أحدهم. الآن كل خطأ غير متوقع يُسجَّل محليًا (سجل
+    //  دائري 50 خطأ: النوع · الرسالة · الصفحة · الوضع) ويراه المدير من لوحة
+    //  التحكم، ويُرسَل للسحابة على أفضل جهد.
+    //  ملاحظة: الإرسال السحابي يخصّ جدول client_errors — وإن لم يكن منشأً بعد
+    //  يفشل بصمت ويتوقف عن المحاولة (لا يزعج أحدًا ولا يُثقل الصفحة).
+    // ═══════════════════════════════════════════════════════════════════════
+    const ERR_KEY = 'al_sayed_errors';
+    const APP_BUILD = '2026-09-22 (T5.3)';   // يُطبع مع كل خطأ لمعرفة أي نسخة تعطّلت
+    let _errRemoteOff = false;               // بعد أول فشل سحابي نتوقف عن المحاولة
+    let _errSeen = {};                        // منع تكرار نفس الخطأ في الجلسة
+
+    function errLogLoad() {
+        try { const a = JSON.parse(localStorage.getItem(ERR_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch (e) { return []; }
+    }
+    function errLogCount() { return errLogLoad().length; }
+    function errLogClear() { try { localStorage.removeItem(ERR_KEY); } catch (e) {} }
+
+    /** تسجيل خطأ واحد (مع منع التكرار الزائد: 10 نسخ لنفس الرسالة كحد أقصى) */
+    function logClientError(kind, message, extra) {
+        try {
+            const msg = String(message || '').slice(0, 300);
+            if (!msg) return;
+            const key = kind + '|' + msg;
+            _errSeen[key] = (_errSeen[key] || 0) + 1;
+            if (_errSeen[key] > 10) return;
+            const rows = errLogLoad();
+            rows.push({
+                t: new Date().toISOString(), kind: kind, msg: msg,
+                where: (currentView || '?') + (typeof sessionRole === 'string' && sessionRole ? ' · ' + sessionRole : ''),
+                url: location.pathname + location.search, build: APP_BUILD,
+                ua: (navigator.userAgent || '').slice(0, 120), n: _errSeen[key],
+                extra: extra ? String(extra).slice(0, 200) : ''
+            });
+            while (rows.length > 50) rows.shift();
+            try { localStorage.setItem(ERR_KEY, JSON.stringify(rows)); } catch (e) {}
+            reportErrorRemote(rows[rows.length - 1]);
+        } catch (e) {}
+    }
+
+    /** إرسال سحابي على أفضل جهد — إن لم يوجد الجدول نتوقف نهائيًا بلا ضجيج */
+    async function reportErrorRemote(row) {
+        if (_errRemoteOff) return;
+        if (typeof cloudReady !== 'function' || !cloudReady() || !sb || !navigator.onLine) return;
+        try {
+            const { error } = await sb.from('client_errors').insert({
+                kind: row.kind, message: row.msg, where_at: row.where, url: row.url,
+                build: row.build, user_agent: row.ua, extra: row.extra, repeats: row.n
+            });
+            if (error) _errRemoteOff = true;   // الجدول غير موجود/غير مسموح ⇒ لا نكرر
+        } catch (e) { _errRemoteOff = true; }
+    }
+
+    /** نافذة سجل الأخطاء (المدير) — فيها زر تفريغ وتصدير */
+    function showErrorsModal() {
+        if (!can('dash')) return toast('⛔ سجل الأخطاء للمدير فقط');
+        const rows = errLogLoad().reverse();
+        const body = document.getElementById('modalBody');
+        const list = rows.length ? rows.map(r => {
+            const d = new Date(r.t);
+            return '<div class="user-row"><div><div class="user-name">' + esc(r.kind) + ' — ' + esc(r.msg) + '</div>' +
+                '<div class="user-meta">' + d.toLocaleString('ar-EG') + ' · ' + esc(r.where || '') + (r.n > 1 ? ' · ×' + r.n : '') + '</div></div></div>';
+        }).join('') : '<div class="empty-state"><div class="icon">✨</div>لا أخطاء مسجَّلة — كل شيء يعمل</div>';
+        body.innerHTML =
+            '<h2>🐞 سجل <span class="accent">الأخطاء</span> (' + rows.length + ')</h2>' +
+            '<p style="font-size:.78rem;font-weight:700;color:var(--text-muted);margin-bottom:10px">هذه أخطاء وقعت في متصفحات المستخدمين (آخر 50). ' +
+            'أرسلها للمطوّر عند أي عطل متكرر.</p>' +
+            '<div class="user-list" style="max-height:50vh;overflow:auto">' + list + '</div>' +
+            '<div class="modal-actions">' +
+                (rows.length ? '<button class="btn btn-outline" onclick="copyErrors()">📋 نسخ</button>' : '') +
+                (rows.length ? '<button class="btn btn-outline" onclick="errLogClear();showErrorsModal();toast(\'🧹 تم تفريغ السجل\')">🧹 تفريغ</button>' : '') +
+                '<button class="btn btn-outline" onclick="closeModal()">إغلاق</button>' +
+            '</div>';
+        document.getElementById('modal').style.display = 'flex';
+    }
+    function copyErrors() {
+        const txt = errLogLoad().map(r => r.t + ' · ' + r.kind + ' · ' + r.msg + ' · ' + r.where + ' · ' + r.build).join('\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => toast('📋 نُسخ السجل'), () => toast('⚠️ تعذّر النسخ'));
+        else toast('⚠️ النسخ غير مدعوم هنا');
+    }
+
+    // ── الالتقاط التلقائي: أخطاء الجافاسكربت والوعود المرفوضة ──
+    window.addEventListener('error', e => {
+        if (e && e.message) logClientError('js', e.message, (e.filename || '') + ':' + (e.lineno || ''));
+    });
+    window.addEventListener('unhandledrejection', e => {
+        const r = e && e.reason;
+        logClientError('promise', (r && (r.message || r)) || 'رفض غير معروف', (r && r.stack) ? String(r.stack).slice(0, 120) : '');
+    });

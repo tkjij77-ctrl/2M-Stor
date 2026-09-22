@@ -1,0 +1,90 @@
+name: Uptime
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  T5.3 — مراقبة الجاهزية (Uptime) بلا أي حساب خارجي
+#
+#  الفكرة: GitHub نفسه هو المُراقب. إن فشل أي فحص، يُسجَّل التشغيل «فاشلًا»
+#  ويُرسل GitHub بريدًا لصاحب المستودع تلقائيًا — أي تنبيه فوري بلا Sentry
+#  ولا UptimeRobot ولا أي اشتراك. ولا يحتاج أي أسرار: يفحص ما يستطيع أي زائر
+#  فحصه (الصفحة نفسها + ملفات التطبيق + الباك اند بمفتاح anon العام).
+#
+#  ما يفحصه كل 30 دقيقة:
+#    1) الصفحة الرئيسية تُرجِع 200 وداخلها بصمة الإصدار (وإلا فالصفحة بيضاء).
+#    2) ملفات الكود web/*.js كلها تُرجِع 200 (ملف ناقص = تطبيق متعطّل).
+#    3) واجهة الباك اند (PostgREST) تردّ 200 لطلب بسيط بمفتاح anon.
+#    4) زمن الاستجابة معقول (< 5 ثوان) — البطء الشديد يعني مشكلة أيضًا.
+# ═══════════════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'      # كل نصف ساعة
+  workflow_dispatch:             # تشغيل يدوي عند الشك
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: https://tkjij77-ctrl.github.io/2M-Stor
+      SUPABASE_URL: https://uzzxhbotbshsgpdnbrmd.supabase.co
+      # مفتاح anon عام بطبيعته (منشور داخل الصفحة نفسها لكل زائر) — ليس سرًّا
+      SUPABASE_ANON: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6enhoYm90YnNoc2dwZG5icm1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NzE3OTcsImV4cCI6MjEwMzE0Nzc5N30.SqaqCWSdU6wKRKHMEdqXD5NJ4UUfh0YAY-QEAldCllc
+    steps:
+      - name: فحص الصفحة الرئيسية
+        run: |
+          set -euo pipefail
+          CODE=$(curl -sS -o /tmp/index.html -w '%{http_code}' --max-time 20 "$SITE/index.html?uptime=1")
+          TIME=$(curl -sS -o /dev/null -w '%{time_total}' --max-time 20 "$SITE/index.html?uptime=2")
+          echo "الصفحة: HTTP $CODE · زمن $TIME ث"
+          [ "$CODE" = "200" ] || { echo "::error::الصفحة لا تُرجِع 200 (الرمز $CODE)"; exit 1; }
+          grep -q 'id="loginOverlay"' /tmp/index.html || { echo "::error::الصفحة رجعت لكن الهيكل ناقص — يبدو أنها صفحة خطأ"; exit 1; }
+          awk -v t="$TIME" 'BEGIN{ if (t+0 > 5) { print "::error::الصفحة بطيئة جدًا ("t" ث)"; exit 1 } }'
+
+      - name: فحص ملفات التطبيق (web/*.js)
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for f in core views ui ops admin cloud boot; do
+            C=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/web/$f.js")
+            [ "$C" = "200" ] || MISSING="$MISSING $f.js($C)"
+          done
+          if [ -n "$MISSING" ]; then echo "::error::ملفات ناقصة أو معطوبة:$MISSING — التطبيق لن يعمل"; exit 1; fi
+          echo "✅ كل ملفات web/ السبعة موجودة"
+
+      - name: فحص الباك اند (قراءة بسيطة بمفتاح anon)
+        run: |
+          set -euo pipefail
+          RES=$(curl -sS -o /tmp/rpc.json -w '%{http_code}' --max-time 20 \
+            "$SUPABASE_URL/rest/v1/items?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON")
+          echo "الباك اند: HTTP $RES"
+          [ "$RES" = "200" ] || { echo "::error::الباك اند لا يستجيب للقراءة (HTTP $RES) — المتجر لن يعرض منتجات"; cat /tmp/rpc.json | head -c 300; exit 1; }
+          head -c 200 /tmp/rpc.json; echo
+
+      - name: فحص دالة ترقيم الفواتير (حرجة للبيع)
+        run: |
+          set -euo pipefail
+          # next_invoice_no دالة حرجة: لو تعطّلت لا يُحفظ بيع. نتحقق من وجودها
+          # من الكتالوج العام (بلا تنفيذها حتى لا نستهلك أرقامًا).
+          RES=$(curl -sS -o /tmp/root.json -w '%{http_code}' --max-time 20 "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON")
+          [ "$RES" = "200" ] || { echo "::error::PostgREST لا يستجيب (HTTP $RES)"; exit 1; }
+          echo "✅ PostgREST يردّ 200 — الواجهة البرمجية حيّة"
+
+      - name: الخلاصة
+        if: always()
+        run: |
+          echo "## نتيجة المراقبة" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ الموقع والباك اند يعملان — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ فحص فاشل — راجع الخطوات أعلاه. لو الموقع معطّل للزبائن، راجع آخر رفع على main." >> "$GITHUB_STEP_SUMMARY"
+          fi

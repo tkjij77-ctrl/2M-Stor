@@ -41,12 +41,15 @@
 
 | الملف | الوصف |
 |---|---|
-| `index.html` | **التطبيق كامل** (واجهة + منطق + مزامنة) — ملف مونوليث واحد |
+| `index.html` | هيكل الصفحة وواجهتها (86 ك.ب) — **الكود في `web/`** |
+| `web/*.js` | كود التطبيق مفكوكًا بحسب المسؤولية: `core` · `views` · `ui` · `ops` · `admin` · `cloud` · `boot` (تُحمَّل بهذا الترتيب) |
 | `sw.js` | Service Worker: NetworkFirst للتنقل + كاش للأوفلاين + تحديث تلقائي |
 | `manifest.json` | تعريف الـ PWA (الاسم، الأيقونات، الوضع المستقل) |
 | `cloud-schema.sql` | مخطط قاعدة البيانات الكامل (جداول + سياسات RLS + Storage) |
 | `supabase/migrations/` | ملفات الترحيل — **مصدر الحقيقة لبنية قاعدة البيانات** |
 | `docs/rls.md` · `docs/sync.md` | توثيق سياسات الأمان ومنطق المزامنة |
+| `docs/migrations.md` | سياسة الترحيل الآمن على الإنتاج (`scripts/safe-migrate.sh`) |
+| `.github/workflows/uptime.yml` | مراقبة الجاهزية كل 30 دقيقة (تنبيه بالبريد عند العطل، بلا أسرار) |
 | `plane.md` | خطة التطوير والمراحل السابقة |
 | `security-fixes.sql` | إصلاحات أمنية جاهزة (تشخيص + تنفيذ + تحقق) |
 | `tests/` | اختبارات Vitest (وحدات) + Playwright (E2E) |
@@ -85,6 +88,15 @@ npm run lint         # ESLint
 npm run typecheck    # فحص الأنواع (tsc --noEmit)
 npm run test         # اختبارات الوحدة (Vitest)
 npm run test:e2e     # اختبارات المتصفح (Playwright)
+
+# فحص التطبيق في متصفح حقيقي (يحتاج: python3 -m http.server 8123)
+node scripts/verify-order-flow.js    # رحلة الطلب: سلة → فاتورة → تأكيد → واتساب
+node scripts/verify-monitoring.js    # سجل الأخطاء والمراقبة
+node scripts/verify-boot-order.js    # ترتيب تحميل ملفات web/ (فخ التفكيك)
+
+# ترحيل آمن على قاعدة الإنتاج (نسخة احتياطية + معاملة ذرّية + تحقق)
+bash scripts/safe-migrate.sh --status
+bash scripts/safe-migrate.sh supabase/migrations/<الملف>.sql
 ```
 
 ---
