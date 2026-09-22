@@ -74,7 +74,12 @@ async function run(label, url, allowCDN) {
       jsSchemeSrc: [...qa('img')].filter(i => /^\s*javascript:/i.test(i.getAttribute('src') || '')).length,
       landing: !!q('.landing-hero, #landing, .hero, main'),
       hasEsc: typeof window.esc === 'function',
+      // ☁️ T-A3 (2026-09-22): لا تهيئة محلية بعد الآن — الحسابات سحابية فقط.
       hasSetupFn: typeof window.createFirstLocalAdmin === 'function',
+      cloudOnly: (typeof window.showLanding === 'function') && (typeof window.cloudDoRegister === 'function'),
+      hasEmbeddedDb: typeof window.getDefaultDB === 'function',
+      hasAuthHeaderBtn: !!document.getElementById('authHeaderBtn'),
+      welcomeFirst: getComputedStyle(document.getElementById('loginOverlay')).display === 'none',
       title: document.title,
       bodyLen: document.body.innerText.length,
       cats: (typeof db !== 'undefined' && db) ? db.length : 0,

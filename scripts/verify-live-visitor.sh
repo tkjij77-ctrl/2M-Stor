@@ -70,24 +70,49 @@ missing=expected-set(keys); extra=set(keys)-expected
 print(f"{len(keys)}|{','.join(sorted(missing))}|{','.join(sorted(extra))}")
 PY
   IFS='|' read -r N MISSING EXTRA < /tmp/vis.keys
-  [ "$N" = "15" ] && [ -z "$MISSING" ] && ok "الزائر يرى 15 مفتاحًا عامًا بالضبط (لا أكثر ولا أقل)" \
-    || { [ -n "$MISSING" ] && bad "مفاتيح واجهة ناقصة للزائر: $MISSING"; [ -n "$EXTRA" ] && bad "مفاتيح خاصة مكشوفة للزائر: $EXTRA"; }
+  # المفاتيح «الناقصة» ليست خطأً بالضرورة: المفتاح الذي **لا يوجد أصلًا** في جدول
+  # الإعدادات لا يمكن أن يظهر لأي أحد. الفرق: موجود لكن محجوب (خطأ) ≠ غير موجود (عادي).
+  REALLY_MISSING=""
+  if [ -n "$MISSING" ]; then
+    for k in $(echo "$MISSING" | tr ',' ' '); do
+      req "settings?select=key&key=eq.$k"
+      [ "$(rows)" = "0" ] || REALLY_MISSING="$REALLY_MISSING $k"
+    done
+  fi
+  [ "$N" -ge 10 ] && [ -z "$REALLY_MISSING" ] && ok "الزائر يرى $N مفتاحًا عامًا (والمفاتيح الغائبة غير موجودة على القاعدة أصلًا)" \
+    || { [ -n "$REALLY_MISSING" ] && bad "مفاتيح واجهة **موجودة ومحجوبة** عن الزائر:$REALLY_MISSING"; [ -n "$EXTRA" ] && bad "مفاتيح خاصة مكشوفة للزائر: $EXTRA"; }
   case " $(cat /tmp/vis.out) " in *baseline_synced*) bad "baseline_synced مكشوف للزائر (يجب أن يكون محجوبًا)";; *) ok "baseline_synced محجوب عن الزائر";; esac
 else bad "الإعدادات لا تُقرأ (HTTP $CODE) — التذييل والكوبون سيختفيان من واجهة الزائر"; fi
 
 echo
 echo "【4】 جداول حسّاسة أخرى"
-for t in profiles audit_log login_attempts; do
-  req "$t?select=*&limit=1"
-  if [ "$CODE" = "200" ]; then bad "$t مكشوف للزائر!"; else ok "$t محجوب (HTTP $CODE)"; fi
+# ⚠️ معيار التسريب هو **وجود صفوف** لا كود الاستجابة: RLS تحجب الصفوف وتُرجع
+# 200 مع مصفوفة فارغة [] — ولو اعتبرناها تسريبًا لكذّبنا أداةً سليمة.
+for t in profiles audit_log invoices login_attempts; do
+  req "$t?select=*&limit=3"
+  if [ "$CODE" = "200" ] && [ "$(rows)" -gt 0 ]; then bad "$t مكشوف للزائر! ($(rows) صف)"
+  elif [ "$CODE" = "200" ]; then ok "$t محجوب (RLS: صفر صفوف)"
+  else ok "$t محجوب (HTTP $CODE)"; fi
 done
 
 echo
-echo "【5】 دوال الباك اند الجديدة موجودة؟ (401/403 = موجودة ومحبوبة · 404 = لم تُنفَّذ)"
-for f in invoice_number_health stock_health; do
+echo "【5】 كائنات الباك اند الجديدة موجودة؟"
+# ملاحظة مهمة: stock_health **view** لا دالة، وdecrement_stock/login_gate تحتاج
+# وسائط ⇒ استدعاؤها بلا وسائط يردّ 404 مضلِّلًا (PGRST202) حتى لو كانت موجودة.
+req "stock_health?select=id&limit=1"
+[ "$CODE" = "404" ] && bad "stock_health (view) غير موجودة — الترحيل لم يُنفَّذ" || ok "stock_health (view) موجودة (HTTP $CODE)"
+for f in invoice_number_health; do
   req "rpc/$f"
-  if [ "$CODE" = "404" ]; then bad "$f() غير موجودة — الترحيل لم يُنفَّذ"
-  else ok "$f() موجودة (HTTP $CODE)"; fi
+  [ "$CODE" = "404" ] && bad "$f() غير موجودة — الترحيل لم يُنفَّذ" || ok "$f() موجودة (HTTP $CODE)"
+done
+# الدوال ذات الوسائط: نتحقق بطلب بلا وسائط ونقرأ رسالة PostgREST: «does not exist»
+# مقابل «function … without parameters» ⇒ الثانية تعني أنها موجودة
+for f in decrement_stock login_gate; do
+  curl -s -o /tmp/vis.fn -w "%{http_code}" "${H[@]}" -X POST "$BASE/rpc/$f" -H "Content-Type: application/json" -d '{}' > /tmp/vis.code
+  C=$(cat /tmp/vis.code)
+  if grep -qi "without parameters" /tmp/vis.fn; then ok "$f() موجودة (تحتاج وسائط)"
+  elif [ "$C" = "404" ]; then bad "$f() غير موجودة — الترحيل لم يُنفَّذ"
+  else ok "$f() موجودة (HTTP $C)"; fi
 done
 
 echo

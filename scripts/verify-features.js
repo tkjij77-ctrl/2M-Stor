@@ -34,6 +34,15 @@ const SEED = [{
 
   await page.goto('http://127.0.0.1:8123/index.html', { waitUntil: 'load' });
   await page.waitForTimeout(2500);
+  // ☁️ T-A4 (2026-09-22): التطبيق لم يعد يقرأ قاعدة بيانات محلية مضمَّنة/محفوظة —
+  // السحابة هي المصدر الوحيد. لذلك نُهيّئ البيانات للاختبار بحقنها في `db` الحيّة.
+  await page.evaluate((seed) => {
+    db = JSON.parse(JSON.stringify(seed));
+    try { if (typeof ensureLids === 'function') ensureLids(); } catch { /* تجاهل */ }
+    try { if (typeof renderAll === 'function') renderAll(); } catch { /* تجاهل */ }
+  }, SEED);
+  await page.waitForTimeout(600);
+
 
   // الجلسة في الكود لا تُستعاد من localStorage وحدها — نضبطها صراحةً
   await page.evaluate(() => { setUser({ u: 'admin', role: 'admin', name: 'مدير النظام' }); });

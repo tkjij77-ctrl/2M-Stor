@@ -79,7 +79,7 @@ function gate(u) {
       localStorage.setItem('al_sayed_cloud', JSON.stringify({ url: 'https://mock.supabase.co', key: 'anon-mock', on: !!cfg.cloud }));
     }, { cloud, seed });
     await page.goto(URL, { waitUntil: 'load' });
-    await page.waitForFunction(() => typeof doLogin === 'function');
+    await page.waitForFunction(() => typeof cloudDoLogin === 'function');
     await page.evaluate(() => { try { renderLogin(); showLogin(); } catch {} });
     await page.waitForTimeout(600);
     return { ctx, page };
@@ -94,13 +94,14 @@ function gate(u) {
         document.getElementById('cl-pass').value = creds.p;
         await cloudDoLogin();
       } else {
-        document.getElementById('login-user').value = creds.u;
-        document.getElementById('login-pass').value = creds.p;
-        await doLogin();
+        // 🚫 T-A3: لم يعد هناك مسار دخول محلي — الواجهة السحابية هي الوحيدة
+        return { mode: 'none', text: 'لا واجهة دخول ظاهرة', shown: false };
       }
       await new Promise((r) => setTimeout(r, 400));
       const el = document.getElementById('loginError');
-      return { mode: cloud ? 'cloud' : 'local', text: (el && el.textContent) || '', shown: !!(el && el.style.display !== 'none') };
+      const note = document.getElementById('loginOk');
+      const txt = ((el && el.style.display !== 'none' ? el.textContent : '') || (note && note.style.display !== 'none' ? note.textContent : '') || '');
+      return { mode: cloud ? 'cloud' : 'none', text: txt, shown: !!(txt && txt.trim()) };
     }, { u: user, p: pass });
   }
 
@@ -156,30 +157,34 @@ function gate(u) {
   check('المستخدم يرى فشلًا عاديًا لا قفلًا', !/قُفل/.test(rExpired.text), rExpired.text.slice(0, 70));
   await ctx.close();
 
-  // ── 6) نجاح الدخول يمسح المحاولات (حساب محلي على جهاز متصل بالسحابة) ──
-  console.log('\n【6】 نجاح الدخول يمسح المحاولات المسجَّلة');
+  // ── 6) 🚫 T-A3: الحساب المحلي أُزيل بالكامل — السحابة هي المسار الوحيد ──
+  console.log('\n【6】 إزالة الحساب المحلي (T-A3) + البداية صفحة ترحيب');
   S.fails = [];
   o = await open({ cloud: true });
-  await o.page.evaluate(() => forceLocalLogin());
-  await o.page.waitForSelector('#login-user', { timeout: 10000 });
-  const okFlow = await o.page.evaluate(async () => {
-    // نضيف المستخدم إلى مصفوفة users الحيّة (لا في localStorage فقط — التطبيق يقرأها عند الإقلاع)
-    const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
-    users.push({ u: 'worker2', role: 'worker', name: 'عامل', salt: salt, p: await pbkdf2('good-pass-123', salt) });
-    const seen = [];
-    for (let i = 0; i < 4; i++) seen.push(await serverFail('worker2'));
-    const gateBefore = await gateBeforeLogin('worker2');
-    document.getElementById('login-user').value = 'worker2';
-    document.getElementById('login-pass').value = 'good-pass-123';
-    await doLogin();
-    await new Promise((r) => setTimeout(r, 700));
-    return { seen, gateBefore, err: (document.getElementById('loginError') || {}).textContent || '' };
-  });
-  check('الدخول المحلي يستخدم نفس القفل السيرفري', okFlow.seen.every((x) => x && x.allowed === true) && okFlow.gateBefore.block === false,
-        'متبقٍ قبل النجاح: ' + okFlow.gateBefore.left);
-  check('الدخول نجح فعلًا (لا رسالة خطأ)', !/❌/.test(okFlow.err), okFlow.err.slice(0, 50) || '(لا رسالة)');
-  check('النجاح مسح المحاولات على السيرفر (login_ok نُفِّذ)', S.calls.ok === 1 && gate('worker2').attempts_left === 5,
-        'login_ok=' + S.calls.ok + ' · ' + JSON.stringify(gate('worker2')));
+  const arch = await o.page.evaluate(() => ({
+    doLogin: typeof window.doLogin, doRegister: typeof window.doRegister,
+    quickCustomer: typeof window.quickCustomer, createFirstLocalAdmin: typeof window.createFirstLocalAdmin,
+    forceLocalLogin: typeof window.forceLocalLogin, doLoginLocalBtn: !!document.getElementById('login-user'),
+    cloudLogin: typeof window.cloudDoLogin === 'function', cloudReg: typeof window.cloudDoRegister === 'function',
+    embeddedDb: typeof window.getDefaultDB === 'function',
+    showLandingFn: typeof window.showLanding === 'function'
+  }));
+  // إعادة تحميل بلا أي تدخّل: نفحص ما يراه المستخدم فعلًا عند أول زيارة
+  await o.page.reload({ waitUntil: 'load' });
+  await o.page.waitForTimeout(1200);
+  const boot = await o.page.evaluate(() => ({
+    overlay: getComputedStyle(document.getElementById('loginOverlay')).display,
+    home: getComputedStyle(document.getElementById('homeView')).display,
+    heroLen: (document.querySelector('.hero') || { innerHTML: '' }).innerHTML.length,
+    authBtn: (() => { const b = document.getElementById('authHeaderBtn'); return b ? b.offsetParent !== null : null; })()
+  }));
+  check('دوال الحساب المحلي مُزالة من الصفحة', ['doLogin','doRegister','quickCustomer','createFirstLocalAdmin','forceLocalLogin'].every(k => arch[k] === 'undefined'), JSON.stringify(arch));
+  check('لا حقل دخول محلي ولا قاعدة بيانات مضمَّنة', arch.doLoginLocalBtn === false && arch.embeddedDb === false);
+  check('الدخول والتسجيل السحابي موجودان', arch.cloudLogin && arch.cloudReg);
+  check('البداية صفحة ترحيب بلا حاجب (عند أول زيارة)', arch.showLandingFn && boot.overlay === 'none' && boot.home !== 'none' && boot.heroLen > 300, JSON.stringify(boot));
+  check('زر التسجيل ظاهر أعلى الصفحة للزائر', boot.authBtn === true);
+  const gateCall = await o.page.evaluate(async () => await gateBeforeLogin('owner@test.com'));
+  check('القفل السيرفري يُسأل قبل أي دخول', !!gateCall && typeof gateCall.block === 'boolean', JSON.stringify(gateCall) + ' · نداءات البوابة=' + S.calls.gate);
   await o.ctx.close();
 
   // ── 7) بلا اتصال: قفل محلي متصاعد + إفصاح صريح ──

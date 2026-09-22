@@ -775,6 +775,10 @@
         .login-tab { border: none; padding: 10px; border-radius: 9px; font-size: 0.95rem; font-weight: 800; cursor: pointer; background: transparent; color: var(--text-muted); transition: 0.15s; font-family: inherit; }
         .login-tab.active { background: var(--btn-bg); color: var(--btn-fg); }
         .login-error { color: var(--danger); font-weight: 800; font-size: 0.85rem; margin-top: 12px; display: none; }
+        .login-ok { color: #0a7c53; font-weight: 800; font-size: 0.85rem; margin-top: 12px; display: none; line-height: 1.6; }
+        [data-theme="dark"] .login-ok { color: #4ade80; }
+        .login-close { position: absolute; top: 8px; inset-inline-end: 8px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); font-size: 0.95rem; font-weight: 800; cursor: pointer; display: grid; place-items: center; z-index: 2; }
+        .login-close:hover { color: var(--danger); border-color: var(--danger); }
         .user-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
         .user-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg-soft); border-radius: 10px; padding: 10px 12px; }
         .user-name { font-weight: 800; font-size: 0.9rem; }
@@ -1138,6 +1142,7 @@
         </nav>
         <div class="header-actions">
             <span class="role-chip" id="roleChip"></span>
+            <button id="authHeaderBtn" class="btn btn-primary" onclick="showLogin()" style="padding:8px 16px;font-size:.82rem;font-weight:800;white-space:nowrap;display:none">🔓 تسجيل الدخول</button>
             <button id="favHeaderBtn" class="burger-btn" onclick="setView('shop'); shopFavOnly=true; setTimeout(()=>{const cb=document.getElementById('favOnly'); if(cb) cb.checked=true; renderAll(); updateFavBadge();},80)" title="المفضلة" aria-label="المفضلة" style="position:relative">❤️<span id="favCount" style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;min-width:18px;height:18px;border-radius:50%;display:none;place-items:center;font-size:.65rem;font-weight:800;padding:0 4px;box-shadow:0 2px 6px rgba(0,0,0,.2)">0</span></button>
             <button id="lockBtn" class="burger-btn" onclick="quickLock()" title="قفل الكاونتر السريع" aria-label="قفل الكاونتر" style="display:none">🔒</button>
             <button id="themeToggle" class="burger-btn" onclick="toggleDarkMode()" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي">🌙</button>
@@ -1297,8 +1302,9 @@
 </div>
 
 <!-- ===== LOGIN ===== -->
-<div class="login-overlay" id="loginOverlay">
-    <div class="login-card" id="loginCard">
+<div class="login-overlay" id="loginOverlay" onclick="if(event.target===this)hideLogin()">
+    <div class="login-card" id="loginCard" style="position:relative">
+        <button class="login-close" onclick="hideLogin()" aria-label="إغلاق" title="إغلاق">✕</button>
         <div class="login-logo">📦</div>
         <h1>2M-Stor</h1>
         <p>إدارة المخزون والمبيعات · v3.3</p>
@@ -1312,9 +1318,12 @@
 </div>
 
 <script>
-    let db = JSON.parse(localStorage.getItem('al_sayed_db')) || getDefaultDB();
+    // ☁️ T-A4 (2026-09-22): لا بيانات مضمَّنة في الصفحة — السحابة هي المصدر الوحيد.
+    // السبب: كانت هناك قاعدة محلية بـ 456 صنفًا تُدمج مع السحابة ⇒ تكرار وتضليل إحصاءات
+    // + تسريب قائمة الأسعار كاملة في كود الصفحة العلني.
+    let db = [];
     // بيانات المصنع (مؤقتة قبل أول مزامنة سحابية) — متُرفعش للسحابة عشان مانلوثش البيانات
-    let dbIsFactory = !localStorage.getItem('al_sayed_db');
+    let dbIsFactory = true; // لا توجد بيانات مصنع بعد الآن — كل شيء من السحابة
     let invoices = JSON.parse(localStorage.getItem('al_sayed_invoices')) || [];
     // هجرة حالات الطلب القديمة (بدون status) → قيد المعالجة
     invoices.forEach(inv=>{ if(!inv.status) inv.status='قيد المعالجة'; });
@@ -1323,7 +1332,7 @@
     function idbGet(key){ return new Promise(res=>{ try{ const r=indexedDB.open(IDB_NAME,1); r.onupgradeneeded=e=>{ try{ e.target.result.createObjectStore(IDB_STORE); }catch{} }; r.onsuccess=()=>{ try{ const tx=r.result.transaction(IDB_STORE,'readonly'); const st=tx.objectStore(IDB_STORE); const g=st.get(key); g.onsuccess=()=>res(g.result||null); g.onerror=()=>res(null); }catch{res(null)} }; r.onerror=()=>res(null);}catch{res(null)} }); }
     function idbSet(key,val){ try{ const r=indexedDB.open(IDB_NAME,1); r.onupgradeneeded=e=>{ try{ e.target.result.createObjectStore(IDB_STORE); }catch{} }; r.onsuccess=()=>{ try{ const tx=r.result.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(val,key); }catch{} }; }catch{} }
     // حاول تحميل من IDB لو localStorage فارغ (جهاز جديد أو quota exceeded سابقاً)
-    (async()=>{ try{ const v=await idbGet('al_sayed_db'); if(v && !localStorage.getItem('al_sayed_db')){ try{ db=JSON.parse(v); dbIsFactory=false; renderAll(); }catch{} } const iv=await idbGet('al_sayed_invoices'); if(iv){ try{ const parsed=JSON.parse(iv); if(parsed.length && !invoices.length){ invoices=parsed; invoices.forEach(x=>{ if(!x.status) x.status='قيد المعالجة'; }); renderAll(); } }catch{} } }catch{} })();
+    (async()=>{ try{ const iv=await idbGet('al_sayed_invoices'); if(iv){ try{ const parsed=JSON.parse(iv); if(parsed.length && !invoices.length){ invoices=parsed; invoices.forEach(x=>{ if(!x.status) x.status='قيد المعالجة'; }); renderAll(); } }catch{} } }catch{} })();
     let currentCat = 'all';
     let currentView = 'home';
     let shopPageSize = 40, shopLimit = 40;
@@ -1339,137 +1348,7 @@
     let deferredPrompt;
     let imgState = { val: null, dirty: false };
 
-    // ===== DEFAULT DATA =====
-    function getDefaultDB() {
-        return [
-            { name: "مستحضرات التجميل والعناية", items: [
-                {n:"سفنجة للمكياج", p:"10", q:0, qs:0}, {n:"بودرة حريمي فاخرة", p:"100 - 150", q:0, qs:0},
-                {n:"جل للشعر الكيس", p:"2", q:0, qs:0}, {n:"مزيل عرق ماركات", p:"60 - 70 - 100", q:0, qs:0},
-                {n:"بيبي فرشة ش 10 عريضة", p:"180", q:0, qs:0}, {n:"بيبي فرشة أم وردة", p:"160", q:0, qs:0},
-                {n:"مخمرية لوكس (عدد 4)", p:"35", q:0, qs:0}, {n:"كريم سوفت ترطيب", p:"20", q:0, qs:0},
-                {n:"كريم نيفيا مغذي", p:"25", q:0, qs:0}, {n:"مبرد للأظافر متين", p:"2", q:0, qs:0},
-                {n:"قلم كحل أسود دقيق", p:"15 - 20", q:0, qs:0}, {n:"حناء للأظافر", p:"25", q:0, qs:0},
-                {n:"حناء للشعر أكياس", p:"35", q:0, qs:0}, {n:"كريم لونا الأصلي", p:"120", q:0, qs:0},
-                {n:"مسكرة رموش وحواجب", p:"40", q:0, qs:0}, {n:"قلم تحديد حواجب", p:"15", q:0, qs:0},
-                {n:"حناء نوبيل الفاخرة", p:"40", q:0, qs:0}, {n:"قلم تحت الحاجب الأبيض", p:"15 - 20", q:0, qs:0},
-                {n:"بلسر (بلاشر وجنات)", p:"40", q:0, qs:0}, {n:"روج متنوع", p:"10 - 25 - 50 - 55", q:0, qs:0},
-                {n:"منوكير ألوان زاهية", p:"10 - 15 - 25 - 30", q:0, qs:0}, {n:"مناديل مبللة معطرة", p:"20", q:0, qs:0},
-                {n:"روج جاف ثابت", p:"2 - 55", q:0, qs:0}, {n:"مخمرية عادية مدورة", p:"10 - 15", q:0, qs:0},
-                {n:"لستيون مزيل طلاء", p:"25", q:0, qs:0}, {n:"صابون ديتول", p:"25", q:0, qs:0},
-                {n:"ديتول خام مركز (عدد 4)", p:"55", q:0, qs:0}, {n:"مشاط للشعر مدورة صغيرة", p:"5", q:0, qs:0},
-                {n:"مشاط للشعر عادية", p:"10 - 35", q:0, qs:0}, {n:"فرش حلاقة ذقن", p:"10 - 15", q:0, qs:0},
-                {n:"كريم فاتيكا تصفيف", p:"30", q:0, qs:0}, {n:"زيت فاتيكا مغذي", p:"45", q:0, qs:0},
-                {n:"ودانة أذن قطنية", p:"3", q:0, qs:0}, {n:"سلاكة فرشة", p:"10 - 15", q:0, qs:0},
-                {n:"قصافة صغيرة دبدوب", p:"15", q:0, qs:0}, {n:"ضوافر صناعية كبير", p:"25", q:0, qs:0},
-                {n:"ضوافر صناعية أطفال", p:"30", q:0, qs:0}, {n:"تاتو حنة تونسي", p:"25", q:0, qs:0},
-                {n:"ملقاط حواجب", p:"15", q:0, qs:0}, {n:"برفيوم عينات فرنسية", p:"20", q:0, qs:0},
-                {n:"مشطات شعر ممتازة", p:"35", q:0, qs:0}, {n:"مرايا مكتب كبير", p:"25", q:0, qs:0},
-                {n:"مرايا صغيرة للجيب", p:"15", q:0, qs:0}, {n:"روج ثلاثي الألوان", p:"12 - 30 - 55", q:0, qs:0}
-            ]},
-            { name: "الإكسسوارات والساعات", items: [
-                {n:"حبل رجالي علب هدايا", p:"20", q:0, qs:0}, {n:"خواتم رجالي تيتانيوم", p:"60 - 120", q:0, qs:0},
-                {n:"خواتم حريمي فصوص", p:"25 - 60", q:0, qs:0}, {n:"خواتم أطفال ديزني", p:"5 - 15", q:0, qs:0},
-                {n:"حلقان موديلات حديثة", p:"5 - 50", q:0, qs:0}, {n:"بوك حريمي يد شيك", p:"25", q:0, qs:0},
-                {n:"بوك فلات عادي", p:"10 - 15 - 20", q:0, qs:0}, {n:"بوك مستورد فاخر", p:"130", q:0, qs:0},
-                {n:"بوك ممتاز جودة", p:"150", q:0, qs:0}, {n:"توكة والوليكس", p:"30", q:0, qs:0},
-                {n:"توكة طيارة مرنة", p:"20", q:0, qs:0}, {n:"توكة فرساوز", p:"10", q:0, qs:0},
-                {n:"أكياس فرز أساور", p:"15", q:0, qs:0}, {n:"محافظ رجالي جلد", p:"60 - 70", q:0, qs:0},
-                {n:"غوايش ذهب صيني", p:"7.5", q:0, qs:0}, {n:"بنس للشعر", p:"20", q:0, qs:0},
-                {n:"دبوس زوجي", p:"4", q:0, qs:0}, {n:"نظارات أطفال شمسية", p:"20", q:0, qs:0},
-                {n:"نظارات حريمي ورجالي", p:"45 - 60 - 70", q:0, qs:0}, {n:"سبحة إلكترونية", p:"15", q:0, qs:0},
-                {n:"شنط حريمي خروج", p:"120", q:0, qs:0}, {n:"فلامنجو حريمي", p:"25", q:0, qs:0},
-                {n:"دبوس حجاب طويل", p:"15", q:0, qs:0}, {n:"دبوس حجاب صغير", p:"5", q:0, qs:0},
-                {n:"ساعات رجالي فخمة", p:"120", q:0, qs:0}, {n:"ساعات بناتي كيدز", p:"90", q:0, qs:0},
-                {n:"سلسلة حروف عربية", p:"35", q:0, qs:0}, {n:"طقم سلسلتين", p:"65", q:0, qs:0},
-                {n:"سلسلة فردية لوكس", p:"80", q:0, qs:0}, {n:"طقم 10 سلسلات", p:"80", q:0, qs:0},
-                {n:"حلق بروش كلاسيك", p:"2", q:0, qs:0}, {n:"علب طيارة مفردة", p:"6", q:0, qs:0},
-                {n:"طقم 16 سلسلة", p:"80", q:0, qs:0}, {n:"طقم 6 سلسلات", p:"75 + 10", q:0, qs:0},
-                {n:"إنسيال فضي", p:"35", q:0, qs:0}, {n:"أساور بناتي ملونة", p:"15", q:0, qs:0},
-                {n:"أساور إستانليس", p:"25", q:0, qs:0}, {n:"خواتم إستانليس", p:"30", q:0, qs:0},
-                {n:"ساعة شمسية", p:"60", q:0, qs:0}, {n:"تاتو فص كريستال", p:"15", q:0, qs:0},
-                {n:"خواتم طقطق", p:"20", q:0, qs:0}, {n:"زينة أعياد ميلاد", p:"70 - 20 - 10 - 35", q:0, qs:0},
-                {n:"قلم ليزر هدايا", p:"20", q:0, qs:0}, {n:"طوق ستان حفلات", p:"15", q:0, qs:0},
-                {n:"شنطة رجالي يد", p:"60", q:0, qs:0}
-            ]},
-            { name: "الأدوات المكتبية والمدرسية", items: [
-                {n:"ورق فلوسكاب مجوز", p:"2", q:0, qs:0}, {n:"ورق فلوسكاب مفرد", p:"1", q:0, qs:0},
-                {n:"قصص أطفال تلوين", p:"5", q:0, qs:0}, {n:"طباشير سبورة", p:"1", q:0, qs:0},
-                {n:"مثلث هندسي شفاف", p:"3", q:0, qs:0}, {n:"جلاد كتب سميك", p:"3", q:0, qs:0},
-                {n:"جلاد كراسة ألوان", p:"2", q:0, qs:0}, {n:"ظرف جواب نمرة 2", p:"2", q:0, qs:0},
-                {n:"ظرف جواب حجم كبير", p:"1", q:0, qs:0}, {n:"ورق رسم مناديل", p:"3", q:0, qs:0},
-                {n:"كشكول رسم صغير", p:"7", q:0, qs:0}, {n:"كشكول رسم كبير", p:"10", q:0, qs:0},
-                {n:"كتيب ربع يس", p:"27", q:0, qs:0}, {n:"كتيب جزء عم", p:"15", q:0, qs:0},
-                {n:"جدول الضرب الملون", p:"15", q:0, qs:0}, {n:"شنطة حضانة مبطنة", p:"30", q:0, qs:0},
-                {n:"شنطة مدرسة كبيرة", p:"150", q:0, qs:0}, {n:"أقلام سبورة ماركر", p:"15", q:0, qs:0},
-                {n:"أقلام سبورة روتو", p:"10", q:0, qs:0}, {n:"صمغ مكتب عادي", p:"6 - 12", q:0, qs:0},
-                {n:"صمغ سائل شفاف", p:"20", q:0, qs:0}, {n:"قلم جاف روتو شبر", p:"10", q:0, qs:0},
-                {n:"قلم جاف فرساوي", p:"4", q:0, qs:0}, {n:"قلم روتو عادي", p:"5", q:0, qs:0},
-                {n:"قلم برلنت", p:"5", q:0, qs:0}, {n:"كتاب نور البيان", p:"25", q:0, qs:0},
-                {n:"كتاب ت والقلم", p:"50", q:0, qs:0}, {n:"مسطرة شفاف 30 سم", p:"3", q:0, qs:0},
-                {n:"مسطرة بلاستيك ملونة", p:"9", q:0, qs:0}, {n:"مسطرة تيكو", p:"10", q:0, qs:0},
-                {n:"مسطرة هندسي أساسية", p:"5", q:0, qs:0}, {n:"مسطرة أشكال هندسية", p:"5", q:0, qs:0},
-                {n:"أستيكة فابر كاستل", p:"3", q:0, qs:0}, {n:"أستيكة Doms", p:"5", q:0, qs:0},
-                {n:"أستيكة طويلة", p:"5", q:0, qs:0}, {n:"ترساتك عادية", p:"5", q:0, qs:0},
-                {n:"براية حديد أصلية", p:"5", q:0, qs:0}, {n:"براية Doms", p:"5", q:0, qs:0},
-                {n:"براية مفردة بلاستيك", p:"3", q:0, qs:0}, {n:"براية شكل مركب", p:"20", q:0, qs:0},
-                {n:"سنادة كراسات", p:"20", q:0, qs:0}, {n:"دباسة ورق متينة", p:"120", q:0, qs:0},
-                {n:"قطاعة ورق وخرامة", p:"25", q:0, qs:0}, {n:"دبابيس دباسة صغير", p:"10", q:0, qs:0},
-                {n:"دبابيس دباسة كبير", p:"10", q:0, qs:0}, {n:"دباسة مكتب كبيرة", p:"50 - 60", q:0, qs:0},
-                {n:"حبر ختامات", p:"25", q:0, qs:0}, {n:"حبر روتو أصلي", p:"40", q:0, qs:0},
-                {n:"نزاعة دبابيس", p:"15", q:0, qs:0}, {n:"مسامير مكتب", p:"5", q:0, qs:0},
-                {n:"دبابيس خرائط ملونة", p:"3", q:0, qs:0}, {n:"هايلايتر فسفوري", p:"20", q:0, qs:0},
-                {n:"أقلام جاف تكنك", p:"6", q:0, qs:0}, {n:"دوسيه عالي", p:"25", q:0, qs:0},
-                {n:"دوسيه شفاف", p:"3 - 5", q:0, qs:0}, {n:"علبة دبابيس كبير", p:"15", q:0, qs:0},
-                {n:"علبة دبابيس صغير", p:"10", q:0, qs:0}, {n:"علبة هندسة متكاملة", p:"45", q:0, qs:0},
-                {n:"علبة هندسة قديم", p:"علبة واحدة", q:0, qs:0}, {n:"علبة هندسة جديد", p:"25 علبة واحدة", q:0, qs:0},
-                {n:"أكياس تغليف هندسة", p:"5", q:0, qs:0}, {n:"ألوان 5 قطع قديم 1", p:"10", q:0, qs:0},
-                {n:"ألوان 5 قطع قديم 2", p:"8", q:0, qs:0}, {n:"ألوان 7 قطع جديد", p:"15 للعلبة", q:0, qs:0},
-                {n:"قلم رصاص HB", p:"جـ الواحد", q:0, qs:0}, {n:"روتو فبر كاستل", p:"10 الواحد", q:0, qs:0},
-                {n:"قلم NEON فسفوري", p:"3 الواحد", q:0, qs:0}, {n:"قلم SCHOOL TIME", p:"2 الواحد", q:0, qs:0},
-                {n:"قلم CMOS", p:"6 الواحد", q:0, qs:0}, {n:"أقلام تظليل", p:"4 الواحد", q:0, qs:0},
-                {n:"ألوان خشب فبركاستل", p:"50 للعلبة", q:0, qs:0}, {n:"ألوان خشب روكسي", p:"20 للعلبة", q:0, qs:0},
-                {n:"ألوان خشب بريما صغير", p:"15 للعلبة", q:0, qs:0}, {n:"ألوان خشب بريما كبير", p:"30 للعلبة", q:0, qs:0},
-                {n:"أقلام تحديد ملونة", p:"10", q:0, qs:0}, {n:"أقلام كتابة مفردة", p:"10", q:0, qs:0}
-            ]},
-            { name: "ألعاب الأطفال والترفيه", items: [
-                {n:"فل لعبة مجسمات", p:"30", q:0, qs:0}, {n:"ثلج أفراح كبير", p:"25", q:0, qs:0},
-                {n:"ثلج أفراح صغير", p:"15", q:0, qs:0}, {n:"عربيات لعب صغير", p:"10", q:0, qs:0},
-                {n:"عربيات لعب وسط", p:"20", q:0, qs:0}, {n:"عربيات لعب كبير", p:"25", q:0, qs:0},
-                {n:"فل لعبة ممتازة", p:"35", q:0, qs:0}, {n:"ثلج أعياد كبير", p:"35", q:0, qs:0},
-                {n:"ثلج أعياد صغير", p:"25", q:0, qs:0}, {n:"كوتشينة ورق", p:"5 - 10 - 20", q:0, qs:0},
-                {n:"كوتشينة فاخرة", p:"25", q:0, qs:0}, {n:"دومينو خشب وبلاستيك", p:"120", q:0, qs:0},
-                {n:"وانش بوكس أطفال", p:"35", q:0, qs:0}
-            ]},
-            { name: "أدوات منزلية وخياطة", items: [
-                {n:"لزق دبل فيس", p:"10", q:0, qs:0}, {n:"توستات وأستك فلوس", p:"5", q:0, qs:0},
-                {n:"شمع إنارة", p:"15", q:0, qs:0}, {n:"بخور روائح", p:"10", q:0, qs:0},
-                {n:"خط ساب وسلك غسيل", p:"35", q:0, qs:0}, {n:"بكرة لزق عريض", p:"3", q:0, qs:0},
-                {n:"أطباق فل تقديم", p:"2", q:0, qs:0}, {n:"فرشة أسنان أطفال", p:"9", q:0, qs:0},
-                {n:"بكرة لزق وسط", p:"15", q:0, qs:0}, {n:"بكرة لزق كبير", p:"60", q:0, qs:0},
-                {n:"بكرة لزق صغير", p:"4", q:0, qs:0}, {n:"بكرة لزق فرسود", p:"15", q:0, qs:0},
-                {n:"بكرة لزق أسود عازل", p:"6", q:0, qs:0}, {n:"صاروخ طيارة ورق", p:"5", q:0, qs:0},
-                {n:"وصلات كهرباء", p:"15 - 30", q:0, qs:0}, {n:"أصابع شمع مسدس", p:"7", q:0, qs:0},
-                {n:"ولاعة مطبخ طويلة", p:"12", q:0, qs:0}, {n:"ولاعة سخان أتوماتيك", p:"10", q:0, qs:0},
-                {n:"ولاعة عادية جيب", p:"6", q:0, qs:0}, {n:"علبة كبريت ضخمة", p:"15", q:0, qs:0},
-                {n:"روب فتافيت", p:"15", q:0, qs:0}, {n:"راديو ترانزستور", p:"300", q:0, qs:0},
-                {n:"طارد الناموس", p:"180", q:0, qs:0}, {n:"بيبي ترنيدو", p:"3", q:0, qs:0},
-                {n:"علم مصر", p:"10 - 20", q:0, qs:0}, {n:"مروحة مكتب", p:"125 - 150", q:0, qs:0},
-                {n:"شريط إسكوتش", p:"35", q:0, qs:0}, {n:"إسرافيل قدم عبوة", p:"5", q:0, qs:0},
-                {n:"إسرافيل قدم كيس", p:"3", q:0, qs:0}, {n:"كيس مسدس الورق", p:"25", q:0, qs:0},
-                {n:"شريط إسرافيل عادي", p:"10", q:0, qs:0}, {n:"إبر تريكو", p:"10 - 12", q:0, qs:0},
-                {n:"خيط خياطة بكرة", p:"8", q:0, qs:0}, {n:"قطر معدني Cutter", p:"20", q:0, qs:0},
-                {n:"مسدس شمع كبير", p:"160", q:0, qs:0}, {n:"مسدس شمع صغير", p:"80", q:0, qs:0},
-                {n:"علبة مفاتيح كهرباء", p:"90", q:0, qs:0}, {n:"خمير الصاروخ", p:"20", q:0, qs:0},
-                {n:"حجارة ريموت كبير", p:"15", q:0, qs:0}, {n:"حجارة ريموت مفردة", p:"12", q:0, qs:0},
-                {n:"مشابك غسيل خشبية", p:"20", q:0, qs:0}, {n:"لستك ملابس مرن", p:"7", q:0, qs:0},
-                {n:"املاية قماش", p:"85", q:0, qs:0}, {n:"مقص مل صغير", p:"15", q:0, qs:0},
-                {n:"مقص منزلي عادي", p:"20", q:0, qs:0}, {n:"مقص منزلي كبير", p:"120", q:0, qs:0},
-                {n:"خيط تريكو صوف", p:"60", q:0, qs:0}, {n:"خيط ستان بكر", p:"12", q:0, qs:0},
-                {n:"صنف مكتب متنوع", p:"120", q:0, qs:0}
-            ]}
-        ];
-    }
-
+    // ===== (حُذفت قاعدة البيانات المضمَّنة T-A4: 456 صنفًا كانت في كود الصفحة) =====
     // ===== HELPERS =====
     function esc(s) {
         return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1477,6 +1356,18 @@
     function getQ(item) { return item.q !== undefined ? item.q : 0; }
     function getQs(item) { return item.qs !== undefined ? item.qs : 0; }
     function getMin(item) { return item.min !== undefined && item.min !== null ? item.min : 5; }
+    // 🔒 T-A5 (2026-09-22): العامل والمدير فقط يرون أرقام المخزون.
+    // العميل يرى «متوفر / غير متوفر» (وتنبيه «آخر N قطع» عند الاقتراب من النفاد).
+    function isStaff() {
+      if (sessionRole === 'admin' || sessionRole === 'worker') return true;
+      return typeof can === 'function' && (can('stock') || can('del') || can('add'));
+    }
+    function availText(it) {
+      const qs = getQs(it);
+      if (qs <= 0) return 'غير متوفر';
+      if (isStaff()) return 'متاح: ' + qs;
+      return qs <= 3 ? ('آخر ' + qs + ' قطع') : 'متوفر ✅';
+    }
     function firstNum(s) { const m = String(s).match(/\d+([.,]\d+)?/); return m ? parseFloat(m[0].replace(',', '.')) : 0; }
     function itemPrice(item) { return item.pn !== undefined ? item.pn : firstNum(item.p); }
     function fmt(n) { return (Math.round(n * 100) / 100).toLocaleString('en-EG'); }
@@ -1682,6 +1573,8 @@
     }
 
     function setView(v) {
+        // 🔒 T-A5: صفحة المخزن للعاملين والمدير فقط — كان العميل يقدر يفتحها ويرى قيمة المخزن ويعدّل الأرقام
+        if (v === 'stock' && !isStaff()) { if (typeof toast === 'function') toast('⛔ صفحة المخزن للعاملين والمدير فقط'); v = 'shop'; }
         currentView = v;
         animateNextRender = true;
         document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
@@ -1776,7 +1669,7 @@
             let qs=getQs(it);
             return '<div class="shop-card" style="cursor:pointer" onclick="setView(\'shop\'); setTimeout(()=>openProductDetail('+ci+','+ii+'),120)">'
                 +'<div class="shop-img" style="height:150px">'+img+'</div>'
-                +'<div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div style="font-size:.82rem;color:var(--text-muted)">'+esc(cat.name)+'</div><div class="shop-price">'+esc(it.p)+' <span>ج.م</span></div>'+(qs>0?'<div class="shop-avail ok">متاح: '+qs+'</div>':'<div class="shop-avail no">غير متوفر</div>')+'</div>'
+                +'<div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div style="font-size:.82rem;color:var(--text-muted)">'+esc(cat.name)+'</div><div class="shop-price">'+esc(it.p)+' <span>ج.م</span></div>'+(qs>0?'<div class="shop-avail ok">'+availText(it)+'</div>':'<div class="shop-avail no">غير متوفر</div>')+'</div>'
                 +'<button class="cart-add" onclick="event.stopPropagation();addToCart('+ci+','+ii+');toast(\'✅ أُضيف للسلة\')">🛒 أضف</button></div>';
         }).join(''):'<div class="empty-state"><div class="icon">📭</div>لا توجد منتجات بعد</div>';
         hv.innerHTML=`
@@ -1789,6 +1682,8 @@
               <p>${esc(settings.desc || '')} مع مزامنة فورية على كل أجهزتك.</p>
               <div class="hero-actions">
                 <button class="btn" onclick="setView('shop')">تصفّح المتجر ←</button>
+                ${(sessionUser || cloudProfile) ? '' : '<button class="btn btn-outline" onclick="showRegister()">➕ إنشاء حساب جديد</button>'}
+                ${(sessionUser || cloudProfile) ? '' : '<button class="btn btn-ghost" onclick="showLogin()">🔓 تسجيل الدخول</button>'}
                 <button class="btn btn-ghost" onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</button>
               </div>
               <div class="hero-stats">
@@ -1963,7 +1858,18 @@
         let container = document.getElementById('view-root');
         container.classList.toggle('no-anim', !anim);
         if (items.length === 0) {
-            container.innerHTML = '<div class="empty-state"><div class="icon">📭</div>لا توجد نتائج</div>';
+            // ☁️ T-A4: نبني الحالة من مصدر البيانات — كان المستخدم يرى «لا توجد نتائج»
+            // ولا يعرف أن السبب أن البيانات تُحمَّل من السحابة أو أن الاتصال انقطع.
+            const noData = db.length === 0;
+            const connecting = (typeof cloudStatus !== 'undefined') && cloudStatus !== 'on';
+            const icon = noData ? (connecting ? '⏳' : '📡') : '🔍';
+            const msg = noData
+                ? (connecting ? 'جاري تحميل المنتجات من السحابة…' : 'تعذّر تحميل المنتجات — راجع اتصال الإنترنت وأعد المحاولة')
+                : 'لا توجد نتائج';
+            const btn = noData
+                ? '<button class="btn btn-outline" style="margin-top:12px" onclick="location.reload()">🔄 إعادة المحاولة</button>'
+                : '';
+            container.innerHTML = '<div class="empty-state"><div class="icon">' + icon + '</div>' + msg + '<br>' + btn + '</div>';
             return;
         }
         let html = '<div class="product-grid">';
@@ -2025,7 +1931,9 @@
         items.forEach(({item}) => availSum += getQs(item));
         document.getElementById('sectionTitle').innerHTML =
             '<span>🏪 ' + esc(title) + ' <span class="cat-count">' + items.length + '</span></span>' +
-            '<span class="total-val">🛒 متاح: ' + fmt(availSum) + ' قطعة</span>';
+            isStaff()
+                ? '<span class="total-val">🛒 متاح: ' + fmt(availSum) + ' قطعة</span>'
+                : '<span class="total-val">🛒 ' + fmt(items.filter(x => getQs(x.item) > 0).length) + ' منتج متاح</span>';
         // فلتر المفضلة
         if(shopFavOnly){
             items = items.filter(({ci,ii})=> isFav(ci,ii));
@@ -2045,12 +1953,23 @@
         else if(shopSort==='qs-desc') items.sort((a,b)=> getQs(b.item)-getQs(a.item));
         else items.sort((a,b)=> getQs(b.item)-getQs(a.item));
         if(shopFavOnly){
-            document.getElementById('sectionTitle').innerHTML='<span>❤️ المفضلة <span class="cat-count">'+items.length+'</span></span><span class="total-val">🛒 متاح: '+fmt(items.reduce((s,{item})=>s+getQs(item),0))+' قطعة</span>';
+            document.getElementById('sectionTitle').innerHTML='<span>❤️ المفضلة <span class="cat-count">'+items.length+'</span></span>' + (isStaff() ? '<span class="total-val">🛒 متاح: '+fmt(items.reduce((s,{item})=>s+getQs(item),0))+' قطعة</span>' : '<span class="total-val">❤️ '+items.length+' منتج</span>');
         }
         let container = document.getElementById('view-root');
         container.classList.toggle('no-anim', !anim);
         if (items.length === 0) {
-            container.innerHTML = '<div class="empty-state"><div class="icon">📭</div>لا توجد نتائج</div>';
+            // ☁️ T-A4: نبني الحالة من مصدر البيانات — كان المستخدم يرى «لا توجد نتائج»
+            // ولا يعرف أن السبب أن البيانات تُحمَّل من السحابة أو أن الاتصال انقطع.
+            const noData = db.length === 0;
+            const connecting = (typeof cloudStatus !== 'undefined') && cloudStatus !== 'on';
+            const icon = noData ? (connecting ? '⏳' : '📡') : '🔍';
+            const msg = noData
+                ? (connecting ? 'جاري تحميل المنتجات من السحابة…' : 'تعذّر تحميل المنتجات — راجع اتصال الإنترنت وأعد المحاولة')
+                : 'لا توجد نتائج';
+            const btn = noData
+                ? '<button class="btn btn-outline" style="margin-top:12px" onclick="location.reload()">🔄 إعادة المحاولة</button>'
+                : '';
+            container.innerHTML = '<div class="empty-state"><div class="icon">' + icon + '</div>' + msg + '<br>' + btn + '</div>';
             return;
         }
         let total = items.length;
@@ -2064,9 +1983,7 @@
             // 🔒 T1.1: esc() تمنع كسر خاصية src (XSS). ملاحظة مهمة: لا نقيّد بالـ https فقط
             // لأن التطبيق يستخدم data: URLs للمعاينة قبل رفع الصورة إلى Storage.
             let imgHtml = item.img ? '<img src="' + esc(item.img) + '" alt="" loading="lazy" decoding="async">' : '<span>📦</span>';
-            let avail = qs > 0
-                ? '<div class="shop-avail ok">متاح: ' + qs + '</div>'
-                : '<div class="shop-avail no">غير متوفر</div>';
+            let avail = '<div class="shop-avail ' + (qs > 0 ? 'ok' : 'no') + '">' + availText(item) + '</div>';
             let ex = invoiceCart.find(x => x.ci === ci && x.ii === ii);
             let cartBtn;
             if (ex) {
@@ -2134,9 +2051,16 @@
        // والصورة تُقرأ من البيانات مباشرة (لا نص يُبنى داخل سياق تنفيذي)، ومهربة في src.
        amzThumbs = thumbs;
        let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" onclick="amzSetMain('+idx+')">'+(t.img?'<img src="'+esc(t.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
-      let bullets = '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b> — كود #'+(item.cid||'—')+'</li><li>السعر الرقمي: <b>'+price+' ج.م</b> — النص: '+esc(item.p)+'</li><li>المخزن: <b>'+q+'</b> · المعروض: <b>'+qs+'</b> · تنبيه عند <b>'+getMin(item)+'</b></li>'+(item.b?'<li>باركود: <b>'+esc(item.b)+'</b></li>':'')+'<li>قيمة المخزن: <b>'+fmt(q*price)+' ج.م</b> · المعروض: <b>'+fmt(qs*price)+' ج.م</b></li></ul>';
-      let qtyOpts = Array.from({length: Math.min(10, Math.max(1,qs))}, (_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
-      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?'✅ متاح — '+qs+' قطعة جاهزة للشحن':'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🧾 يُحسب الإجمالي والشحن في السلة قبل التأكيد — بلا دفع إلكتروني في النظام</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">المتاح '+qs+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
+      // 🔒 T-A5: بنود المخزون/القيمة للعامل والمدير فقط — العميل يرى السعر والتوفر
+      let bullets = isStaff()
+        ? '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b> — كود #'+(item.cid||'—')+'</li><li>السعر الرقمي: <b>'+price+' ج.م</b> — النص: '+esc(item.p)+'</li><li>المخزن: <b>'+q+'</b> · المعروض: <b>'+qs+'</b> · تنبيه عند <b>'+getMin(item)+'</b></li>'+(item.b?'<li>باركود: <b>'+esc(item.b)+'</b></li>':'')+'<li>قيمة المخزن: <b>'+fmt(q*price)+' ج.م</b> · المعروض: <b>'+fmt(qs*price)+' ج.م</b></li></ul>'
+        : '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b></li><li>السعر: <b>'+esc(item.p)+' ج.م</b></li><li>الحالة: <b>'+availText(item)+'</b></li></ul>';
+      const availLine = isStaff() ? ('✅ متاح — '+qs+' قطعة جاهزة للشحن') : '✅ متوفر وجاهز للشحن';
+      const qtyHint = isStaff() ? ('المتاح '+qs) : (qs <= 3 ? ('آخر '+qs+' قطع') : '');
+      const metaExtra = isStaff() ? (' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')) : '';
+      const availDetail = isStaff() ? ('📦 المتوفر الآن: '+qs+' قطعة · إجمالي المخزن: '+q) : ('📦 الحالة: '+(qs>0?'متوفر ✅':'غير متوفر ❌'));
+      let qtyOpts = Array.from({length: Math.min(isStaff()?10:5, Math.max(1,qs))}, (_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
+      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?availLine:'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🧾 يُحسب الإجمالي والشحن في السلة قبل التأكيد — بلا دفع إلكتروني في النظام</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">'+qtyHint+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1;'+(isStaff()?'':'display:none')+'" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
       let related = cat.items.filter((_,idx)=> idx!==ii).slice(0,6);
        let relatedHtml = related.length ? '<div class="product-related-title">📦 منتجات من نفس الصنف — '+esc(cat.name)+'</div><div class="product-related">'+related.map(r=>{ let rIdx=cat.items.indexOf(r); let rImg=r.img?'<img src="'+r.img+'" loading="lazy" decoding="async">':'📦'; let rQs=getQs(r); return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+(rQs>0?'✅ متاح '+rQs:'❌ غير متوفر')+'</div></div></div>'; }).join('')+'</div>' : '';
       document.getElementById('productDetailCard').innerHTML =
@@ -2144,9 +2068,9 @@
         '<div class="breadcrumb" style="padding:10px 18px;color:var(--text-muted);font-size:.88rem;background:var(--bg-soft);border-bottom:1px solid var(--border)"><a onclick="setView(\'home\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">الرئيسية</a> / <a onclick="setView(\'shop\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">المتجر</a> / '+esc(item.n)+'</div>' +
         '<div class="amz-layout">' +
           '<div class="amz-gallery"><div class="amz-main-img" id="amzMainWrap">'+mainImg+'</div><div class="amz-thumbs">'+thumbsHtml+'</div></div>' +
-          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')+'</div><div class="amz-rating">'+ratingNote+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">'+shipLine+' · '+taxLine+'</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700">'+shipLine+'<div>📦 المتوفر الآن: '+qs+' قطعة · إجمالي المخزن: '+q+'</div><div>↩️ '+esc(returnLine)+' <a onclick="closeProductDetail();showLegal(\'returns\')" style="color:var(--primary);cursor:pointer;text-decoration:underline">التفاصيل</a></div></div><div class="amz-secure">ℹ️ الطلب يُسجَّل داخل نظام المتجر — وبعد إلغاء أي فاتورة يُرجَع المخزون تلقائيًا</div></div>' +
+          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+metaExtra+'</div><div class="amz-rating">'+ratingNote+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">'+shipLine+' · '+taxLine+'</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700">'+shipLine+'<div>'+availDetail+'</div><div>↩️ '+esc(returnLine)+' <a onclick="closeProductDetail();showLegal(\'returns\')" style="color:var(--primary);cursor:pointer;text-decoration:underline">التفاصيل</a></div></div><div class="amz-secure">ℹ️ الطلب يُسجَّل داخل نظام المتجر — وبعد إلغاء أي فاتورة يُرجَع المخزون تلقائيًا</div></div>' +
           buyBox +
-          '<div class="amz-details"><div style="background:var(--bg-soft); padding:14px; border-radius:12px; font-size:0.85rem; line-height:1.8"><b>تفاصيل إضافية:</b><br>🏷️ الفئة: '+esc(cat.name)+'<br>💰 السعر الرقمي: '+price+' ج.م<br>📦 المخزن: '+q+' · المعروض: '+qs+'<br>⚠️ تنبيه عند: '+getMin(item)+'</div>'+relatedHtml+'</div>' +
+          '<div class="amz-details"><div style="background:var(--bg-soft); padding:14px; border-radius:12px; font-size:0.85rem; line-height:1.8"><b>تفاصيل إضافية:</b><br>🏷️ الفئة: '+esc(cat.name)+'<br>💰 السعر: '+esc(item.p)+' ج.م<br>📦 الحالة: '+availText(item)+'</div>'+relatedHtml+'</div>' +
         '</div>';
       document.getElementById('productDetailOverlay').classList.add('open');
       window.scrollTo(0,0);
@@ -2511,7 +2435,7 @@
                     '<div style="color:var(--text-muted);font-size:.72rem;margin-top:1px">البائع: ' + esc(inv.user || '—') + ' • ' + esc(inv.status||'قيد المعالجة') + '</div></div>' +
                     '<table><tr><th>الصنف</th><th style="text-align:center">الكمية</th><th>السعر</th><th style="text-align:left">الإجمالي</th></tr>' + rows + '</table>' +
                     '<div class="receipt-totals"><div class="rt-row"><span>الإجمالي الفرعي (' + inv.items.length + ' صنف)</span><span>' + fmt(subTotal) + '</span></div>' + (inv.discount > 0 ? '<div class="rt-row"><span>الخصم</span><span>−' + fmt(inv.discount) + '</span></div>' : '') + (inv.tax > 0 ? '<div class="rt-row"><span>الضريبة</span><span>' + fmt(inv.tax) + '</span></div>' : '') + '<div class="rt-row rt-grand"><span>الإجمالي</span><span>' + fmt(inv.total) + ' ج.م</span></div></div>' +
-                    '<div style="text-align:center;margin-top:12px"><div id="qrcode-'+esc(String(inv.no||'0'))+'" style="display:inline-block;padding:8px;background:#fff;border:1px solid var(--border);border-radius:12px"></div><div style="font-size:.68rem;color:var(--text-muted);margin-top:4px">امسح للتحقق • '+invNo+' • '+esc(dtFull)+'</div></div>' +
+                    '<div style="text-align:center;margin-top:12px"><div id="qrcode-'+esc(String(inv.no||'0'))+'" style="display:inline-block;min-width:126px;min-height:126px;padding:8px;background:#fff;border:1px solid var(--border);border-radius:12px"></div><div style="font-size:.68rem;color:var(--text-muted);margin-top:4px">امسح للتحقق • '+invNo+' • '+esc(dtFull)+'</div></div>' +
                     (settings.footer ? '<div style="text-align:center;color:var(--text-muted);font-size:.75rem;margin-top:8px;font-weight:700">' + esc(settings.footer) + '</div>' : '') +
                 '</div>';
         body.innerHTML =
@@ -2523,21 +2447,70 @@
             '</div>';
         document.getElementById('modal').style.display = 'flex';
         setTimeout(()=>{
-            try{
-                const el=document.getElementById('qrcode-'+String(inv.no||'0'));
-                const el2=document.querySelectorAll('[id^=\"qrcode-\"]')[1];
-                [el, el2].forEach(e=>{
-                    if(e && window.QRCode){
-                        e.innerHTML='';
-                        new QRCode(e, {text:qrData, width:110, height:110, correctLevel:QRCode.CorrectLevel.H});
-                    } else if(e){
-                        // 🔒 T1.2 (2026-09-21): أُلغي الـ fallback إلى api.qrserver.com —
-                        // كان يرسل اسم العميل والإجمالي والبائع لخدمة خارجية.
-                        // الآن: توليد محلي فقط (qrcodejs)، وإن فشل نظهر تنبيهًا بدل تسريب البيانات.
-                        e.innerHTML='<div style="width:110px;height:110px;display:grid;place-items:center;border:1px dashed var(--border);border-radius:8px;font-size:.6rem;color:var(--text-muted);text-align:center;padding:6px">تعذّر توليد QR<br>تحقق من الاتصال</div>';
-                    }
-                });
-            }catch{}
+          // 🐞 T-B1 (2026-09-22): كان المحدِّد هنا مكتوبًا بعلامات اقتباس مهروبة
+          // querySelectorAll('[id^=\"qrcode-\"]') ⇒ يطابق صفر عنصر (أثبتناه في متصفح معزول)،
+          // فكانت نسخة المحل تُطبع بمربع أبيض فارغ بلا رمز. الآن: نستهدف كل نسخ الإيصال،
+          // ونرسم لكل نسخة، ونتحقق أن الرمز ظهر فعلًا — وإن فشل نُظهر تنبيهًا صريحًا
+          // (بلا أي إرسال لبيانات العميل لخدمة خارجية — التوليد محلي فقط).
+          try{
+            const boxes = Array.from(document.querySelectorAll('.receipt-copy [id^="qrcode-"]'));
+            if (!boxes.length) {
+              const only = document.getElementById('qrcode-' + String(inv.no||'0'));
+              if (only) boxes.push(only);
+            }
+            const failNote = '<div style="width:110px;height:110px;display:grid;place-items:center;border:1px dashed var(--border);border-radius:8px;font-size:.62rem;color:var(--text-muted);text-align:center;padding:6px">تعذّر توليد QR<br>أعد فتح الإيصال</div>';
+            // المكتبة ترسم في وضعين: canvas مباشرة، أو صورة data:URL (تختفي الـ canvas).
+            // لذلك نعتبر الرسم ناجحًا بوجود أحدهما — ونمنح الرسم وقتًا كافيًا (المكتبة غير متزامنة).
+            const rendered = (e) => {
+              const im = e.querySelector('img');
+              if (im && im.src && im.src.indexOf('data:') === 0 && im.src.length > 200) return true;
+              const cv = e.querySelector('canvas');
+              if (!cv) return false;
+              try {
+                const d = cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
+                for (let i=0;i<d.length;i+=4) { if (d[i+3] > 10 && d[i] < 128) return true; }
+              } catch (err) {}
+              return false;
+            };
+            // 🐞 السبب الجذري (مُثبت بقياس): مكتبة qrcodejs تحسب طول النص بالحروف لا بالبايتات،
+            // وبيانات الفاتورة تحتوي اسم العميل (عربي = بايتان للحرف) ⇒ كانت ترمي
+            // «code length overflow. (1268>1120)» داخل try{} بلا أي رسالة ⇒ مربع أبيض.
+            // الحل: سلّم محاولات (H ثم M ثم نص مختصر ASCII + L) — ويظهر تنبيه صريح لو فشل الكل.
+            const safeData = (() => {
+              try {
+                const o = JSON.parse(qrData);
+                return '2M|' + (o.no || '') + '|' + (o.total || '') + '|' + String(o.date || '').replace(/[^0-9T:\-]/g, '') + '|' + (o.count || '');
+              } catch (e) { return String(qrData).replace(/[^\x20-\x7E]/g, ''); }
+            })();
+            const CL = (window.QRCode && QRCode.CorrectLevel) || { L: 1, M: 0, Q: 3, H: 2 };
+            const attempts = [
+              { text: qrData,     level: CL.H },
+              { text: qrData,     level: CL.M },
+              { text: safeData,   level: CL.M },
+              { text: safeData,   level: CL.L }
+            ];
+            const tryDraw = (e, i) => {
+              if (!e) return;
+              if (!window.QRCode) { e.innerHTML = failNote; return; }
+              if (i >= attempts.length) { e.dataset.qrErr = 'all-attempts-failed'; e.innerHTML = failNote; return; }
+              try {
+                e.innerHTML = '';
+                new QRCode(e, {text: attempts[i].text, width: 110, height: 110, correctLevel: attempts[i].level});
+              } catch (err) {
+                e.dataset.qrErr = 'a' + i + ':' + ((err && err.message) ? err.message : err);
+                tryDraw(e, i + 1);
+                return;
+              }
+              let tries = 8;
+              const check = () => {
+                if (rendered(e)) { delete e.dataset.qrErr; return; }
+                if (tries-- > 0) { setTimeout(check, 250); return; }
+                tryDraw(e, i + 1);
+              };
+              setTimeout(check, 250);
+            };
+            boxes.forEach(e => tryDraw(e, 0));
+          }catch(e){}
         }, 120);
     }
     async function confirmSaveInvoice() {
@@ -2577,7 +2550,7 @@
     function printReceipt() { window.print(); }
 
     function showInvoiceHistory() {
-        if (!can('history')) return toast('⚠️ السجل للعامل والمدير فقط');
+        if (!can('history')) return toast('⛔ سجل الفواتير للعامل والمدير فقط');
         const modal = document.getElementById('modal');
         const body = document.getElementById('modalBody');
         if (invoices.length === 0) {
@@ -2725,7 +2698,7 @@
     // ===== MODAL =====
     function openModal(type, ci, ii) {
         if (type === 'add' && !can('add')) return toast('⚠️ إضافة الأصناف للعامل والمدير فقط');
-        if (type === 'edit' && !can('edit')) return;
+        if (type === 'edit' && !can('edit')) { if (typeof toast === 'function') toast('⛔ التعديل للعاملين والمدير فقط'); return; }
         const modal = document.getElementById('modal');
         const body = document.getElementById('modalBody');
         editingCat = ci !== undefined ? ci : -1;
@@ -2991,7 +2964,7 @@
 
     // ===== SETTINGS MODAL (الإعدادات - مدير) =====
     function openSettingsModal() {
-        if (!can('dash')) return;
+        if (!can('dash')) return toast('⛔ الإعدادات للمدير فقط');
         const body = document.getElementById('modalBody');
         let backups = [];
         try { backups = JSON.parse(localStorage.getItem('al_sayed_backups') || '[]'); } catch (e) {}
@@ -3652,7 +3625,7 @@
         closeBurger();
     }
     function importData(event) {
-        if (!can('exp')) return;
+        if (!can('exp')) return toast('⛔ الاستيراد للمدير فقط');
         let file = event.target.files[0];
         if (!file) return;
         let reader = new FileReader();
@@ -3680,7 +3653,7 @@
 
     // ===== DASHBOARD =====
     function toggleDashboard() {
-        if (!can('dash')) return;
+        if (!can('dash')) return toast('⛔ لوحة التحكم للمدير فقط');
         let overlay = document.getElementById('dashOverlay');
         let open = overlay.classList.toggle('open');
         if (open) renderDashboard();
@@ -3996,42 +3969,7 @@
     // الأجهزة الجديدة: المدير يُنشئ أول حساب محلي بكلمة مرور يختارها هو (شاشة «تهيئة أول مرة»).
     function saveUsers() { localStorage.setItem('al_sayed_users', JSON.stringify(users)); }
 
-    // 🔒 T0.5: إنشاء حساب المدير المحلي أول مرة — بكلمة مرور يختارها المالك
-    async function createFirstLocalAdmin() {
-        const uEl = document.getElementById('setup-user');
-        const pEl = document.getElementById('setup-pass');
-        const p2El = document.getElementById('setup-pass2');
-        const err = document.getElementById('loginError');
-        const show = (m) => { if (err) { err.textContent = m; err.style.display = 'block'; } };
-        const un = (uEl && uEl.value.trim()) || '';
-        const pw = (pEl && pEl.value) || '';
-        const pw2 = (p2El && p2El.value) || '';
-        if (un.length < 2) return show('اكتب اسم مستخدم (حرفان على الأقل)');
-        if (pw.length < 6) return show('كلمة المرور 6 أحرف على الأقل');
-        if (pw === un || pw === 'admin' || pw === '123456' || pw === 'password') return show('كلمة المرور ضعيفة جدًا — اختر كلمة أقوى');
-        if (pw !== pw2) return show('كلمتا المرور غير متطابقتين');
-        if (users.some(x => x.u.toLowerCase() === un.toLowerCase())) return show('اسم المستخدم مستخدم بالفعل');
-        const nu = { u: un, role: 'admin', name: 'المدير', _firstRun: true };
-        // استخدام نفس آلية التشفير القوية الموجودة في التطبيق: PBKDF2 + salt عشوائي
-        // ⚠️ مهم: verifyPass يتحقق من وجود user.salt — بدون salt سيفشل الدخول لاحقًا
-        try {
-            if (window.crypto && crypto.subtle) {
-                const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-                nu.salt = b64(saltBytes);
-                nu.p = await pbkdf2(pw, nu.salt);
-            } else {
-                nu.p = hashPass(pw);   // متصفح قديم جدًا — نسخة أضعف لكن تعمل
-            }
-        } catch (e) { nu.p = hashPass(pw); }
-        users.push(nu);
-        saveUsers();
-        clearLock();
-        setUser(nu);
-        logAction('تهيئة أول مرة — إنشاء مدير محلي', un);
-        toast('✅ تم إنشاء حساب المدير المحلي — احفظ كلمة المرور في مكان آمن', 6000);
-        afterLogin();
-    }
-
+    // 🚫 T-A3 (2026-09-22): حُذف إنشاء الحساب المحلي بالكامل — الحسابات سحابية فقط.
     let sessionUser = localStorage.getItem('al_sayed_session_user') || '';
     let sessionRole = '';
     let lastActivity = Date.now();
@@ -4060,9 +3998,28 @@
         document.getElementById('paneRegister').style.display = tab === 'register' ? 'block' : 'none';
         document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
         document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+        if (typeof hideLoginNote === 'function') hideLoginNote();
+        const first = document.querySelector('#pane' + (tab === 'login' ? 'Login' : 'Register') + ' input');
+        if (first) setTimeout(() => { try { first.focus(); } catch (e) {} }, 120);
     }
+    // 🏠 T-A1 (2026-09-22): البداية صفحة ترحيب — لا حاجب تسجيل إجباري
+    function showLanding() {
+        updateAuthBtn();
+        if (sessionUser || cloudProfile) return; // مسجَّل: يكمّل من حيث كان
+        sessionRole = '';
+        currentView = 'home';
+        try { applyRoleUI(); } catch (e) {}   // يضبط القائمة والصلاحيات لواجهة الزائر
+        try { setView('home'); } catch (e) {}
+    }
+    function updateAuthBtn() {
+        const b = document.getElementById('authHeaderBtn');
+        if (!b) return;
+        b.style.display = (sessionUser || cloudProfile) ? 'none' : 'inline-flex';
+    }
+    function showRegister() { showLogin(); switchLoginTab('register'); }
     function showLogin() {
         document.getElementById('loginOverlay').style.display = 'flex';
+        hideLoginNote();
         const err = document.getElementById('loginError');
         err.style.display = 'none';
         err.textContent = '';
@@ -4077,78 +4034,9 @@
         void card.offsetWidth;
         card.classList.add('shake');
     }
-    async function doLogin() {
-        const uEl = document.getElementById('login-user');
-        const pEl = document.getElementById('login-pass');
-        const err = document.getElementById('loginError');
-        const un = uEl.value.trim();
-        const pw = pEl.value;
-        if (!un || !pw) {
-            err.textContent = 'اكتب اسم المستخدم وكلمة المرور';
-            err.style.display = 'block';
-            loginShake();
-            return;
-        }
-        // 🔒 F2: القفل أولًا — سيرفري إن توفّر الاتصال (لا يُتجاوز بمسح بيانات المتصفح)
-        const gate = await gateBeforeLogin(un);
-        if (gate.block) {
-            err.textContent = gate.message;
-            err.style.display = 'block';
-            loginShake();
-            return;
-        }
-        const found = users.find(x => x.u.toLowerCase() === un.toLowerCase());
-        const ok = found ? await verifyPass(found, pw) : false;
-        if (!found || !ok) {
-            failLogin();
-            const g = await serverFail(un);
-            const extra = (g && !g.allowed) ? ' · ' + lockMessage(g.seconds, g.scope)
-                        : (g && typeof g.left === 'number') ? ' — بقي ' + g.left + ' محاولات'
-                        : (gate.left ? ' — بقي ' + gate.left + ' محاولات' : '');
-            err.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة' + extra;
-            err.style.display = 'block';
-            loginShake();
-            pEl.value = '';
-            return;
-        }
-        clearLock();
-        await serverOk(un);
-        setUser(found);
-        logAction('تسجيل دخول', found.u);
-        afterLogin();
-        // 🔒 T0.5: الحسابات الافتراضية أُلغيت — نتحقق الآن من قوة كلمة المرور فعليًا
-        if (pw.length < 6 || pw.toLowerCase() === String(found.u).toLowerCase() || ['admin','123456','password','12345678'].includes(pw.toLowerCase()))
-            toast('⚠️ كلمة مرورك ضعيفة — غيّرها من القائمة ← 🔒', 8000);
-        upgradeHash(found, pw);
-    }
-    function quickCustomer() {
-        let name;
-        do { name = 'عميل-' + Math.random().toString(36).slice(2, 6).toUpperCase(); } while (users.some(x => x.u === name));
-        const pass = Math.random().toString(36).slice(2, 10);
-        const u = { u: name, p: hashPass(pass), role: 'customer', name: name };
-        users.push(u);
-        saveUsers();
-        setUser(u);
-        logAction('حساب عميل عشوائي', name);
-        afterLogin();
-        toast('✅ تم إنشاء حسابك: ' + name, 4000);
-    }
-    function doRegister() {
-        const name = document.getElementById('reg-name').value.trim();
-        const pass = document.getElementById('reg-pass').value;
-        if (name.length < 2) return toast('اكتب اسمك (حرفان على الأقل)');
-        if (pass.length < 4) return toast('كلمة المرور 4 أحرف على الأقل');
-        if (users.some(x => x.u.toLowerCase() === name.toLowerCase())) return toast('الاسم موجود — جرّب تسجيل الدخول');
-        const u = { u: name, p: hashPass(pass), role: 'customer', name: name };
-        users.push(u);
-        saveUsers();
-        setUser(u);
-        logAction('تسجيل حساب جديد', name);
-        afterLogin();
-        toast('✅ أهلًا ' + name + '! تم إنشاء حسابك', 4000);
-    }
     function afterLogin() {
         hideLogin();
+        updateAuthBtn();
         applyRoleUI();
     }
     function setItemDisplay(id, val) {
@@ -4173,16 +4061,23 @@
         const icons = { admin: '🛡️', worker: '👷', customer: '👤' };
         const roleLabels = { admin: 'مدير النظام', worker: 'عامل', customer: 'عميل' };
         const me = (cloudReady() && cloudProfile) ? cloudProfile : currentUser();
+        const signedIn = !!(sessionUser || cloudProfile);
         const chip = document.getElementById('roleChip');
         if (chip) {
             chip.textContent = (icons[sessionRole] || '') + ' ' + (sessionUser || '');
-            chip.style.display = 'inline-flex';
+            chip.style.display = signedIn ? 'inline-flex' : 'none';
         }
+        // 🏠 T-A1: الزائر يرى واجهة عميل مبسطة — لا بنود إدارية ولا خروج قبل الدخول
+        setItemDisplay('burger-pass', signedIn ? 'flex' : 'none');
+        setItemDisplay('burger-logout', signedIn ? 'flex' : 'none');
+        setItemDisplay('burger-quicklock', signedIn ? 'flex' : 'none');
         const av = document.getElementById('sideAvatar'); if (av) av.textContent = icons[sessionRole] || '👤';
         const sn = document.getElementById('sideName'); if (sn) sn.textContent = me ? (me.display_name || me.name || me.u || '') : (sessionUser || '—');
         const sr = document.getElementById('sideRole'); if (sr) sr.textContent = roleLabels[sessionRole] || '';
         setItemDisplay('viewTabs', p.stock ? 'grid' : 'none');
-        if (!p.stock && currentView !== 'shop') setView('shop');
+        updateAuthBtn();
+        // 🔒 T-A5: العميل لا يُدفع لصفحة العرض قسرًا — نُبقيه على الرئيسية/المتجر/حسابه
+        if (!p.stock && !['shop', 'home', 'account'].includes(currentView)) setView('home');
         // إحصائيات الهيدر: للمدير فقط (مميزات ادارية)
         setItemDisplay('statRow', sessionRole === 'admin' ? 'flex' : 'none');
         setItemDisplay('fabWrap', p.add ? 'flex' : 'none');
@@ -4210,7 +4105,7 @@
         // السلة بتفضل زي ما هي عشان العميل يقدر يضيف والعامل يخلص الفاتورة
         updateCartBadge();
         closeBurger();
-        showLogin();
+        showLanding();   // 🏠 بعد الخروج نرجع لصفحة الترحيب لا لشاشة تسجيل إجبارية
     }
 
     // ===== AUTO LOCK (قفل تلقائي بعد 30 دقيقة بدون نشاط) =====
@@ -4303,32 +4198,56 @@
 
     // ===== CHANGE MY PASSWORD (تغيير كلمة المرور) =====
     function openPassModal() {
-        if (!currentUser()) return;
+        const cloud = !!(typeof cloudReady === 'function' && cloudReady() && cloudProfile && sb);
+        if (!cloud && !currentUser()) return toast('سجّل دخولك أولًا');
         const body = document.getElementById('modalBody');
         body.innerHTML =
             '<h2>🔒 تغيير <span class="accent">كلمة المرور</span></h2>' +
-            '<div class="form-group"><label>الحالية</label><input type="password" id="pass-cur" placeholder="••••"></div>' +
-            '<div class="form-group"><label>الجديدة (4 أحرف على الأقل)</label><input type="password" id="pass-new" placeholder="••••"></div>' +
-            '<div class="form-group"><label>تأكيد الجديدة</label><input type="password" id="pass-conf" placeholder="••••"></div>' +
+            (cloud ? '<p style="font-size:.8rem;color:var(--text-muted);font-weight:700;margin-bottom:10px">حسابك سحابي — التغيير يسري على كل أجهزتك.</p>' +
+                     '<p style="font-size:.8rem;color:var(--text-muted);font-weight:700;margin-bottom:10px">ملاحظة: رمز PIN الخاص بالكاونتر يُدار من الإعدادات ← الأمان.</p>' : '') +
+            '<div class="form-group"><label>كلمة المرور الحالية</label><input type="password" id="pass-cur" placeholder="••••••" autocomplete="current-password"></div>' +
+            '<div class="form-group"><label>الجديدة (6 أحرف على الأقل)</label><input type="password" id="pass-new" placeholder="••••••" autocomplete="new-password"></div>' +
+            '<div class="form-group"><label>تأكيد الجديدة</label><input type="password" id="pass-conf" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')savePass()"></div>' +
             '<div class="modal-actions">' +
                 '<button class="btn btn-outline" onclick="closeModal()">إلغاء</button>' +
-                '<button class="btn btn-primary" onclick="savePass()">💾 حفظ</button>' +
+                '<button class="btn btn-primary" id="btnSavePass" onclick="savePass()">💾 حفظ</button>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
     }
-    function savePass() {
+    async function savePass() {
+        const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+        const cur = val('pass-cur'), nw = val('pass-new'), cf = val('pass-conf');
+        if (nw.length < 6) return toast('🔑 كلمة المرور الجديدة 6 أحرف على الأقل');
+        if (nw !== cf) return toast('❌ تأكيد كلمة المرور غير مطابق');
+        // ☁️ T-A6 (2026-09-22): الحسابات السحابية كانت لا تستطيع تغيير كلمة المرور إطلاقًا
+        // (الدالة كانت تعتمد على حساب محلي غير موجود) ⇒ الآن تتحدّث على السحابة فعلًا.
+        if (typeof cloudReady === 'function' && cloudReady() && cloudProfile && sb) {
+            const btn = document.getElementById('btnSavePass');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الحفظ...'; }
+            try {
+                const { data: u } = await sb.auth.getUser();
+                const email = u && u.user ? u.user.email : '';
+                if (!email) { if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; } return toast('❌ تعذّر قراءة بيانات حسابك — أعد تسجيل الدخول'); }
+                const { error: vErr } = await sb.auth.signInWithPassword({ email, password: cur });
+                if (vErr) { if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; } return toast('❌ كلمة المرور الحالية غير صحيحة'); }
+                const { error } = await sb.auth.updateUser({ password: nw });
+                if (error) { if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; } return toast('❌ ' + (error.message || 'تعذّر التحديث')); }
+                logAction('تغيير كلمة المرور (سحابي)', sessionUser);
+                closeModal();
+                toast('✅ تم تغيير كلمة المرور على السحابة — استخدمها في دخولك القادم');
+            } catch (e) {
+                if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; }
+                toast('❌ ' + ((e && e.message) ? e.message : 'خطأ غير متوقع'));
+            }
+            return;
+        }
         const me = currentUser();
-        if (!me) return;
-        const cur = document.getElementById('pass-cur').value;
-        const nw = document.getElementById('pass-new').value;
-        const cf = document.getElementById('pass-conf').value;
+        if (!me) return toast('سجّل دخولك أولًا');
         if (hashPass(cur) !== me.p) return toast('❌ كلمة المرور الحالية غير صحيحة');
-        if (nw.length < 4) return toast('كلمة المرور الجديدة قصيرة');
-        if (nw !== cf) return toast('تأكيد كلمة المرور غير متطابق');
         me.p = hashPass(nw);
         saveUsers();
         closeModal();
-        toast('✅ تم تغيير كلمة المرور بنجاح');
+        toast('✅ تم تغيير كلمة المرور');
     }
 
     // ═══════════════════════════════════════════════════════
@@ -4952,7 +4871,23 @@
     }
 
     // ── مصادقة سحابية ──
-    function loginErr(msg) { const el = document.getElementById('loginError'); if (el) { el.textContent = msg; el.style.display = 'block'; } }
+    function hideLoginNote() {
+      const e = document.getElementById('loginError'); if (e) { e.style.display = 'none'; e.textContent = ''; }
+      const o = document.getElementById('loginOk'); if (o) { o.style.display = 'none'; o.textContent = ''; }
+    }
+    function loginErr(msg) {
+      const e = document.getElementById('loginError');
+      if (!e) return;
+      const o = document.getElementById('loginOk'); if (o) o.style.display = 'none';
+      e.textContent = msg; e.style.display = 'block';
+      try { const c = document.getElementById('loginCard'); if (c && c.classList) { c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); } } catch (err) {}
+    }
+    function loginOk(msg) {
+      const o = document.getElementById('loginOk');
+      if (!o) return;
+      const e = document.getElementById('loginError'); if (e) e.style.display = 'none';
+      o.textContent = msg; o.style.display = 'block';
+    }
     async function fetchCloudProfile(uid) {
       try {
         const { data } = await sb.from('profiles').select('*').eq('id', uid).single();
@@ -4977,45 +4912,80 @@
       await pullAll(); // سحب فوري يظهر المتجر مباشرة
     }
     async function cloudDoLogin() {
+      hideLoginNote();
       const email = (document.getElementById('cl-email').value || '').trim();
       const pw = document.getElementById('cl-pass').value;
-      if (!email || !pw) return loginErr('اكتب الإيميل وكلمة المرور');
-      if(!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش جاهز — انتظر ثانية وحاول تاني');
-        // 🔒 F2: نفس القفل السيرفري لحسابات السحابة
+      if (!email || !pw) return loginErr('✍️ اكتب الإيميل وكلمة المرور');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return loginErr('✍️ الإيميل غير صحيح — مثال: name@gmail.com');
+      if (!sb && !initCloudClient()) return loginErr('⚠️ الاتصال بالسحابة مش جاهز — اتأكد من الإنترنت وحاول تاني');
+      const btn = document.getElementById('btnCloudLogin');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري التحقق...'; }
+      try {
         const cloudGate = await gateBeforeLogin(email);
-        if (cloudGate.block) return loginErr(cloudGate.message);
-      const btn=document.querySelector('#paneLogin .btn-primary');
-      if(btn){ btn.disabled=true; btn.textContent='⏳ جاري الدخول...'; }
-      const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
-      if(btn){ btn.disabled=false; btn.textContent='🔓 تسجيل الدخول'; }
-      if (error) {
-        let msg=error.message||'خطأ في الدخول';
-        if(/Invalid login credentials/i.test(msg)) msg='الإيميل أو كلمة المرور غير صحيحة — تأكد أو أنشئ حساب جديد';
-        else if(/Email not confirmed/i.test(msg)) msg='الإيميل غير مؤكد — افتح رابط التأكيد في بريدك أو عطّل Confirm email من Supabase';
-        else if(/Too many requests/i.test(msg)) msg='محاولات كثيرة — انتظر دقيقة وحاول تاني';
-        const g = await serverFail(email);
-        const extra = (g && !g.allowed) ? ' · ' + lockMessage(g.seconds, g.scope)
-                    : (g && typeof g.left === 'number') ? ' — بقي ' + g.left + ' محاولات' : '';
-        return loginErr('❌ '+msg+extra);
+        if (cloudGate.block) { loginErr('⛔ ' + cloudGate.message); loginShake(); return; }
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
+        if (error) {
+          let msg = error.message || 'خطأ في الدخول', extra = '';
+          const g = await serverFail(email);
+          if (/Invalid login credentials/i.test(msg)) {
+            msg = '❌ الإيميل أو كلمة المرور غير صحيحة';
+            extra = (g && !g.allowed) ? ' · ' + lockMessage(g.seconds, g.scope)
+                  : (g && typeof g.left === 'number') ? ' — بقي ' + g.left + ' محاولات' : '';
+            loginShake();
+          } else if (/Email not confirmed/i.test(msg)) {
+            msg = '📧 الإيميل غير مؤكد — افتح رابط التأكيد في بريدك ثم حاول تاني';
+          } else if (/Too many requests|rate limit/i.test(msg)) {
+            msg = '⏳ محاولات كثيرة — استنى دقيقة وحاول تاني';
+          } else if (/Failed to fetch|Network|network/i.test(msg)) {
+            msg = '📡 مشكلة في الاتصال — راجع الإنترنت وحاول تاني';
+          } else { msg = '❌ ' + msg; }
+          return loginErr(msg + extra);
+        }
+        await serverOk(email);
+        await onCloudSession(data.session);
+        return true;
+      } catch (e) {
+        return loginErr('❌ خطأ غير متوقع: ' + ((e && e.message) ? e.message : 'حاول تاني'));
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔓 تسجيل الدخول'; }
       }
-      await serverOk(email);
-      await onCloudSession(data.session);
     }
     async function cloudDoRegister() {
+      hideLoginNote();
       const username = (document.getElementById('reg-username').value || '').trim();
       const name = (document.getElementById('reg-name2').value || '').trim();
       const email = (document.getElementById('reg-email').value || '').trim();
       const pw = document.getElementById('reg-pass2').value;
-      if (username.length < 2) return loginErr('اكتب اسم المستخدم');
-      if (!email.includes('@')) return loginErr('اكتب إيميل صحيح');
-      if (pw.length < 6) return loginErr('كلمة المرور 6 أحرف على الأقل');
-      const { data, error } = await sb.auth.signUp({
-        email, password: pw,
-        options: { data: { username, display_name: name || username, role: 'customer' } }
-      });
-      if (error) return loginErr('❌ ' + (error.message || 'خطأ في التسجيل'));
-      if (data.session) { await onCloudSession(data.session); return; }
-      loginErr('📧 وصلك إيميل تأكيد — افتحه وتأكد حسابك (أو عطّل "Confirm email" من Supabase ← Authentication ← Providers)');
+      if (username.length < 2) { loginErr('✍️ اكتب اسم المستخدم (حرفان على الأقل)'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { loginErr('✍️ اكتب إيميل صحيح — مثال: name@gmail.com'); return; }
+      if (pw.length < 6) { loginErr('🔑 كلمة المرور 6 أحرف على الأقل'); return; }
+      if (!sb && !initCloudClient()) { loginErr('⚠️ الاتصال بالسحابة مش جاهز — اتأكد من الإنترنت وحاول تاني'); return; }
+      const btn = document.getElementById('btnCloudRegister');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري إنشاء الحساب...'; }
+      try {
+        const { data, error } = await sb.auth.signUp({
+          email, password: pw,
+          options: { data: { username, display_name: name || username, role: 'customer' } }
+        });
+        if (error) {
+          const m = error.message || '';
+          if (/already registered|already been registered|already exists|User already/i.test(m)) { switchLoginTab('login'); return loginErr('📧 الإيميل ده مسجّل بالفعل — سجّل الدخول من تبويب «تسجيل الدخول»، أو استخدم إيميل تاني'); }
+          if (/Password should be|weak password|at least/i.test(m)) return loginErr('🔑 كلمة المرور ضعيفة — استخدم 6 أحرف على الأقل');
+          if (/Unable to validate email|invalid format|invalid email/i.test(m)) return loginErr('✍️ الإيميل غير صالح — راجع كتابته');
+          if (/rate limit|Too many/i.test(m)) return loginErr('⏳ طلبات كثيرة — استنى دقيقة وحاول تاني');
+          if (/Database error saving new user/i.test(m)) return loginErr('⚠️ اسم المستخدم ده مستخدم بالفعل — جرّب اسمًا آخر، أو سجّل الدخول لو عندك حساب');
+          if (/Failed to fetch|Network|network/i.test(m)) return loginErr('📡 مشكلة في الاتصال — راجع الإنترنت وحاول تاني');
+          return loginErr('❌ ' + m);
+        }
+        if (data && data.session) { await onCloudSession(data.session); loginOk('✅ تم إنشاء حسابك وتسجيل الدخول — أهلًا بيك!'); return; }
+        switchLoginTab('login');
+        const le = document.getElementById('cl-email'); if (le && !le.value) le.value = email;
+        loginOk('📧 بعتنالك إيميل تأكيد على ' + email + ' — افتح الرسالة واضغط الرابط، ثم سجّل الدخول من هنا.');
+      } catch (e) {
+        loginErr('❌ خطأ غير متوقع: ' + ((e && e.message) ? e.message : 'حاول تاني'));
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '✅ إنشاء الحساب والدخول'; }
+      }
     }
     async function cloudInit() {
       if (!initCloudClient()) { setCloudStatus('connect'); return; }
@@ -5027,7 +4997,7 @@
         if (data && data.session) { await onCloudSession(data.session); return; }
       } catch (e) {}
       setCloudStatus('on');
-      showLogin();
+      showLanding();
     }
     function cloudLogout() {
       if (sb) { try { sb.auth.signOut(); } catch (e) {} }
@@ -5049,71 +5019,36 @@
       return loginErr('استخدم «+ حساب جديد» وسجّل بإيميلك الحقيقي');
     }
 
-    let _forceLocal=false;
-    // 🔒 T0.5: الوضع المحلي يبقى كاحتياطي للعمل بدون إنترنت (لا يستطيع الوصول للسحابة)،
-    // لكن لا يُذكر أي كلمة مرور في الواجهة — الحساب المحلي بكلمة مرور يحددها المالك.
-    function forceLocalLogin(){ _forceLocal=true; renderLogin(); toast('🏠 وضع محلي — سجّل دخولك بحسابك المحلي', 4000); }
-    function forceCloudLogin(){ _forceLocal=false; renderLogin(); }
-    // ── واجهة شاشة الدخول (محلي / سحابي) ──
+    // 🚫 T-A3 (2026-09-22): أُزيل «الوضع المحلي» بالكامل — لا حساب ولا بيانات بدون سحابة.
+    // ── ☁️ واجهة شاشة الدخول — سحابي فقط (T-A3: أُزيل الحساب المحلي) ──
+    // ملاحظة T-A2: صندوق الرسائل صار خارج التبويبين — كان داخل تبويب «دخول» فقط
+    // فكانت رسائل التسجيل تُكتب في مكان مخفي ⇒ «الزر لا يعمل» من وجهة نظر المستخدم.
     function renderLogin() {
       const inner = document.getElementById('loginInner');
       if (!inner) return;
-      const showCloud = !_forceLocal && (cloudReady() || (cloudCfg && cloudCfg.on && window.supabase));
-      if (showCloud) {
-        inner.innerHTML =
-          '<div class="login-tabs">' +
-            '<button class="login-tab active" id="tabLogin" onclick="switchLoginTab(\'login\')">🔓 دخول</button>' +
-            '<button class="login-tab" id="tabRegister" onclick="switchLoginTab(\'register\')">➕ حساب جديد</button>' +
-          '</div>' +
-          '<div id="paneLogin">' +
-            '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" autocomplete="email" style="direction:ltr;text-align:left" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
-            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" autocomplete="current-password" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
-            '<button class="btn btn-primary" style="width:100%" onclick="cloudDoLogin()">🔓 تسجيل الدخول</button>' +
-            '<div class="login-error" id="loginError"></div>' +
-            '<button class="login-switch-mode" onclick="forceLocalLogin()">🏠 الدخول بحساب محلي (بدون إنترنت)</button>' +
-          '</div>' +
-          '<div id="paneRegister" style="display:none">' +
-            '<div class="form-group"><label>اسم المستخدم (بيظهر للناس)</label><input type="text" id="reg-username" placeholder="اسم المستخدم" style="direction:ltr;text-align:left"></div>' +
-            '<div class="form-group"><label>الاسم الكامل</label><input type="text" id="reg-name2" placeholder="مثال: أحمد السيد"></div>' +
-            '<div class="form-group"><label>الإيميل</label><input type="email" id="reg-email" placeholder="you@example.com" style="direction:ltr;text-align:left"></div>' +
-            '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="reg-pass2" placeholder="••••••" onkeydown="if(event.key===\'Enter\')cloudDoRegister()"></div>' +
-            '<button class="btn btn-primary" style="width:100%" onclick="cloudDoRegister()">✅ إنشاء الحساب والدخول</button>' +
-          '</div>' +
-          '<p style="font-size:0.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">☁️ وضع سحابي — بياناتك محفوظة ومتزامنة على كل الأجهزة · الحسابات الجديدة تكون عميل</p>';
-      } else if (users.length === 0) {
-        // 🔒 T0.5: لا توجد حسابات محلية — نطلب من المالك إنشاء حساب المدير بكلمة مرور خاصة به
-        inner.innerHTML =
-          '<h3 style="margin:0 0 4px;text-align:center">🔐 تهيئة أول مرة</h3>' +
-          '<p style="font-size:.78rem;color:var(--text-muted);font-weight:700;text-align:center;margin-bottom:14px">لا يوجد حساب على هذا الجهاز.<br>أنشئ حساب المدير بكلمة مرور تختارها أنت — ولا تُشاركها مع أحد.</p>' +
-          '<div class="form-group"><label>اسم المستخدم</label><input type="text" id="setup-user" value="admin" style="direction:ltr;text-align:left" autocomplete="username"></div>' +
-          '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="setup-pass" placeholder="••••••" autocomplete="new-password"></div>' +
-          '<div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="setup-pass2" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')createFirstLocalAdmin()"></div>' +
-          '<button class="btn btn-primary" style="width:100%" onclick="createFirstLocalAdmin()">✅ إنشاء حساب المدير والدخول</button>' +
-          '<div class="login-error" id="loginError"></div>' +
-          '<button class="login-switch-mode" onclick="forceCloudLogin()">☁️ عندي حساب سحابي — الدخول من السحابة</button>';
-      } else {
-        inner.innerHTML =
-          '<div class="login-tabs">' +
-            '<button class="login-tab active" id="tabLogin" onclick="switchLoginTab(\'login\')">🔓 دخول</button>' +
-            '<button class="login-tab" id="tabRegister" onclick="switchLoginTab(\'register\')">➕ حساب جديد</button>' +
-          '</div>' +
-          '<div id="paneLogin">' +
-            '<div class="form-group"><label>اسم المستخدم</label><input type="text" id="login-user" placeholder="اسم المستخدم" autocomplete="username" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'"></div>' +
-            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="login-pass" placeholder="••••" autocomplete="current-password" oninput="const e=document.getElementById(\'loginError\'); if(e) e.style.display=\'none\'" onkeydown="if(event.key===\'Enter\')doLogin()"></div>' +
-            '<button class="btn btn-primary" style="width:100%" onclick="doLogin()">🔓 تسجيل الدخول</button>' +
-            '<button class="btn btn-outline" style="width:100%;margin-top:10px;white-space:normal;line-height:1.4" onclick="quickCustomer()">⚡ دخول سريع كعميل (حساب عشوائي)</button>' +
-            '<div class="login-error" id="loginError"></div>' +
-            '<button class="login-switch-mode" onclick="forceCloudLogin()">☁️ الرجوع للسحابة</button>' +
-          '</div>' +
-          '<div id="paneRegister" style="display:none">' +
-            '<p style="font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-bottom:12px">حساب عميل جديد — للتصفح والإضافة للسلة</p>' +
-            '<div class="form-group"><label>الاسم</label><input type="text" id="reg-name" placeholder="اسمك..."></div>' +
-            '<div class="form-group"><label>كلمة المرور</label><input type="password" id="reg-pass" placeholder="4 أحرف على الأقل" onkeydown="if(event.key===\'Enter\')doRegister()"></div>' +
-            '<button class="btn btn-primary" style="width:100%" onclick="doRegister()">✅ إنشاء الحساب والدخول</button>' +
-          '</div>';
-      }
+      const clr = "hideLoginNote()";
+      inner.innerHTML =
+        '<div class="login-tabs">' +
+          '<button class="login-tab active" id="tabLogin" onclick="switchLoginTab(\'login\')">🔓 تسجيل الدخول</button>' +
+          '<button class="login-tab" id="tabRegister" onclick="switchLoginTab(\'register\')">➕ حساب جديد</button>' +
+        '</div>' +
+        '<div class="login-error" id="loginError" style="display:none"></div>' +
+        '<div class="login-ok" id="loginOk" style="display:none"></div>' +
+        '<div id="paneLogin" style="display:block">' +
+          '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" autocomplete="email" inputmode="email" style="direction:ltr;text-align:left" oninput="' + clr + '" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
+          '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" autocomplete="current-password" oninput="' + clr + '" onkeydown="if(event.key===\'Enter\')cloudDoLogin()"></div>' +
+          '<button class="btn btn-primary" id="btnCloudLogin" style="width:100%" onclick="cloudDoLogin()">🔓 تسجيل الدخول</button>' +
+          '<button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="hideLogin()">🛍️ تصفّح المتجر بدون حساب</button>' +
+        '</div>' +
+        '<div id="paneRegister" style="display:none">' +
+          '<div class="form-group"><label>اسم المستخدم (بيظهر للناس)</label><input type="text" id="reg-username" placeholder="اسم المستخدم" style="direction:ltr;text-align:left" oninput="' + clr + '"></div>' +
+          '<div class="form-group"><label>الاسم الكامل</label><input type="text" id="reg-name2" placeholder="مثال: أحمد السيد" oninput="' + clr + '"></div>' +
+          '<div class="form-group"><label>الإيميل</label><input type="email" id="reg-email" placeholder="you@example.com" inputmode="email" style="direction:ltr;text-align:left" oninput="' + clr + '"></div>' +
+          '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="reg-pass2" placeholder="••••••" autocomplete="new-password" oninput="' + clr + '" onkeydown="if(event.key===\'Enter\')cloudDoRegister()"></div>' +
+          '<button class="btn btn-primary" id="btnCloudRegister" style="width:100%" onclick="cloudDoRegister()">✅ إنشاء الحساب والدخول</button>' +
+        '</div>' +
+        '<p style="font-size:0.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">☁️ حساب سحابي واحد يفتح على كل أجهزتك · الحسابات الجديدة تكون عميل · العاملون والمدير يدخلون بإيميلهم وكلمة مرورهم</p>';
     }
-
     // ── إعدادات السحابة (من مودال الإعدادات) ──
     function cloudStatusLabel() {
       return { on: '✅ متصل بالسحابة', offline: '📡 أوفلاين — بيتزامن أول ما النت يرجع', connect: ' جاري الاتصال', off: '📱 تخزين محلي' }[cloudStatus] || cloudStatus;
@@ -5316,7 +5251,7 @@
         setCloudStatus(sb ? 'on' : 'connect');
         // محاولة تفريغ الطلبات العالقة حتى بدون تسجيل سحابي (anon) — بعد إصلاح RLS
         setTimeout(()=>{ if(cloudReady() && outbox.length) flushOutbox(); if(cloudReady()) pullAll().catch(()=>{}); }, 1200);
-        showLogin();
+        showLanding();
         cloudInit();
       } else {
         // Supabase CDN لسه بيحمل — انتظر لحظات ثم اعد المحاولة (يحل مشكلة defer القديم)
@@ -5328,24 +5263,24 @@
             initCloudClient();
             setCloudStatus(sb ? 'on' : 'connect');
             renderLogin();
-            showLogin();
+            showLanding();
             cloudInit();
           } else if(_tries>20){
             clearInterval(_iv);
             renderLogin();
-            showLogin();
+            showLanding();
           }
         }, 400);
         renderLogin();
-        showLogin();
+        showLanding();
       }
-    } else if (sessionUser && users.some(u => u.u === sessionUser)) {
-      sessionRole = currentUser().role;
-      applyRoleUI();
     } else {
+      // ☁️ T-A3: لا جلسات محلية — الجلسة تُستعاد من السحابة فقط، والزائر يرى صفحة الترحيب
       sessionUser = '';
       sessionRole = '';
-      showLogin();
+      localStorage.removeItem('al_sayed_session_user');
+      localStorage.removeItem('al_sayed_db');
+      showLanding();
     }
     window.addEventListener('online', () => { if (cloudReady()) { flushOutbox(); pullAll(); } }, { passive: true });
     // 🔄 T3.2: لو فشل الرفع أثناء الاتصال (انقطاع لحظي بمكان)، نعيد المحاولة
