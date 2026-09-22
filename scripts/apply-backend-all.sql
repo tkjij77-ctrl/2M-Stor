@@ -289,13 +289,61 @@ create trigger trg_invoices_assign_no
 --  فلو أعدت بناء المشروع تختفي المزامنة الفورية والفهارس.
 -- ═══════════════════════════════════════════════════════════════════
 
--- 6.1 فهرس بحث نصي عربي
-create extension if not exists pg_trgm with schema extensions;
+-- 6.1 فهرس بحث نصي عربي (trigram) — تحسين اختياري، لا يُسقط الملف أبدًا
+--
+-- 🔴 عطل حقيقي وقع على قاعدة الإنتاج (22 سبتمبر 2026):
+--      ERROR: 42704: operator class "extensions.gin_trgm_ops" does not exist
+--    السبب الجذري: `create extension if not exists pg_trgm with schema extensions`
+--    **لا يفعل شيئًا** إن كانت pg_trgm منصَّبة سابقًا في مخطط آخر — وهي كذلك على
+--    قاعدتنا (`public`: الدليل أن show_trgm() وshow_limit() ظاهرتان كدوال RPC عامة،
+--    وPostgREST لا يكشف إلا المخططات المكشوفة). فيبقى الصنف في public، ويصير
+--    `extensions.gin_trgm_ops` غير موجود ⇒ يفشل الملف **قبل** بقية الإصلاحات.
+--    والأخطر: SQL Editor يلفّ الملف في معاملة واحدة ⇒ تراجعت كل الإصلاحات معه.
+--
+--    القاعدة المستفادة: فهرس لتحسين الأداء **لا يجوز** أن يُبطل إصلاحًا أمنيًا.
+--    الحل: نكتشف مخطط الصنف (opclass) الفعلي ونبني الفهرس به، وإن لم نجده نتخطّاه
+--    بإشعار واضح. (اختبار verify-apply-backend-all.sh صار يشمل هذا السيناريو بالضبط.)
+do $$
+declare
+  opc_schema text;
+begin
+  select n.nspname into opc_schema
+    from pg_opclass o
+    join pg_namespace n on n.oid = o.opcnamespace
+   where o.opcname = 'gin_trgm_ops'
+   limit 1;
 
-create index if not exists idx_items_name_trgm
-  on public.items using gin (name extensions.gin_trgm_ops);
-create index if not exists idx_categories_name_trgm
-  on public.categories using gin (name extensions.gin_trgm_ops);
+  if opc_schema is null then
+    begin
+      execute 'create extension if not exists pg_trgm with schema extensions';
+    exception when others then
+      raise notice 'ℹ️ pg_trgm غير متاحة (%) — تم تخطّي فهارس البحث التقريبي', sqlerrm;
+      return;
+    end;
+    select n.nspname into opc_schema
+      from pg_opclass o
+      join pg_namespace n on n.oid = o.opcnamespace
+     where o.opcname = 'gin_trgm_ops'
+     limit 1;
+  end if;
+
+  if opc_schema is null then
+    raise notice 'ℹ️ صنف gin_trgm_ops غير موجود — تم تخطّي الفهارس (لا تأثير على الأمان)';
+    return;
+  end if;
+
+  begin
+    execute format(
+      'create index if not exists idx_items_name_trgm on public.items using gin (name %I.gin_trgm_ops)',
+      opc_schema);
+    execute format(
+      'create index if not exists idx_categories_name_trgm on public.categories using gin (name %I.gin_trgm_ops)',
+      opc_schema);
+    raise notice '✅ فهارس البحث التقريبي جاهزة (الصنف في مخطط %)', opc_schema;
+  exception when others then
+    raise notice 'ℹ️ تعذّر إنشاء فهارس trigram (%) — تم تخطّيها بلا تأثير على بقية الإصلاحات', sqlerrm;
+  end;
+end $$;
 
 -- 6.2 فهارس الاستعلامات الشائعة
 create index if not exists idx_items_category   on public.items (category_id) where deleted_at is null;
@@ -308,6 +356,14 @@ declare
   t text;
   tables text[] := array['items', 'categories', 'settings', 'invoices'];
 begin
+  -- ⚠️ المزامنة الفورية تحسين لا شرط أمني: لو كان دلو النشر غير موجود أصلًا
+  --    (أو لا نملك صلاحية تعديله) لا يجوز أن يُسقط الملف باقي الإصلاحات.
+  --    وهذا ليس افتراضًا نظريًا: سقوط عبارة واحدة هنا يُلغي **كل** الملف لأن
+  --    SQL Editor يلفّه في معاملة واحدة (وقع فعلًا مع فهرس trigram).
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    raise notice 'ℹ️ دلو النشر supabase_realtime غير موجود — تم تخطّي Realtime (لا تأثير على الأمان)';
+    return;
+  end if;
   foreach t in array tables loop
     if not exists (
       select 1 from pg_publication_tables
@@ -315,7 +371,11 @@ begin
         and schemaname = 'public'
         and tablename = t
     ) then
-      execute format('alter publication supabase_realtime add table public.%I', t);
+      begin
+        execute format('alter publication supabase_realtime add table public.%I', t);
+      exception when others then
+        raise notice 'ℹ️ تعذّر إضافة % إلى supabase_realtime (%) — تُخطّيت', t, sqlerrm;
+      end;
     end if;
   end loop;
 end $$;

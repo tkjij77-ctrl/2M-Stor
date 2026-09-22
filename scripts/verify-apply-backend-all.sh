@@ -12,6 +12,12 @@
 #     4) تقريره النهائي يطبع أحكامًا ✅ (لا صفوف غامضة)
 #     5) ثابت idempotency في الملف نفسه + تشغيله مرتين بلا خطأ
 #
+#  🔴 عطل إنتاجي أُضيف كسيناريو دائم (22 سبتمبر 2026):
+#     على قاعدتك الحيّة pg_trgm منصَّبة في public (لا في extensions كما افترضنا)
+#     ⇒ `create index … (name extensions.gin_trgm_ops)` فشل بـ42704 وأسقط الملف كله،
+#     ولأن SQL Editor يلفّ الملف في معاملة واحدة **تراجعت كل الإصلاحات**.
+#     صار القسم 【7】 يعيد تمثيل هذا الترتيب بالضبط ويتأكد أن الملف ينجح ويُصلح الأمان.
+#
 #  ⚠️ أول تشغيل لهذا الملف كشف **ثلاثة عيوب حقيقية** أُصلحت:
 #     • ملف الترحيلات لم يكن idempotent (فشل «policy already exists») — وهو ما
 #       يناقض وعدنا للمستخدم «أعد التشغيل بلا خوف»
@@ -24,12 +30,13 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 DB="t_apply_$$"
+DB2="t_apply_pub_$$"      # السيناريو (ب): pg_trgm في public — نفس ترتيب قاعدتك الحيّة
 PSQL_SU="sudo -n -u postgres psql"
 FILE="scripts/apply-backend-all.sql"
 PASS=0; FAIL=0
 ok()  { echo "  ✅ $1"; PASS=$((PASS+1)); }
 bad() { echo "  ❌ $1${2:+  → $2}"; FAIL=$((FAIL+1)); }
-cleanup() { $PSQL_SU -q -c "drop database if exists $DB" >/dev/null 2>&1; }
+cleanup() { $PSQL_SU -q -c "drop database if exists $DB" >/dev/null 2>&1; $PSQL_SU -q -c "drop database if exists $DB2" >/dev/null 2>&1; }
 trap cleanup EXIT
 Q() { $PSQL_SU -d "$DB" -tAc "$1" 2>&1 | tr -d '\r' | grep -viE '^(begin|set|commit|rollback|do)$' | sed '/^$/d'; }
 
@@ -149,6 +156,34 @@ $PSQL_SU -d "$DB" -v ON_ERROR_STOP=1 -f "$FILE" > /tmp/apply-run2.txt 2>&1
 if [ $? -eq 0 ]; then ok "التشغيل الثاني نجح (المستخدم يعيده بلا خوف)"; else bad "التشغيل الثاني فشل" "$(grep -iE 'error' /tmp/apply-run2.txt | head -2 | tr '\n' ' ')"; fi
 T2=$(Q "select count(*) from pg_tables where schemaname='public' and tablename not like 'spatial%'")
 [ "$T2" = "8" ] && ok "لا ازدواج كائنات بعد الإعادة (8 جداول)" || bad "الجداول صارت $T2"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "【7】 🔴 السيناريو (ب): pg_trgm منصَّبة في public — **نفس ترتيب قاعدتك الحيّة**"
+echo "     (هذا العطل وقع فعلًا: ERROR 42704 operator class \"extensions.gin_trgm_ops\""
+echo "      does not exist ⇒ تراجعت كل الإصلاحات لأن SQL Editor يلفّها في معاملة واحدة)"
+$PSQL_SU -q -c "create database $DB2" >/dev/null 2>&1
+sed 's/create extension if not exists pg_trgm with schema extensions;/create extension if not exists pg_trgm with schema public;/' \
+  scripts/supabase-stub.sql > /tmp/stub_pub.sql
+if grep -q "pg_trgm with schema public" /tmp/stub_pub.sql; then ok "بنينا محاكيًا فيه pg_trgm في public (كما قاعدتك)"; else bad "فشل تحضير المحاكي"; fi
+for f in /tmp/stub_pub.sql supabase/migrations/20260826200407_baseline.sql supabase/migrations/20260827104851_add_invoice_status.sql; do
+  $PSQL_SU -d "$DB2" -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { bad "فشل تحضير $f"; }
+done
+OPC=$($PSQL_SU -d "$DB2" -tAc "select n.nspname from pg_opclass o join pg_namespace n on n.oid=o.opcnamespace where o.opcname='gin_trgm_ops' limit 1" | tr -d ' ')
+[ "$OPC" = "public" ] && ok "الصنف gin_trgm_ops في public (لا في extensions)" || bad "الصنف في «$OPC» — المحاكي غير مطابق"
+$PSQL_SU -d "$DB2" -tAc "create policy leak_probe_read on public.invoices for select using (true);
+   insert into public.invoices(invoice_no, customer_name, total) values (1,'sayed',575)" >/dev/null 2>&1
+# 🎯 الملف يجب أن ينجح رغم أن الامتداد في مخطط آخر — وهذا ما لم يكن يحدث قبل الإصلاح
+$PSQL_SU -d "$DB2" -v ON_ERROR_STOP=1 -f "$FILE" > /tmp/apply-pub.txt 2>&1
+if [ $? -eq 0 ]; then ok "الملف نُفِّذ بلا خطأ رغم أن pg_trgm في public"; else bad "ما زال يفشل" "$(grep -iE 'error' /tmp/apply-pub.txt | head -1)"; fi
+grep -q "فهارس البحث التقريبي جاهزة (الصنف في مخطط public)" /tmp/apply-pub.txt && ok "الملف أدرك المخطط الصحيح وبنى الفهرس به" || bad "لم يُبنِ الفهرس بالمخطط الصحيح"
+IDX=$($PSQL_SU -d "$DB2" -tAc "select count(*) from pg_indexes where schemaname='public' and indexname in ('idx_items_name_trgm','idx_categories_name_trgm')" | tr -d ' ')
+[ "$IDX" = "2" ] && ok "الفهرسان موجودان فعلًا (public)" || bad "عدد الفهارس $IDX بدل 2"
+AFTER2=$($PSQL_SU -d "$DB2" -tAc "begin; set local role anon; select count(*) from public.invoices; commit;" 2>/dev/null | grep -E '^[0-9]+$' | tail -1)
+[ "$AFTER2" = "0" ] && ok "الإصلاح الأمني نُفِّذ مع ذلك (الزائر يقرأ صفر فواتير)" || bad "التسريب باقٍ في هذا السيناريو ($AFTER2)"
+# تحقق من عدم كسر أي شيء آخر في هذا السيناريو
+PUBFN=$($PSQL_SU -d "$DB2" -tAc "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('login_gate','public_settings','next_invoice_no')" | tr -d ' ')
+[ "$PUBFN" = "3" ] && ok "الدوال الجديدة أُنشئت في هذا السيناريو أيضًا" || bad "الدوال الناقصة ($PUBFN/3)"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"

@@ -195,8 +195,17 @@ function parseSql(sql) {
     }
 
     // ── الفهارس ──
-    m = /create (?:unique )?index (?:concurrently )?(?:if not exists )?"?([a-z_][\w]*)"?\s+on\s+(?:only\s+)?(?:public\.|storage\.)?([a-z_][\w]*)/i.exec(st);
-    if (m) { inv.indexes[m[1].toLowerCase()] = m[2].toLowerCase(); keep("index", m[1].toLowerCase()); }
+    // ⚠️ نطابق **كل** مواضع إنشاء الفهرس في العبارة لا أولها فقط، لأن بعض الفهارس
+    //    تُنشأ ديناميكيًا داخل كتلة DO:
+    //      execute format('create index if not exists idx_x on public.items
+    //                      using gin (name %I.gin_trgm_ops)', sch)
+    //    والسبب أن مخطط صنف trigram يختلف بين القواعد (extensions على Supabase
+    //    المعتاد · public على قاعدتنا الحيّة — انظر عطل 42704). بلا هذا التعميم
+    //    يظهر انحراف كاذب: «الفهرس على القاعدة وليس في المستودع».
+    for (const g of st.matchAll(/create (?:unique )?index (?:concurrently )?(?:if not exists )?"?([a-z_][\w]*)"?\s+on\s+(?:only\s+)?(?:public\.|storage\.)?([a-z_][\w]*)/gi)) {
+      inv.indexes[g[1].toLowerCase()] = g[2].toLowerCase();
+      keep("index", g[1].toLowerCase());
+    }
     m = /drop index (?:concurrently )?(?:if exists )?(?:public\.)?"?([a-z_][\w]*)"?/i.exec(st);
     if (m) { delete inv.indexes[m[1].toLowerCase()]; delete inv.raw["index:" + m[1].toLowerCase()]; }
 
