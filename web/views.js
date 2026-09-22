@@ -91,7 +91,32 @@
     function renderAccount(){
         const av=document.getElementById('accountView'); if(!av) return;
         if(!sessionUser){
+            // 🆕 T-A8: الزائر قد يكون أنشأ طلبات محفوظة على جهازه (لا تصل السحابة بلا حساب).
+            // كان يرى «سجّل دخولك» فقط فيظن أن طلبه ضاع — الآن يراها صريحة بحالتها.
+            const guestOrders = invoices.slice().reverse();
+            if (!guestOrders.length) {
             av.innerHTML='<div class="empty-state"><div class="icon">🔒</div>سجّل دخولك لعرض حسابك<br><button class="btn btn-primary" style="margin-top:14px" onclick="showLogin()">🔓 تسجيل الدخول</button></div>';
+            return;
+            }
+            const rows = guestOrders.map(o => {
+                const st = o.status || 'قيد المعالجة';
+                return '<div class="order-card" style="margin-bottom:10px"><div class="oc-head"><b>طلب #' + (o.no ? String(o.no).padStart(4,'0') : o.id) + '</b>' +
+                    '<span class="status ' + statusClass(st) + '">' + esc(st) + '</span>' +
+                    '<span style="background:rgba(245,182,44,.15);color:#8a6100;font-weight:900;font-size:.7rem;padding:3px 8px;border-radius:8px;margin-right:auto">⏳ لم يصل للمحل بعد</span></div>' +
+                    '<div class="oc-items">' + o.items.map(i => esc(i.name) + ' ×' + i.qty).join(' • ') + '</div>' +
+                    '<div class="ct-row" style="margin-top:8px;font-weight:900"><span>' + new Date(o.date).toLocaleDateString('ar-EG') + '</span><span>' + fmt(o.total) + ' ج.م</span></div>' +
+                    (waNumber(settings.phone) ? '<div style="margin-top:8px"><button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices[' + invoices.indexOf(o) + '])">📲 أرسل هذا الطلب للمحل</button></div>' : '') +
+                    '</div>';
+            }).join('');
+            av.innerHTML =
+                '<div class="landing-head" style="margin-bottom:16px"><span class="tag">حسابي</span><h2>أنت تتسوق <span class="accent">كزائر</span></h2>' +
+                '<p style="font-size:.85rem;color:var(--text-muted);font-weight:700">طلباتك محفوظة على هذا الجهاز فقط — لتصل للمحل تلقائيًا ولتتابعها من أي جهاز، أنشئ حسابًا (دقيقة واحدة).</p></div>' +
+                '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+                    '<button class="btn btn-primary" onclick="showRegister()">➕ إنشاء حساب</button>' +
+                    '<button class="btn btn-outline" onclick="showLogin()">🔓 تسجيل الدخول</button>' +
+                    (waNumber(settings.phone) ? '<button class="btn btn-outline" style="color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices[invoices.length-1])">📲 أرسل آخر طلب على واتساب</button>' : '') +
+                '</div>' +
+                '<h3 style="margin:6px 0 10px;font-size:.95rem">📦 طلباتك على هذا الجهاز (' + guestOrders.length + ')</h3>' + rows;
             return;
         }
         const me=cloudProfile || {u:sessionUser, name:sessionUser, role:sessionRole};
