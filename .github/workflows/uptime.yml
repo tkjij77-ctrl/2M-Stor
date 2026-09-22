@@ -68,15 +68,27 @@ jobs:
           [ "$RES" = "200" ] || { echo "::error::الباك اند لا يستجيب للقراءة (HTTP $RES) — المتجر لن يعرض منتجات"; cat /tmp/rpc.json | head -c 300; exit 1; }
           head -c 200 /tmp/rpc.json; echo
 
-      - name: فحص دالة ترقيم الفواتير (حرجة للبيع)
+      - name: فحص المسارات التي يستخدمها الزائر فعلًا (RPC)
         run: |
           set -euo pipefail
-          # next_invoice_no دالة حرجة: لو تعطّلت لا يُحفظ بيع. نتحقق من وجودها
-          # من الكتالوج العام (بلا تنفيذها حتى لا نستهلك أرقامًا).
-          RES=$(curl -sS -o /tmp/root.json -w '%{http_code}' --max-time 20 "$SUPABASE_URL/rest/v1/" \
-            -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON")
-          [ "$RES" = "200" ] || { echo "::error::PostgREST لا يستجيب (HTTP $RES)"; exit 1; }
-          echo "✅ PostgREST يردّ 200 — الواجهة البرمجية حيّة"
+          # ⚠️ درس من أول تشغيل لهذا الـworkflow: كنا نفحص نقطة جذر PostgREST
+          # فتُرجِع 401 فنُبلّغ عن «عطل» غير موجود. الفحص الصحيح = نداء المسارات
+          # الحقيقية بمفتاح anon تمامًا كما يفعل التطبيق:
+          #   1) public_settings() — إعدادات المتجر التي يقرأها كل زائر
+          #   2) login_gate()      — بوابة الدخول (قراءة فقط، لا تكتب شيئًا)
+          post_rpc() {
+            local fn="$1" body="$2"
+            local code
+            code=$(curl -sS -o /tmp/rpc.json -w '%{http_code}' --max-time 20 \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/$fn" \
+              -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON" \
+              -H "Content-Type: application/json" -d "$body")
+            echo "  $fn → HTTP $code · $(head -c 120 /tmp/rpc.json)"
+            [ "$code" = "200" ] || { echo "::error::$fn لا يعمل (HTTP $code) — مسار حيوي للزبائن معطّل"; return 1; }
+          }
+          post_rpc public_settings '{}'
+          post_rpc login_gate '{"p_username":"__uptime_probe__","p_device":"uptime"}'
+          grep -q '"allowed"' /tmp/rpc.json || { echo "::error::login_gate يرد 200 بلا حقل allowed — سلوك غير متوقع"; exit 1; }
 
       - name: الخلاصة
         if: always()
