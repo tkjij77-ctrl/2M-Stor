@@ -73,8 +73,8 @@
                 '</div>' +
                 '<div class="modal-section">💰 الأسعار</div>' +
                 '<div class="form-grid-2">' +
-                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" placeholder="مثال: 50 أو 100 - 150"></div>' +
-                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" placeholder="تلقائي" min="0" step="0.5"></div>' +
+                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" placeholder="مثال: 50 أو 100 - 150" oninput="syncNumericPrice()"></div>' +
+                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" placeholder="تلقائي" min="0" step="0.5" oninput="this.dataset.manual=\'1\'"></div>' +
                 '</div>' +
                 '<div class="modal-section">📦 الكميات</div>' +
                 '<div class="form-grid-2">' +
@@ -122,8 +122,8 @@
                 '</div>' +
                 '<div class="modal-section">💰 الأسعار</div>' +
                 '<div class="form-grid-2">' +
-                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" value="' + esc(item.p) + '"></div>' +
-                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" value="' + itemPrice(item) + '" min="0" step="0.5"></div>' +
+                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" value="' + esc(item.p) + '" oninput="syncNumericPrice()"></div>' +
+                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" value="' + itemPrice(item) + '" min="0" step="0.5" oninput="this.dataset.manual=\'1\'"></div>' +
                 '</div>' +
                 '<div class="modal-section">📦 الكميات</div>' +
                 '<div class="form-grid-2">' +
@@ -507,7 +507,7 @@
         openTrash();
     }
 
-    function restoreLocalTrash(lid) {
+    async function restoreLocalTrash(lid) {
         const arr = trashList();
         const t = arr.find(x => x.lid === lid);
         if (!t) return toast('⚠️ العنصر غير موجود');
@@ -521,7 +521,10 @@
             clone.items = (clone.items || []).filter(it => !alive.has(it.lid) && !(it.cid && alive.has('c' + it.cid)));
             db.push(clone);
             clone.items.forEach(it => queue({ t: it.cid ? 'item-upd' : 'item-ins', lid: it.lid, catLid: clone.lid }));
+            // 🐞 إصلاح (تدقيق المدير 2026-09-22): القسم السحابي المُستعاد لم يكن يُرسَل
+            // أي تعديل له ⇒ يبقى deleted_at عليه ويُمسح محليًا عند أول مزامنة.
             if (!clone.cid) queue({ t: 'cat-ins', lid: clone.lid, so: db.length - 1 });
+            else queue({ t: 'cat-upd', lid: clone.lid });
         } else {
             if (!t.snapshot) return toast('⚠️ لا توجد نسخة محفوظة لهذا الصنف');
             // لا نُكريّر صنفًا ما زال موجودًا
@@ -539,6 +542,13 @@
         toast('✅ تمت استعادة «' + (t.name || '') + '»');
         closeModal();
         renderAll();
+        // 🐞 إصلاح (تدقيق المدير 2026-09-22): كنا نكتفي بالطابور، فأي مزامنة تصل قبل
+        // رفعه ترى العنصر محذوفًا على السحابة فتمسحه من الشاشة (الاستعادة تختفي).
+        // الآن نرفع فورًا ثم نُطابق مع السحابة — فالاستعادة تثبت أمام عين المدير.
+        if (typeof cloudReady === 'function' && cloudReady()) {
+            try { await flushOutbox(); await pullAll(); renderAll(); }
+            catch (e) { /* بلا اتصال: الطابور يحفظ الاستعادة ويرفعها لاحقًا */ }
+        }
     }
 
     function purgeLocalTrash(lid) {

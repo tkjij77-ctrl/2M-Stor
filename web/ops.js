@@ -78,6 +78,17 @@
     }
 
     // ===== SAVE / DELETE ITEM =====
+    // 🔗 إصلاح فخ السعر (تدقيق المدير 2026-09-22): السعر الرقمي للحسابات يتبع
+    // «السعر المعروض» لحظيًا ما لم يكتب المدير الرقم بنفسه (dataset.manual).
+    // قبل الإصلاح: تعديل سعر العميل وحده كان يترك الحساب على الرقم القديم بصمت.
+    function syncNumericPrice() {
+        const pEl = document.getElementById('modal-price'), nEl = document.getElementById('modal-pn');
+        if (!pEl || !nEl) return;
+        if (nEl.dataset && nEl.dataset.manual === '1') return;   // المدير كتب الرقم بنفسه ⇒ لا نتدخل
+        const num = firstNum(pEl.value);
+        if (!isNaN(num)) nEl.value = num;
+    }
+
     function saveItem() {
         let cat = parseInt(document.getElementById('modal-cat').value);
         let n = document.getElementById('modal-name').value.trim();
@@ -88,8 +99,19 @@
         let pnEl = document.getElementById('modal-pn');
         let mnEl = document.getElementById('modal-min');
         if (!n || !p) return toast('يرجى إدخال الاسم والسعر!');
-        let pn = pnEl && pnEl.value !== '' ? parseFloat(pnEl.value) : firstNum(p);
+        // 🐞 إصلاح (تدقيق المدير 2026-09-22): فخ سعر حقيقي كان قائمًا في التعديل.
+        // الحقلان: «السعر (يظهر للعميل)» نص حر (p) و«السعر الرقمي (للحسابات)» رقم (pn).
+        // في الإضافة يكون pn فارغًا فيُشتق تلقائيًا من p — أما في التعديل فكان مُعبّأ
+        // مسبقًا، فلو عدّل المدير سعر العميل فقط بقي الرقم المحسوب قديمًا: العميل يرى
+        // سعرًا والفاتورة تحسب آخر. الآن: ما لم يَلمس المدير الحقل الرقمي بنفسه،
+        // يتبع الحقل الرقمي سعر العميل تلقائيًا (نفس سلوك الإضافة).
+        let pnManual = !!(pnEl && pnEl.dataset && pnEl.dataset.manual === '1');
+        let pn = pnManual ? parseFloat(pnEl.value) : firstNum(p);
         if (isNaN(pn) || pn < 0) pn = firstNum(p);
+        if (pnEl && pnManual && firstNum(p) !== pn) {
+            // اختلاف مقصود يُعلَن للمدير صراحة بدل أن يمرّ صامتًا
+            setTimeout(() => toast('ℹ️ السعر المعروض ' + firstNum(p) + ' ج.م والحساب بـ' + pn + ' ج.م (كما أدخلت رقميًا)', 5000), 400);
+        }
         let mn = mnEl ? (parseInt(mnEl.value) || 0) : 5;
 
         const orig = (editingIdx >= 0 && editingCat >= 0) ? db[editingCat].items[editingIdx] : null;

@@ -180,7 +180,9 @@
         c.cid = data.id; c._ts = data.updated_at;
       } else if (e.t === 'cat-upd') {
         const c = findLocalCat(e.lid); if (!c || !c.cid) return;
-        const { error } = await sb.from('categories').update({ name: c.name }).eq('id', c.cid);
+        // 🐞 إصلاح (تدقيق المدير 2026-09-22): نفس عطل الأصناف — استعادة قسم محذوف
+        // كانت تُبقي deleted_at عليه فيُمسح محليًا عند أول مزامنة.
+        const { error } = await sb.from('categories').update({ name: c.name, deleted_at: null }).eq('id', c.cid);
         if (error) throw error;
       } else if (e.t === 'cat-del') {
         if (!e.cid) return;
@@ -207,7 +209,11 @@
         if (!it.cid) { queue({ t: 'item-ins', lid: it.lid, catLid: e.catLid }); return; }
         const cat = findLocalCat(e.catLid);
         if (it.img && !it.imgUrl) it.imgUrl = await uploadItemImage(it);
-        const { error } = await sb.from('items').update(itemPayload(it, cat)).eq('id', it.cid);
+        // 🐞 إصلاح (تدقيق المدير 2026-09-22): `itemPayload` لا تحمل deleted_at، فكان
+        // تعديل صنف مُستعاد من «سلة المحذوفات» يُبقي deleted_at عليه على السحابة ⇒
+        // المزامنة التالية ترى الصنف محذوفًا فتمسحه محليًا (الاستعادة تنقلب بلا رسالة).
+        // الحل: أي تعديل لصنف موجود محليًا = إحياء صريح له على السحابة.
+        const { error } = await sb.from('items').update({ ...itemPayload(it, cat), deleted_at: null }).eq('id', it.cid);
         if (error) throw error;
       } else if (e.t === 'item-del') {
         if (!e.cid) return;
