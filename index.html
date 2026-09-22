@@ -1728,7 +1728,7 @@
             av.innerHTML='<div class="empty-state"><div class="icon">🔒</div>سجّل دخولك لعرض حسابك<br><button class="btn btn-primary" style="margin-top:14px" onclick="showLogin()">🔓 تسجيل الدخول</button></div>';
             return;
         }
-        const me=currentUser() || cloudProfile || {u:sessionUser, name:sessionUser, role:sessionRole};
+        const me=cloudProfile || {u:sessionUser, name:sessionUser, role:sessionRole};
         const roleNames={admin:'🛡️ مدير', worker:'👷 عامل', customer:'👤 عميل'};
         const myOrders=invoices.filter(o=> (o.user===sessionUser) || (o.email===sessionUser) || (o.customer===sessionUser));
         const favProducts=[]; favs.forEach(k=>{ const [ci,ii]=k.split(':').map(Number); const cat=db[ci]; const it=cat&&cat.items[ii]; if(it) favProducts.push({ci,ii,cat,it}); });
@@ -3870,36 +3870,10 @@
         customer: { stock: false, add: false, edit: false, del: false, cats: false, dash: false, exp: false, invoice: true,  history: false, users: false }
     };
 
-    function hashPass(s) {
-        const str = 'alsayed::' + String(s);
-        let h = 5381;
-        for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
-        return 'h' + (h >>> 0).toString(16) + '.' + str.length;
-    }
-
-    // ===== PBKDF2 (تشفير كلمات المرور المتقدم) =====
-    function b64(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
-    async function pbkdf2(pw, salt) {
-        const enc = new TextEncoder().encode(pw);
-        const key = await crypto.subtle.importKey('raw', enc, 'PBKDF2', false, ['deriveBits']);
-        return b64(await crypto.subtle.deriveBits(
-            { name: 'PBKDF2', salt: new TextEncoder().encode(salt), iterations: 120000, hash: 'SHA-256' },
-            key, 256
-        ));
-    }
-    async function verifyPass(user, pw) {
-        if (user.salt) { try { return (await pbkdf2(pw, user.salt)) === user.p; } catch (e) { return false; } }
-        return user.p === hashPass(pw); // نسخة قديمة — ترقى بعد التحقق
-    }
-    async function upgradeHash(user, pw) {
-        try {
-            if (!window.crypto || !crypto.subtle) return;
-            const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-            user.salt = b64(saltBytes);
-            user.p = await pbkdf2(pw, user.salt);
-            saveUsers();
-        } catch (e) {}
-    }
+    // 🚫 T-A3/F4 (2026-09-22): حُذفت تجزئة djb2 (hashPass) وطبقة PBKDF2 المحلية
+    // (b64/pbkdf2/verifyPass/upgradeHash) بالكامل — كانت تخدم الحسابات المحلية فقط،
+    // وقد أُلغيت الحسابات المحلية (كل الحسابات سحابية عبر Supabase Auth).
+    // ⇒ لم تبقَ في الصفحة أي تجزئة ضعيفة، ولا مسار محلي للتحقق من كلمة المرور.
 
     // ===== LOGIN LOCK =====
     // 🔒 F2 (2026-09-21): القفل صار **على السيرفر** (login_gate · login_fail ·
@@ -3962,19 +3936,13 @@
         if (m > 0) return { block: true, message: '🔒 قفل محلي (بلا اتصال) — حاول بعد ' + m + ' دقيقة', left: 0, online: false };
         return { block: false, left: null, online: false };
     }
-    let users = JSON.parse(localStorage.getItem('al_sayed_users') || 'null');
-    if (!Array.isArray(users)) users = [];
-    // 🔒 T0.5 (2026-09-21): أُلغيت الحسابات الافتراضية بكلمات مرور معروفة (admin/admin · Amel/Amel).
-    // الأجهزة التي عليها حسابات محلية بالفعل تستمر كما هي بلا أي تغيير.
-    // الأجهزة الجديدة: المدير يُنشئ أول حساب محلي بكلمة مرور يختارها هو (شاشة «تهيئة أول مرة»).
-    function saveUsers() { localStorage.setItem('al_sayed_users', JSON.stringify(users)); }
-
-    // 🚫 T-A3 (2026-09-22): حُذف إنشاء الحساب المحلي بالكامل — الحسابات سحابية فقط.
+    // 🚫 T-A3 (2026-09-22): لا مصفوفة مستخدمين محلية إطلاقًا — الحسابات سحابية فقط.
+    // كان هنا: users[] + saveUsers() + currentUser() + seed محلية بكلمات مرور معروفة
+    // + دوال الإضافة/الحذف/تصفير كلمة المرور المحلية — أُلغيت كلها (F4).
     let sessionUser = localStorage.getItem('al_sayed_session_user') || '';
     let sessionRole = '';
     let lastActivity = Date.now();
 
-    function currentUser() { return users.find(u => u.u === sessionUser) || null; }
     // ── صلاحيات قابلة للتعديل من المدير (تخزين محلي + مزامنة سحابية) ──
     let customPerms = JSON.parse(localStorage.getItem('al_sayed_role_perms') || 'null');
     if (!customPerms || typeof customPerms !== 'object') customPerms = {};
@@ -4060,7 +4028,7 @@
         const p = perms();
         const icons = { admin: '🛡️', worker: '👷', customer: '👤' };
         const roleLabels = { admin: 'مدير النظام', worker: 'عامل', customer: 'عميل' };
-        const me = (cloudReady() && cloudProfile) ? cloudProfile : currentUser();
+        const me = (cloudReady() && cloudProfile) ? cloudProfile : {u:sessionUser, name:sessionUser, role:sessionRole};
         const signedIn = !!(sessionUser || cloudProfile);
         const chip = document.getElementById('roleChip');
         if (chip) {
@@ -4136,70 +4104,15 @@
     }
     function openUsersModal() {
         if (!can('users')) return;
-        if (cloudReady()) { renderCloudUsers(); return; }
-        renderUsersModal();
-    }
-    function renderUsersModal() {
-        const body = document.getElementById('modalBody');
-        const roleName = { admin: '🛡️ مدير', worker: '👷 عامل', customer: '👤 عميل' };
-        let rows = users.map((u, i) => {
-            const delBtn = (u.u !== 'admin' && u.u !== sessionUser)
-                ? '<button class="btn btn-danger" style="padding:5px 10px;font-size:0.72rem" onclick="deleteUser(' + i + ')">حذف</button>' : '';
-            return '<div class="user-row">' +
-                '<div><div class="user-name">' + esc(u.name || u.u) + '</div><div class="user-meta">@' + esc(u.u) + ' · ' + roleName[u.role] + '</div></div>' +
-                '<div style="display:flex;gap:6px;align-items:center">' +
-                    '<button class="btn btn-outline" style="padding:5px 10px;font-size:0.72rem" onclick="resetUserPass(' + i + ')">🔑 كلمة مرور</button>' +
-                    delBtn +
-                '</div></div>';
-        }).join('');
-        body.innerHTML =
-            '<h2>👥 إدارة <span class="accent">الحسابات</span> (' + users.length + ')</h2>' +
-            '<div class="user-list">' + rows + '</div>' +
-            '<div class="form-group" style="margin-top:16px"><label>➕ إضافة حساب جديد</label>' +
-                '<input type="text" id="nu-name" placeholder="الاسم" style="margin-bottom:8px">' +
-                '<input type="text" id="nu-user" placeholder="اسم المستخدم (بيُدخل بيه)" style="margin-bottom:8px;direction:ltr;text-align:left">' +
-                '<input type="text" id="nu-pass" placeholder="كلمة المرور" style="margin-bottom:8px;direction:ltr;text-align:left">' +
-                '<select id="nu-role" style="margin-bottom:10px"><option value="customer">👤 عميل</option><option value="worker">👷 عامل</option></select>' +
-                '<button class="btn btn-primary" style="width:100%" onclick="addUser()">إضافة الحساب</button>' +
-            '</div>' +
-            '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>';
-        document.getElementById('modal').style.display = 'flex';
-    }
-    function addUser() {
-        const name = document.getElementById('nu-name').value.trim();
-        const un = document.getElementById('nu-user').value.trim();
-        const pass = document.getElementById('nu-pass').value;
-        const role = document.getElementById('nu-role').value;
-        if (name.length < 2 || un.length < 2) return toast('اكتب الاسم واسم المستخدم');
-        if (pass.length < 4) return toast('كلمة المرور 4 أحرف على الأقل');
-        if (users.some(x => x.u.toLowerCase() === un.toLowerCase())) return toast('اسم المستخدم موجود بالفعل');
-        users.push({ u: un, p: hashPass(pass), role: role, name: name });
-        saveUsers();
-        toast('✅ تم إضافة حساب ' + name);
-        renderUsersModal();
-    }
-    function resetUserPass(i) {
-        if (!users[i]) return;
-        const np = prompt('كلمة مرور جديدة لـ ' + users[i].u + ' :');
-        if (np === null) return;
-        if (np.length < 4) return toast('كلمة المرور 4 أحرف على الأقل');
-        users[i].p = hashPass(np);
-        saveUsers();
-        toast('✅ تم تغيير كلمة مرور ' + users[i].u);
-    }
-    function deleteUser(i) {
-        const u = users[i];
-        if (!u || u.u === 'admin' || u.u === sessionUser) return toast('لا يمكن حذف هذا الحساب');
-        if (!confirm('حذف حساب ' + u.u + ' نهائياً؟')) return;
-        users.splice(i, 1);
-        saveUsers();
-        renderUsersModal();
+        // ☁️ T-A3/F4: لا إدارة حسابات محلية — كل الحسابات على Supabase.
+        if (!cloudReady()) return toast('☁️ إدارة الحسابات تحتاج اتصالًا بالإنترنت');
+        renderCloudUsers();
     }
 
     // ===== CHANGE MY PASSWORD (تغيير كلمة المرور) =====
     function openPassModal() {
         const cloud = !!(typeof cloudReady === 'function' && cloudReady() && cloudProfile && sb);
-        if (!cloud && !currentUser()) return toast('سجّل دخولك أولًا');
+        if (!cloud) return toast('☁️ تغيير كلمة المرور متاح للحسابات السحابية — اتصل بالإنترنت أولًا');
         const body = document.getElementById('modalBody');
         body.innerHTML =
             '<h2>🔒 تغيير <span class="accent">كلمة المرور</span></h2>' +
@@ -4241,13 +4154,8 @@
             }
             return;
         }
-        const me = currentUser();
-        if (!me) return toast('سجّل دخولك أولًا');
-        if (hashPass(cur) !== me.p) return toast('❌ كلمة المرور الحالية غير صحيحة');
-        me.p = hashPass(nw);
-        saveUsers();
-        closeModal();
-        toast('✅ تم تغيير كلمة المرور');
+        // 🚫 T-A3/F4: لا مسار محلي — الحسابات سحابية فقط (المسار أعلاه يعالجها).
+        toast('☁️ تغيير كلمة المرور يحتاج اتصالًا بالسحابة');
     }
 
     // ═══════════════════════════════════════════════════════
@@ -5164,7 +5072,8 @@
           usersList = (data || []).map(p => ({ id: p.id, name: p.display_name || p.username, username: p.username, role: p.role, created: p.created_at }));
         } catch (e) {}
       } else {
-        usersList = users.map(u => ({ id: u.u, name: u.name || u.u, username: u.u, role: u.role, created: null }));
+        // 🚫 T-A3: لا قائمة حسابات محلية — القائمة تأتي من السحابة فقط
+        usersList = [];
       }
       const roleNames = { admin: '🛡️ مدير', worker: '👷 عامل', customer: '👤 عميل' };
       const workersN = usersList.filter(u => u.role === 'worker').length;
@@ -5180,11 +5089,11 @@
             ).join('') +
           '</div>' +
         '</div>';
-      const rows = usersList.map(u => {
+      const rows = usersList.length ? usersList.map(u => {
         const isSelf = (cloudReady() && cloudProfile && u.id === cloudProfile.id) || (!cloudReady() && u.username === sessionUser);
         const roleCtl = isSelf
           ? '<span class="staff-role-badge">' + roleNames[u.role] + ' (أنت)</span>'
-          : '<select onchange="' + (cloudReady() ? 'changeUserRole' : 'changeLocalRole') + '(\'' + u.id + '\', this.value)" ' +
+          : '<select onchange="' + 'changeUserRole' + '(\'' + u.id + '\', this.value)" ' +
             'style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-weight:700;font-size:0.8rem">' +
             ['admin', 'worker', 'customer'].map(r => '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleNames[r] + '</option>').join('') +
             '</select>';
@@ -5195,7 +5104,7 @@
           '<div class="staff-info"><div class="staff-name">' + esc(u.name) + '</div><div class="staff-meta">@' + esc(u.username) + (created ? ' · انضم ' + created : '') + '</div></div>' +
           roleCtl +
         '</div>';
-      }).join('');
+      }).join('') : '';
       body.innerHTML =
         '<div class="dash-card"><h3>🔐 الصلاحيات (عدّلها كما يناسب محلك)</h3>' +
           permCardHtml('worker') + permCardHtml('customer') +
@@ -5204,16 +5113,6 @@
           (rows || '<div style="color:var(--text-muted);font-weight:700;font-size:0.85rem;padding:10px">لا توجد حسابات بعد</div>') +
         '</div>';
     }
-    function changeLocalRole(id, role) {
-      const u = users.find(x => x.u === id);
-      if (!u) return;
-      u.role = role;
-      saveUsers();
-      logAction('تغيير دور (محلي)', id + ' → ' + role);
-      toast('✅ تم تغيير الدور');
-      renderStaffPage();
-    }
-
     async function manualSync() {
       if (!cloudReady()) return toast('⚠️ السحابة مش مفعلة');
       toast('🔄 جاري المزامنة...');

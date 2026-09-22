@@ -4,8 +4,11 @@ const { chromium } = require('playwright'); const fs=require('fs'); const log=co
   const p = await (await b.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'})).newPage();
   await p.goto('http://127.0.0.1:8123/index.html',{waitUntil:'domcontentloaded'}); await p.waitForTimeout(6000);
   const email = fs.readFileSync('/tmp/ux_email','utf8').trim();
+  // 🆕 T-A1: الترحيب أولًا — نفتح شاشة الدخول صراحةً ثم نستخدم زر الدخول السحابي
+  await p.evaluate(()=>{ if(!document.getElementById('loginOverlay').classList.contains('show')) showLogin(); });
+  await p.waitForSelector('#cl-email',{state:'visible',timeout:15000});
   await p.fill('#cl-email', email); await p.fill('#cl-pass','Test12345');
-  await p.click('#paneLogin button.btn-primary'); await p.waitForTimeout(7000);
+  await p.click('#btnCloudLogin'); await p.waitForTimeout(7000);
   log('الدور بعد الدخول: ' + await p.evaluate(()=>sessionRole) + ' · الاسم: ' + await p.evaluate(()=>sessionUser));
 
   // ── أ) عناصر القائمة الجانبية للعميل ──
