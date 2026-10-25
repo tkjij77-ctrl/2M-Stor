@@ -427,6 +427,12 @@ function proEnhanceProductDetail(ci, ii) {
 
     // (أ) إصلاح المعرض: صور هذا المنتج فقط — لا صور منتجات أخرى من نفس القسم
     const gallery = card.querySelector('.amz-gallery');
+    if (gallery && !imgs.length) {
+        // منتج بلا صور: نخفي شريط المصغرات بدل عرض صور منتجات أخرى (عطل قديم)
+        const t = gallery.querySelector('.amz-thumbs');
+        if (t) t.style.display = 'none';
+        amzThumbs = [];
+    }
     if (gallery && imgs.length) {
         const main = gallery.querySelector('.amz-main-img');
         if (main) main.innerHTML = '<img src="' + esc(imgs[0]) + '" alt="" id="amzMainImg">';
