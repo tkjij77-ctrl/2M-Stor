@@ -334,6 +334,8 @@
         navigator.serviceWorker.register('sw.js').catch(() => {});
         let updateToastShown = false;
         function showUpdateToast() {
+            // 🏪 2026-10-25: لا نُزعج الزائر بإشعار تحديث أثناء المعاينة المحلية
+            if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname)) return;
             if (updateToastShown) return;
             updateToastShown = true;
             const container = document.getElementById('toastContainer');

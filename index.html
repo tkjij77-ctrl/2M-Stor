@@ -8,10 +8,12 @@
          ملاحظات:
          · 'unsafe-inline' في script-src ضروري لأن الواجهة تستخدم onclick= بكثافة
            (إزالته تحتاج إعادة هيكلة الأحداث — مهمة T5.1)
+         · https://telegram.org مسموح لسكربت Telegram Mini App فقط (SDK رسمي
+           لا يعمل بدونه زر الرجوع/الاهتزاز داخل تيليجرام) — 2026-10-25
          · لا حاجة لـ 'unsafe-eval' — الكود لا يستخدم eval أو new Function (تم التحقق)
          · img-src يسمح بأي https للحفاظ على توافق صور المنتجات القديمة
          · frame-ancestors غير مدعومة في meta (تحتاج رأس HTTP — Cloudflare Pages) -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self';">
     <meta name="description" content="نظام متكامل لإدارة المخزون والفواتير والمبيعات">
     <title>2M-Stor - إدارة المخزون والمبيعات</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,6 +27,9 @@
          الإصدارات (مقارنة البصمة مع المصدر الرسمي مُتحقَّق منها):
            jsQR 1.4.0 · @supabase/supabase-js 2.45.4 · qrcodejs 1.0.0 · Chart.js 4.4.0 -->
     <link rel="preload" as="script" href="vendor/jsqr.min.js">
+    <!-- ✈️ 2026-10-25: SDK الرسمي لتطبيق تيليجرام (Mini App) — خفيف جدًا (≈10 ك.ب)
+         ولا يؤثر على الويب العادي: يعمل فقط داخل تيليجرام. -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <script defer src="vendor/jsqr.min.js"></script>
     <script src="vendor/supabase.min.js"></script>
@@ -1126,6 +1131,8 @@
         .mini-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg-soft);cursor:pointer}
         @media(max-width:900px){.account-grid{grid-template-columns:1fr}.account-nav{position:static;display:flex;overflow:auto;gap:8px}.account-nav button{white-space:nowrap}}
     </style>
+    <!-- 🏪 2026-10-25: أنماط المتجر الاحترافي ولوحة التحكم الجديدة (ملف مستقل) -->
+    <link rel="stylesheet" href="web/pro.css">
 </head>
 <body>
 
@@ -1325,6 +1332,11 @@
 <script src="web/lock.js"></script>
 <script src="web/cloud.js"></script>
 <script src="web/boot.js"></script>
+<!-- 🏪 2026-10-25: وحدات المتجر الاحترافي — تُحمَّل بعد boot لأنها تُغلّف دوال العرض
+     القائمة (renderHome / openProductDetail / addToCart / renderCart) ولا تعتمد على تعديلها. -->
+<script src="web/pro-store.js"></script>
+<script src="web/pro-admin.js"></script>
+<script src="web/pro-checkout.js"></script>
 </script>
 </body>
 </html>

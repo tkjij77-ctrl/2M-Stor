@@ -18,10 +18,11 @@ const ROOT = path.resolve(__dirname, "../..");
 const html = readFileSync(path.join(ROOT, "index.html"), "utf8");
 
 /** ترتيب التحميل الملزم — تغييره يكسر التطبيق (كل ملف يعتمد على ما قبله) */
-const ORDER = ["core", "views", "ui", "ops", "admin", "lock", "cloud", "boot"];
+const ORDER = ["core", "views", "ui", "ops", "admin", "lock", "cloud", "boot",
+  "pro-store", "pro-admin", "pro-checkout"];
 
-/** الملفات التي لا تدخل في هذا الفحص (مكتبات خارجية محلية) */
-const VENDOR = /^vendor\//;
+/** الملفات التي لا تدخل في هذا الفحص (مكتبات محلية أو خارجية مثل SDK تيليجرام) */
+const VENDOR = /^(vendor\/|https?:)/;
 
 function scriptSources(): string[] {
   return [...html.matchAll(/<script\s+src="([^"]+)"><\/script>/g)]

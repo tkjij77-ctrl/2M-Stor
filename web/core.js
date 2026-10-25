@@ -82,7 +82,8 @@
         const fc=document.getElementById('favCountMobile');
         if(fc){ fc.textContent=favs.length; fc.style.display=favs.length?'inline-flex':'none'; }
     }
-    const ORDER_STATUSES=['قيد المعالجة','في الطريق','تم التوصيل','تم رفض الطلب','ملغي'];
+    // 🏪 2026-10-25: أُضيفت حالة «مؤكد» بين الجديد والشحن (دورة حياة أوضح للطلبات الأونلاين)
+    const ORDER_STATUSES=['قيد المعالجة','مؤكد','في الطريق','تم التوصيل','تم رفض الطلب','ملغي'];
     function statusClass(s){
         if(s==='في الطريق') return 'shipping';
         if(s==='تم التوصيل') return 'done';
@@ -119,7 +120,15 @@
             // 📦 T3.3 (2026-09-21): نموذج المخزون — كان البيع ينقص «المعروض» فقط
             // ويترك «إجمالي المخزن» ثابتًا للأبد → الجرد وهمي.
             stockMode: 'both',    // both = خصم المخزن والمعروض · display = المعروض فقط · off = لا خصم
-            oversell: 'warn'      // warn = تنبيه والسماح · block = منع البيع بلا رصيد
+            oversell: 'warn',     // warn = تنبيه والسماح · block = منع البيع بلا رصيد
+            // 🏪 2026-10-25: هوية المتجر الإلكتروني (تُحرَّر من لوحة التحكم ← الإعدادات)
+            open: '1',            // 1 = يستقبل طلبات · 0 = مغلق مؤقتًا (إجازة/جرد)
+            announce: '',         // شريط الإعلان العلوي
+            logo: '',             // شعار المتجر (رابط صورة)
+            brandColor: '',       // لون الهوية (فاضي = اللون الافتراضي)
+            payVodafone: '',      // رقم فودافون كاش
+            payInstapay: '',      // حساب إنستاباي
+            payBank: ''           // بيانات التحويل البنكي
         },
         JSON.parse(localStorage.getItem('al_sayed_settings') || 'null') || {}
     );

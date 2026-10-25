@@ -18,7 +18,8 @@ const path = require("path");
 const acorn = require("acorn");
 
 const ROOT = path.resolve(__dirname, "..");
-const ORDER = ["core", "views", "ui", "ops", "admin", "cloud", "boot"];
+const ORDER = ["core", "views", "ui", "ops", "admin", "lock", "cloud", "boot",
+  "pro-store", "pro-admin", "pro-checkout"];
 
 /** أسماء متاحة دائمًا (بيئة المتصفح + مكتبات محلية + أسماء ES القياسية) */
 const AMBIENT = new Set([

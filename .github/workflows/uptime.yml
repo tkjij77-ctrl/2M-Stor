@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           MISSING=""
-          for f in core views ui ops admin cloud boot; do
+          for f in core views ui ops admin lock cloud boot pro-store pro-admin pro-checkout; do
             C=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/web/$f.js")
             [ "$C" = "200" ] || MISSING="$MISSING $f.js($C)"
           done

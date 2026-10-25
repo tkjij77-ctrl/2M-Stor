@@ -1,5 +1,5 @@
 // Service Worker — 2M-Stor v34 (مكتبات محلية + CSP + كود التطبيق مفكوك في web/)
-const CACHE = 'al-sayed-v34';   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
+const CACHE = 'al-sayed-v35';   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
 const URLS = [
   'index.html',
   'manifest.json',
@@ -19,7 +19,12 @@ const URLS = [
   'web/admin.js',
   'web/lock.js',
   'web/cloud.js',
-  'web/boot.js'
+  'web/boot.js',
+  // 🏪 2026-10-25: وحدات المتجر الاحترافي (لوحة التحكم · الواجهة · الدفع)
+  'web/pro.css',
+  'web/pro-store.js',
+  'web/pro-admin.js',
+  'web/pro-checkout.js'
 ];
 
 self.addEventListener('install', e => {

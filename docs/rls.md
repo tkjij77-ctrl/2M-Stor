@@ -8,17 +8,17 @@
 
 | البند | العدد | المصدر |
 |---|---|---|
-| جداول في `public` | **9** | الترحيلات كلها (7 أساس + `login_attempts` + `client_errors`) |
-| سياسات RLS | **26** | الترحيلات كلها بالترتيب (منها 3 لـ`client_errors`) |
-| دوال | 28 | منها 4 مساعدة أمنية · 4 دوال قفل دخول · `public_settings` للزائر · `client_errors_purge` |
-| مشغّلات (Triggers) | 8 | منها حارس تصعيد الدور |
-| فهارس | 16 | منها فهرسان نصيان عربيان · 3 لجدول محاولات الدخول · فهرس زمني لأخطاء المستخدمين |
+| جداول في `public` | **11** | الترحيلات كلها (7 أساس + `login_attempts` + `client_errors` + `banners` + `order_chat_links`) |
+| سياسات RLS | **28** | الترحيلات كلها بالترتيب (منها 3 لـ`client_errors` و2 لـ`banners`) |
+| دوال | 30 | منها 4 مساعدة أمنية · 4 دوال قفل دخول · `public_settings` للزائر · `client_errors_purge` · `place_store_order` · `get_order_by_token` |
+| مشغّلات (Triggers) | 9 | منها حارس تصعيد الدور · `trg_banners_touch` |
+| فهارس | 20 | منها فهرسان نصيان عربيان · 3 لجدول محاولات الدخول · فهرس زمني لأخطاء المستخدمين · 4 لطلبات الأونلاين والبنرات |
 
 > **الأرقام في هذا الجدول مُفحوصة آليًا صفًّا صفًّا** (`verify-schema-drift.js --repo`): لا يكفي
 > أن يظهر الرقم في الملف، بل يجب أن يكون في الصف الصحيح — وهذا ما كشف تأخّر الملف عن
 > إضافة `login_attempts`.
 
-**الجداول التسعة:** `profiles` · `categories` · `items` · `invoices` · `invoice_items` · `settings` · `audit_log` · `login_attempts` · `client_errors`
+**الجداول الأحد عشر:** `profiles` · `categories` · `items` · `invoices` · `invoice_items` · `settings` · `audit_log` · `login_attempts` · `client_errors` · `banners` · `order_chat_links`
 — كلها عليها `enable row level security` (يُفحَص آليًا).
 
 ### `login_attempts` — الاستثناء الوحيد: RLS مُفعَّل **وبلا سياسات عن قصد**
@@ -30,6 +30,15 @@
 | لماذا بلا سياسات | سياسة واحدة «للقراءة» تكفي لكشف متى/من حاول الدخول (تسريب معلومات)؛ و«للكتابة» تسمح بتلويث العدّاد وتعطيل القفل نفسه. فالحل: صفر وصول + دالة واحدة محسوبة |
 | ماذا تخزّن | `username_hash = md5(lower(username))` — لا اسم ولا إيميل صريحًا · `device_id` · `ip` · `success` · `at` |
 | الاحتفاظ | تنظيف تلقائي لما تجاوز **30 يومًا** عند كل فحص |
+
+### `order_chat_links` — استثناء ثانٍ: RLS مُفعَّل **وبلا سياسات**
+
+| البند | الحقيقة |
+|---|---|
+| من يقرأه/يكتبه | **لا أحد** من `anon`/`authenticated`: `revoke all on table public.order_chat_links` |
+| كيف يُستخدم | من دالة Edge `telegram-order-bot` بمفتاح `service_role` (يتجاوز RLS) |
+| لماذا بلا سياسات | يربط **محادثة تيليجرام العميل** برمز تتبّع الطلب؛ أي وصول عام = كشف محادثات العملاء |
+| ماذا يخزّن | `order_token` · `chat_id` · `linked_at` — لا اسم ولا هاتف |
 | هل هذا استثناء مقبول آليًا؟ | نعم — لكنه **مُقفل**: الفاحص لا يتجاوز «كل جدول عليه سياسة» إلا لجدول مذكور بالاسم هنا، ويشترط وجود `revoke` فعلًا في الترحيل |
 
 ## السياسات جدولًا جدولًا
@@ -41,14 +50,16 @@
 
 - السياسات المتعلقة بالمستخدمين صارت `for … to authenticated` (لا تُقيَّم للزائر أصلًا)،
 - ما يحتاجه الزائر فعلًا (`categories` · `items` · إعدادات المتجر) يمر عبر
-  **`public_settings()`** (security definer · قائمة بيضاء بـ**15 مفتاحًا**) **وسياسة
+  **`public_settings()`** (security definer · قائمة بيضاء بـ**22 مفتاحًا**) **وسياسة
   `settings_public_read` على الجدول بنفس القائمة** — فلا يُكشف أي مفتاح داخلي، ولا يُمنح
   الزائر تنفيذ `my_role()`.
 
-  المفاتيح الخمسة عشر = **مفاتيح `mergeSettings()` في `index.html` حرفيًا**:
+  المفاتيح الاثنان والعشرون = **مفاتيح `mergeSettings()` في `web/cloud.js` حرفيًا**:
   `store_name` · `address` · `phone` · `footer` · `tax_pct` · `store_desc` · `return_days` ·
   `return_note` · `shipping_fee` · `free_shipping_over` · `coupon_code` · `coupon_pct` ·
-  `stock_mode` · `oversell_policy` · `role_perms`
+  `stock_mode` · `oversell_policy` · `role_perms` ·
+  `store_open` · `announce_text` · `store_logo` · `brand_color` ·
+  `pay_vodafone` · `pay_instapay` · `pay_bank`
   — **مفحوصة آليًا**: يفشل الفاحص إن أضافت الواجهة مفتاحًا ولم يُضَف للقائمة (أو العكس).
 
   > ⚠️ **عطل حقيقي اكتُشف وأُصلح (21 سبتمبر 2026):** القائمة كُتبت أول مرة من الذاكرة

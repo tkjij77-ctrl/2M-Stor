@@ -128,7 +128,10 @@ as $$
      'shipping_fee', 'free_shipping_over',
      'coupon_code', 'coupon_pct',
      'stock_mode', 'oversell_policy',
-     'role_perms'
+     'role_perms',
+     -- 🏪 2026-10-25: مفاتيح المتجر الإلكتروني — أُضيفت في الترحيل 20261025120000_pro_store
+     'store_open', 'announce_text', 'store_logo', 'brand_color',
+     'pay_vodafone', 'pay_instapay', 'pay_bank'
    )
 $$;
 
@@ -153,7 +156,10 @@ create policy "settings_public_read" on public.settings
       'shipping_fee', 'free_shipping_over',
       'coupon_code', 'coupon_pct',
       'stock_mode', 'oversell_policy',
-      'role_perms'
+      'role_perms',
+      -- 🏪 2026-10-25: نفس المفاتيح السبعة الجديدة — متطابقة مع الدالة أعلاه
+      'store_open', 'announce_text', 'store_logo', 'brand_color',
+      'pay_vodafone', 'pay_instapay', 'pay_bank'
     )
   );
 

@@ -168,10 +168,10 @@ describe("المستودع الحقيقي (T3.7)", () => {
     expect(failed).toEqual([]);
   });
 
-  // 🐞 T5.3: صار تسعة جداول بإضافة client_errors (سجل أخطاء متصفحات المستخدمين)
-  it("تسعة جداول وRLS على كلها", () => {
+  // 🐞 T5.3: تسعة جداول بإضافة client_errors · 🏪 2026-10-25: أحد عشر بإضافة banners وorder_chat_links
+  it("أحد عشر جدولًا وRLS على كلها", () => {
     expect(Object.keys(inv.tables).sort()).toEqual(
-      ["audit_log", "categories", "client_errors", "invoice_items", "invoices", "items", "login_attempts", "profiles", "settings"]
+      ["audit_log", "banners", "categories", "client_errors", "invoice_items", "invoices", "items", "login_attempts", "order_chat_links", "profiles", "settings"]
     );
     for (const t of Object.keys(inv.tables)) expect(inv.rls.has(t)).toBe(true);
   });
@@ -179,10 +179,11 @@ describe("المستودع الحقيقي (T3.7)", () => {
   it("كل جدول عليه سياسة إلا login_attempts (استثناء موثَّق عن قصد)", () => {
     const withPolicy = new Set(Object.values(inv.policies).map((p: { table: string }) => p.table));
     const without = Object.keys(inv.tables).filter((t) => !withPolicy.has(t));
-    // الفاحص يقبل هذا الاستثناء فقط لأنه مكتوب في docs/rls.md — لا لأنه مُدرَج في كود
-    expect(without).toEqual(["login_attempts"]);
+    // الفاحص يقبل هذه الاستثناءات فقط لأنها مكتوبة بالاسم في docs/rls.md — لا لأنها مُدرَجة في كود
+    expect(without.sort()).toEqual(["login_attempts", "order_chat_links"]);
     const doc = fs.readFileSync(path.join(ROOT, "docs", "rls.md"), "utf8");
     expect(doc).toContain("login_attempts");
+    expect(doc).toContain("order_chat_links");
     expect(doc.toLowerCase()).toContain("revoke");
   });
 

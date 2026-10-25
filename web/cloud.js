@@ -138,7 +138,12 @@
         display_qs: getQs(it),
         min_alert: getMin(it),
         barcode: it.b || null,
-        image_url: it.imgUrl || null
+        image_url: it.imgUrl || null,
+        // 🏪 2026-10-25: حقول المتجر الاحترافي — تُرسَل فقط إن كانت مُعرَّفة،
+        // فمن لم يُنفّذ ترقية القاعدة بعد لا تنكسر مزامنته (لا عمود = لا مفتاح).
+        description: (it.desc === undefined || it.desc === '') ? undefined : it.desc,
+        old_price: (parseFloat(it.oldP) > 0) ? parseFloat(it.oldP) : undefined,
+        images: (Array.isArray(it.imgs) && it.imgs.length) ? it.imgs : undefined
       };
     }
 
@@ -242,7 +247,19 @@
             subtotal: inv.subtotal || 0, discount: inv.discount || 0,
             tax: inv.tax || 0, total: inv.total, status: inv.status || 'قيد المعالجة',
             // 📦 T3.3: هل خُصم مخزون هذه الفاتورة؟ (يمنع الخصم/الاسترجاع المزدوج بين الأجهزة)
-            stock_applied: inv.stockApplied || null
+            stock_applied: inv.stockApplied || null,
+            // 🏪 2026-10-25: حقول الطلب الأونلاين — تُرسَل فقط إن وُجدت
+            customer_phone: inv.phone || undefined,
+            customer_address: inv.address || undefined,
+            customer_city: inv.city || undefined,
+            customer_area: inv.area || undefined,
+            notes: inv.notes || undefined,
+            payment_method: inv.payment || undefined,
+            payment_status: inv.paymentStatus || undefined,
+            receipt_url: inv.receipt || undefined,
+            order_token: inv.token || undefined,
+            source: inv.source || undefined,
+            fulfillment: inv.fulfillment || undefined
           }).select().single();
           if (!error) {
             inv.cid = data.id;
@@ -447,9 +464,14 @@
         if (rc.deleted_at) continue;
         let lc = localCatByCid(rc.id);
         if (!lc) {
-          db.push({ name: rc.name, lid: genLid(), cid: rc.id, _ts: rc.updated_at, items: [] });
+          db.push({ name: rc.name, lid: genLid(), cid: rc.id, _ts: rc.updated_at,
+                    image: rc.image_url || '', icon: rc.icon || '', items: [] });
         } else if (!pendingHas(lc.lid) && rc.updated_at && (!lc._ts || rc.updated_at > lc._ts)) {
-          lc.name = rc.name; lc._ts = rc.updated_at;
+          lc.name = rc.name;
+          // 🏪 2026-10-25: صورة القسم الدائرية وأيقونته
+          if (rc.image_url !== undefined) lc.image = rc.image_url || '';
+          if (rc.icon !== undefined) lc.icon = rc.icon || '';
+          lc._ts = rc.updated_at;
         }
       }
     }
@@ -471,6 +493,7 @@
           cat.items.push({
             n: ri.name, p: ri.price_text, pn: ri.price_num, q: ri.stock_q, qs: ri.display_qs,
             min: ri.min_alert, b: ri.barcode || '', img: ri.image_url || '', imgUrl: ri.image_url || '',
+            desc: ri.description || '', oldP: ri.old_price || 0, imgs: Array.isArray(ri.images) ? ri.images : [],
             lid: genLid(), cid: ri.id, _ts: ri.updated_at
           });
         } else if (!pendingHas(local.lid) && ri.updated_at && (!local._ts || ri.updated_at > local._ts)) {
@@ -480,6 +503,10 @@
           local.q = ri.stock_q; local.qs = ri.display_qs; local.min = ri.min_alert;
           local.b = ri.barcode || '';
           if (ri.image_url !== undefined) { local.img = ri.image_url || ''; local.imgUrl = ri.image_url || ''; }
+          // 🏪 2026-10-25: الوصف والسعر قبل الخصم ومعرض الصور
+          if (ri.description !== undefined) local.desc = ri.description || '';
+          if (ri.old_price !== undefined) local.oldP = ri.old_price || 0;
+          if (ri.images !== undefined) local.imgs = Array.isArray(ri.images) ? ri.images : [];
           local._ts = ri.updated_at;
         }
       }
@@ -501,6 +528,11 @@
         invoices.push({
           id: ri.id, lid: genLid(), cid: ri.id, no: ri.invoice_no, date: ri.created_at,
           customer: ri.customer_name, user: (ri.profiles && ri.profiles.username) || '—',
+          phone: ri.customer_phone || '', address: ri.customer_address || '',
+          city: ri.customer_city || '', area: ri.customer_area || '', notes: ri.notes || '',
+          payment: ri.payment_method || 'cash', paymentStatus: ri.payment_status || 'unpaid',
+          receipt: ri.receipt_url || '', token: ri.order_token || '',
+          source: ri.source || 'pos', fulfillment: ri.fulfillment || 'delivery',
           items: (ri.invoice_items || []).map(x => ({ name: x.item_name, cat: x.category_name, qty: x.qty, price: x.price })),
           subtotal: ri.subtotal, discount: ri.discount, tax: ri.tax, total: ri.total, status: ri.status || 'قيد المعالجة', updated_at: ri.updated_at || ri.created_at,
           stockApplied: ri.stock_applied || false
@@ -517,7 +549,13 @@
         shipping_fee: 'shipping', free_shipping_over: 'freeShip',
         coupon_code: 'couponCode', coupon_pct: 'couponPct',
         // 📦 T3.3: قواعد المخزون
-        stock_mode: 'stockMode', oversell_policy: 'oversell'
+        stock_mode: 'stockMode', oversell_policy: 'oversell',
+        // 🏪 2026-10-25: هوية المتجر الإلكتروني وبيانات التحويل
+        // ⚠️ أي مفتاح يُضاف هنا يجب أن يُضاف لقائمة public_settings في
+        //    supabase/migrations/20260921050000_rls_anon_access.sql (فحص آلي)
+        store_open: 'open', announce_text: 'announce',
+        store_logo: 'logo', brand_color: 'brandColor',
+        pay_vodafone: 'payVodafone', pay_instapay: 'payInstapay', pay_bank: 'payBank'
       };
       const numeric = { tax_pct: 1, shipping_fee: 1, free_shipping_over: 1, coupon_pct: 1 };
       for (const rs of remote) {
