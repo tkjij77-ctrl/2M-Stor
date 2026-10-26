@@ -49,7 +49,7 @@ async function logInbox(chatId, from, text, kind) {
         title: [from && from.first_name, from && from.last_name].filter(Boolean).join(" ") || null,
         text: String(text || "").slice(0, 300), kind: kind }])
     });
-  } catch (_) { /* التسجيل لا يعطل الرد */ }
+  } catch { /* التسجيل لا يعطل الرد */ }
 }
 
 const isAdmin = async (chatId) => {

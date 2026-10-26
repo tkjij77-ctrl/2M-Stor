@@ -13,7 +13,13 @@ const config = [
     // 🧩 T5.1: كود التطبيق مفكوك في web/*.js — سكربتات كلاسيكية تعمل في النطاق العام
     // (لا import/export، تعتمد على ترتيب التحميل)، فلا تصلح لها قواعد الوحدات.
     // تُفحص نحويًا وتزامنيًا عبر tests/unit/web-split.test.ts + node --check.
-    "web/**"] },
+    "web/**",
+    // ✈️ دوال Edge تعمل على Deno لا على Node: لديها globals خاصة (Deno.serve …)
+    // وقواعد eslint الخاصة بـNode/Next تُنتج أخطاء كاذبة. تُفحص بالتزامن مع الترحيلات.
+    "supabase/functions/**",
+    // 🧪 سكربتات تشخيص/جولة مؤقتة (تبدأ بـ_) كانت تُفشل `npm run lint` في CI
+    // وهي ليست جزءًا من التطبيق ولا تُستدعى من أي مكان.
+    "scripts/_*.js"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 
   // ملفات CommonJS حقًّا (سكربتات Node · next.config.js · service worker):
