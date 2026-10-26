@@ -365,43 +365,20 @@ declare
   v_cfg   public.telegram_config%rowtype;
   v_msg   jsonb;
   v_chat  bigint;
-  v_link  bigint;
   v_prev  text;
 begin
-  select * into v_cfg from public.telegram_config where id = 1;
-  if not found or coalesce(btrim(v_cfg.bot_token), '') = '' then
-    return new;   -- البوت غير مهيّأ — لا شيء نفعله
-  end if;
-
-  -- ── طلب جديد ──
-  if tg_op = 'INSERT' then
-    if not v_cfg.notify_admin then return new; end if;
-    if coalesce(new.source, '') = 'pos' and not v_cfg.notify_pos then return new; end if;
-
-    v_msg := public.tg_invoice_message(new.id, 'new', null);
-    if coalesce((v_msg->>'ok')::boolean, false) then
-      for v_chat in select chat_id from public.telegram_admins loop
-        perform public.tg_api('sendMessage', jsonb_build_object(
-          'chat_id', v_chat,
-          'parse_mode', 'HTML',
-          'text', v_msg->>'text',
-          'reply_markup', v_msg->'keyboard',
-          'disable_web_page_preview', true
-        ));
-      end loop;
+  -- ⚠️ الإشعار «تحسين» لا «شرط»: أي عطب في تيليجرام لا يُفشل إنشاء الطلب إطلاقًا
+  begin
+    select * into v_cfg from public.telegram_config where id = 1;
+    if not found or coalesce(btrim(v_cfg.bot_token), '') = '' then
+      return new;
     end if;
-    return new;
-  end if;
 
-  -- ── تغيّر حالة ──
-  if tg_op = 'UPDATE' then
-    if new.status is not distinct from old.status then return new; end if;
-    if coalesce(new.source, '') = 'pos' and not v_cfg.notify_pos then return new; end if;
+    if tg_op = 'INSERT' then
+      if not v_cfg.notify_admin then return new; end if;
+      if coalesce(new.source, '') = 'pos' and not v_cfg.notify_pos then return new; end if;
 
-    v_prev := old.status;
-
-    if v_cfg.notify_admin then
-      v_msg := public.tg_invoice_message(new.id, 'status', v_prev);
+      v_msg := public.tg_invoice_message(new.id, 'new', null);
       if coalesce((v_msg->>'ok')::boolean, false) then
         for v_chat in select chat_id from public.telegram_admins loop
           perform public.tg_api('sendMessage', jsonb_build_object(
@@ -413,26 +390,48 @@ begin
           ));
         end loop;
       end if;
+      return new;
     end if;
 
-    -- العميل: رسالة مختصرة بلا أرقام داخلية
-    if v_cfg.notify_customer and coalesce(new.order_token, '') <> '' then
-      for v_link in select chat_id from public.order_chat_links where order_token = new.order_token loop
-        perform public.tg_api('sendMessage', jsonb_build_object(
-          'chat_id', v_link,
-          'parse_mode', 'HTML',
-          'text',
-            '🔔 <b>تحديث طلبك #' || coalesce(new.invoice_no::text, '') || '</b>' || E'\n' ||
-            'الحالة الآن: <b>' || public.tg_esc(coalesce(new.status, '')) || '</b>' || E'\n' ||
-            'الإجمالي: ' || public.tg_money(new.total) || ' ج.م' || E'\n\n' ||
-            'شكرًا لتسوّقك معنا 🛍️'
-        ));
-      end loop;
+    if tg_op = 'UPDATE' then
+      if new.status is not distinct from old.status then return new; end if;
+      if coalesce(new.source, '') = 'pos' and not v_cfg.notify_pos then return new; end if;
+
+      v_prev := old.status;
+
+      if v_cfg.notify_admin then
+        v_msg := public.tg_invoice_message(new.id, 'status', v_prev);
+        if coalesce((v_msg->>'ok')::boolean, false) then
+          for v_chat in select chat_id from public.telegram_admins loop
+            perform public.tg_api('sendMessage', jsonb_build_object(
+              'chat_id', v_chat,
+              'parse_mode', 'HTML',
+              'text', v_msg->>'text',
+              'reply_markup', v_msg->'keyboard',
+              'disable_web_page_preview', true
+            ));
+          end loop;
+        end if;
+      end if;
+
+      if v_cfg.notify_customer and coalesce(new.order_token, '') <> '' then
+        for v_chat in select chat_id from public.order_chat_links where order_token = new.order_token loop
+          perform public.tg_api('sendMessage', jsonb_build_object(
+            'chat_id', v_chat,
+            'parse_mode', 'HTML',
+            'text',
+              '🔔 <b>تحديث طلبك #' || coalesce(new.invoice_no::text, '') || '</b>' || E'\n' ||
+              'الحالة الآن: <b>' || public.tg_esc(coalesce(new.status, '')) || '</b>' || E'\n' ||
+              'الإجمالي: ' || public.tg_money(new.total) || ' ج.م' || E'\n\n' ||
+              'شكرًا لتسوّقك معنا 🛍️'
+          ));
+        end loop;
+      end if;
+      return new;
     end if;
-
-    return new;
-  end if;
-
+  exception when others then
+    raise warning 'telegram alert skipped: %', sqlerrm;
+  end;
   return new;
 end $$;
 
