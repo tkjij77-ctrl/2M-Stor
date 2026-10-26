@@ -269,6 +269,38 @@ end $$;
 
 revoke all on function public.tg_invoice_message(bigint, text, text) from public;
 
+-- ── 4.ب) معرّف الصنف في سطور الفاتورة ────────────────────────────────────────
+--  🐞 عطب حقيقي (26 أكتوبر): أصناف كثيرة في القاعدة **بنفس الاسم** (مثال: «مزيل عرق
+--  ماركات» موجود مرتين). الإلغاء كان يبحث بالاسم فيرجّع الكمية لصنف آخر!
+--  الحل: نحفظ item_id مع السطر، والمطابقة تبدأ بالمعرّف ثم الاسم كاحتياط.
+alter table public.invoice_items add column if not exists item_id bigint;
+create index if not exists invoice_items_item_id_idx
+  on public.invoice_items (item_id) where item_id is not null;
+comment on column public.invoice_items.item_id is
+  'معرّف الصنف في items — يمنع الخلط بين أصناف متشابهة الاسم عند استرجاع المخزون';
+
+-- ── 4.ج) تعبئة item_id عند إنشاء الطلب ──────────────────────────────────────
+--  نُعدّل place_store_order نصيًا حتى لا نكرّر 200 سطر؛ التعديل مُتَحقَّق منه.
+do $do$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.place_store_order(jsonb)'::regprocedure);
+  if position('invoice_id, item_id, item_name' in v_def) > 0 then return; end if;
+  v_def := replace(v_def,
+    'insert into public.invoice_items (invoice_id, item_name, category_name, qty, price)',
+    'insert into public.invoice_items (invoice_id, item_id, item_name, category_name, qty, price)');
+  v_def := replace(v_def,
+    $n$select v_invoice_id,
+         (l->>'name'),$n$,
+    $r$select v_invoice_id,
+         (l->>'item_id')::bigint,
+         (l->>'name'),$r$);
+  if position('(l->>''item_id'')::bigint' in v_def) = 0 then
+    raise exception 'تعذّر تعديل place_store_order — النص الأصلي تغيّر';
+  end if;
+  execute v_def;
+end $do$;
+
 -- ── 5) تغيير حالة الطلب مع ضبط المخزون (يُستدعى من البوت) ───────────────────
 create or replace function public.admin_set_order_status(
   p_id     bigint,
@@ -289,9 +321,10 @@ declare
   v_line     record;
   v_item_id  bigint;
   v_moved    int := 0;
+  v_old      text;
 begin
   if p_status not in ('قيد المعالجة', 'مؤكد', 'في الطريق', 'تم التوصيل', 'ملغي', 'تم رفض الطلب') then
-    return jsonb_build_object('ok', false, 'error', 'حالة غير معروفة: ' || coalesce(p_status, ''));
+    return jsonb_build_object('ok', false, 'error', 'حالة غير معروفة');
   end if;
 
   select * into v_inv from public.invoices where id = p_id for update;
@@ -302,18 +335,25 @@ begin
     return jsonb_build_object('ok', true, 'same', true, 'status', v_inv.status);
   end if;
 
+  v_old := v_inv.status;
   select coalesce(max(value), 'both') into v_mode from public.settings where key = 'stock_mode';
-
   v_was_held := coalesce(v_inv.status, '') = any(v_held);
   v_now_held := p_status = any(v_held);
 
-  -- إلغاء/رفض ⇒ إرجاع الكميات | إعادة تنشيط ⇒ خصمها مرة أخرى
+  -- إلغاء/رفض ⇒ إرجاع الكميات
   if v_was_held and not v_now_held and v_inv.stock_applied is not null then
-    for v_line in select item_name, qty from public.invoice_items where invoice_id = v_inv.id loop
-      select i.id into v_item_id
-        from public.items i
-       where i.name = v_line.item_name and i.deleted_at is null
-       order by i.id limit 1;
+    for v_line in select item_id, item_name, qty from public.invoice_items where invoice_id = v_inv.id loop
+      -- 🔑 المعرّف أولًا (يمنع الخلط بين أصناف بنفس الاسم) ثم الاسم كاحتياط للفواتير القديمة
+      v_item_id := null;
+      if v_line.item_id is not null then
+        select i.id into v_item_id from public.items i
+         where i.id = v_line.item_id and i.deleted_at is null;
+      end if;
+      if v_item_id is null then
+        select i.id into v_item_id from public.items i
+         where i.name = v_line.item_name and i.deleted_at is null
+         order by i.id limit 1;
+      end if;
       if v_item_id is not null and coalesce(v_line.qty, 0) > 0 then
         update public.items i
            set display_qs = i.display_qs + v_line.qty,
@@ -322,16 +362,23 @@ begin
          where i.id = v_item_id;
         v_moved := v_moved + 1;
       end if;
-      v_item_id := null;
     end loop;
     v_inv.stock_applied := null;
     v_inv.stock_reverted_at := now();
+
+  -- إعادة تنشيط طلب ملغي ⇒ خصم مرة أخرى
   elsif not v_was_held and v_now_held and v_inv.stock_applied is null and v_mode <> 'off' then
-    for v_line in select item_name, qty from public.invoice_items where invoice_id = v_inv.id loop
-      select i.id into v_item_id
-        from public.items i
-       where i.name = v_line.item_name and i.deleted_at is null
-       order by i.id limit 1;
+    for v_line in select item_id, item_name, qty from public.invoice_items where invoice_id = v_inv.id loop
+      v_item_id := null;
+      if v_line.item_id is not null then
+        select i.id into v_item_id from public.items i
+         where i.id = v_line.item_id and i.deleted_at is null;
+      end if;
+      if v_item_id is null then
+        select i.id into v_item_id from public.items i
+         where i.name = v_line.item_name and i.deleted_at is null
+         order by i.id limit 1;
+      end if;
       if v_item_id is not null and coalesce(v_line.qty, 0) > 0 then
         update public.items i
            set display_qs = greatest(0, i.display_qs - v_line.qty),
@@ -340,32 +387,25 @@ begin
          where i.id = v_item_id;
         v_moved := v_moved + 1;
       end if;
-      v_item_id := null;
     end loop;
     v_inv.stock_applied := v_mode;
   end if;
 
   update public.invoices
-     set status           = p_status,
-         updated_at       = now(),
-         stock_applied    = v_inv.stock_applied,
-         stock_reverted_at= v_inv.stock_reverted_at
+     set status            = p_status,
+         updated_at        = now(),
+         stock_applied     = v_inv.stock_applied,
+         stock_reverted_at = v_inv.stock_reverted_at
    where id = v_inv.id;
 
   insert into public.audit_log (user_id, action, details)
   values (null, 'تحديث حالة طلب (تيليجرام)',
-          '#' || coalesce(v_inv.invoice_no::text, '?') || ' · ' ||
-          coalesce(v_inv.status, '—') || ' → ' || p_status ||
+          '#' || coalesce(v_inv.invoice_no::text, '?') || ' · ' || coalesce(v_old, '—') || ' → ' || p_status ||
           case when v_moved > 0 then ' · ' || v_moved || ' صنف تعدّل مخزونه' else '' end ||
           ' · ' || coalesce(p_note, ''));
 
-  return jsonb_build_object(
-    'ok', true,
-    'invoice_no', v_inv.invoice_no,
-    'from', v_inv.status,
-    'status', p_status,
-    'stock_moved', v_moved
-  );
+  return jsonb_build_object('ok', true, 'invoice_no', v_inv.invoice_no,
+                            'from', v_old, 'status', p_status, 'stock_moved', v_moved);
 end $$;
 
 revoke all on function public.admin_set_order_status(bigint, text, text) from public;
