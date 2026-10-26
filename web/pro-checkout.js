@@ -408,6 +408,17 @@ function proCreateLocalOrder(payload, t) {
     return { ok: true, order_no: inv.no, token: token, total: inv.total, local: true, invoice: inv };
 }
 
+// 🤖 متابعة الطلب على تيليجرام — يفتح البوت برمز الطلب فيربطه بمحادثة العميل
+//    (يعمل مع الدالة الخلفية telegram-order-bot: /start o_<token>)
+function proTelegramBotUsername() {
+    const u = (settings && (settings.telegramBot || settings.tgBot)) || 'Stor2M_bot';
+    return String(u).replace(/^@/, '').trim();
+}
+function proTelegramFollowUrl(token) {
+    if (!token) return '';
+    return 'https://t.me/' + proTelegramBotUsername() + '?start=o_' + encodeURIComponent(token);
+}
+
 function proAfterOrderSuccess(res, t, isLocal) {
     // 🏪 2026-10-25: نُسجّل الطلب السحابي محليًا فورًا — بدونه لا يظهر في «طلباتي»
     // على نفس الجهاز حتى المزامنة التالية، ولا يعمل زر التتبّع من الشاشة نفسها.
@@ -468,6 +479,7 @@ function proAfterOrderSuccess(res, t, isLocal) {
             (isLocal ? '<div style="background:#fff7e6;border:1px solid #f5b62c;color:#7a5200;border-radius:12px;padding:11px;font-size:.78rem;font-weight:800;line-height:1.8;margin-bottom:12px">📲 طلبك محفوظ على جهازك — اضغط «إرسال على واتساب» ليصل للمحل فورًا.</div>' : '') +
             '<div style="display:flex;flex-direction:column;gap:9px">' +
                 '<button class="btn btn-primary" style="padding:13px" onclick="proTrackByToken(\'' + esc(token) + '\')">🔍 تتبّع طلبك الآن</button>' +
+                (!isLocal && token ? '<a class="btn" style="padding:13px;background:#229ED9;color:#fff;text-decoration:none;text-align:center" target="_blank" rel="noopener" href="' + proTelegramFollowUrl(token) + '">🔔 تابع طلبك على تيليجرام</a>' : '') +
                 '<button class="btn btn-outline" style="padding:13px" onclick="proCopyTrackLink(\'' + esc(token) + '\')">🔗 نسخ رابط التتبّع</button>' +
                 (wa ? '<a class="btn" style="padding:13px;background:var(--pro-whatsapp);color:#fff;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + wa + '?text=' + waText + '">💬 إرسال الطلب على واتساب</a>' : '') +
                 '<button class="btn btn-ghost" style="padding:13px" onclick="proCloseCheckout();setView(\'shop\')">🏪 متابعة التسوّق</button>' +
@@ -572,6 +584,7 @@ function proRenderTracking(token, data) {
                 '<div>' + (data.fulfillment === 'pickup' ? '🏬 استلام من المحل' : '🚚 توصيل') + ' · ' + proPayLabel(data.payment || 'cod') + '</div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;margin-top:12px">' +
+                (!data.local ? '<a class="btn" style="flex:1;padding:11px;background:#229ED9;color:#fff;text-decoration:none;text-align:center" target="_blank" rel="noopener" href="' + proTelegramFollowUrl(token) + '">🔔 تابع على تيليجرام</a>' : '') +
                 (waNumber(settings.phone) ? '<a class="btn" style="flex:1;padding:11px;background:var(--pro-whatsapp);color:#fff;text-decoration:none;text-align:center" target="_blank" rel="noopener" href="https://wa.me/' + waNumber(settings.phone) + '?text=' + encodeURIComponent('استفسار عن الطلب #' + data.order_no) + '">💬 تواصل مع المتجر</a>' : '') +
                 (settings.phone ? '<a class="btn btn-outline" style="flex:1;padding:11px;text-decoration:none;text-align:center" href="tel:' + esc(settings.phone) + '">📞 اتصال</a>' : '') +
             '</div>' +

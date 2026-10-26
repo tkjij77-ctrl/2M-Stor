@@ -353,6 +353,8 @@ function selfCheck() {
   const NO_POLICY_TABLES = {
     login_attempts: "revoke كامل من anon/authenticated + بلا سياسات: لا يُقرأ ولا يُكتب إلا عبر دوال login_gate/login_fail/login_ok",
     order_chat_links: "revoke كامل: يربط محادثة تيليجرام برمز الطلب — تُدار من دالة Edge بمفتاح service_role فقط",
+    telegram_config: "revoke كامل: يحتوي توكن البوت وسرّ الـwebhook — يقرأه المشغّل ودالة Edge بمفتاح service_role فقط",
+    telegram_admins: "revoke كامل: قائمة محادثات مصرّح لها بتغيير حالات الطلبات — لا تُقرأ ولا تُكتب إلا بـservice_role",
   };
   const withPolicy = new Set(Object.values(inv.policies).map((p) => p.table));
   const noPolicy = Object.keys(inv.tables).filter((t) => !withPolicy.has(t) && !NO_POLICY_TABLES[t]);

@@ -1,249 +1,283 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  ✈️  telegram-order-bot — دالة Edge لإشعارات الطلبات الفورية على تيليجرام
+//  ✈️  telegram-order-bot — مستقبِل تحديثات البوت (Webhook)
 //
-//  ماذا تفعل:
-//   1) تُستدعى من قاعدة البيانات (Webhook) عند إنشاء/تغيير حالة أي طلب.
-//   2) ترسل للمدير رسالة فورية فيها كل تفاصيل الطلب + أزرار جاهزة:
-//        ✅ تأكيد   ·   🚚 خرج للتوصيل   ·   📦 تم التسليم   ·   🚫 إلغاء
-//      والضغط على الزر يُحدِّث حالة الطلب في Supabase فورًا (بلا فتح الموقع).
-//   3) ترسل للعميل (إن ربط حسابه بالبوت) تحديث حالة طلبه تلقائيًا.
-//   4) تدعم تتبّع العميل: /start o_<token> ⇒ تُربط محادثته بالطلب.
+//  التقسيم بعد تحديث 2026-10-26:
+//    • إشعارات الطلبات (جديد / تغيّر حالة) صارت **داخل قاعدة البيانات** عبر
+//      pg_net + المشغّل trg_invoices_telegram — لا تحتاج هذه الدالة إطلاقًا.
+//    • هذه الدالة تتولّى فقط ما يأتي **من** تيليجرام:
+//         /start admin_<CODE>   ⇒ ربط محادثة المدير (مرة واحدة) — CODE من telegram_config
+//         /start o_<TOKEN>      ⇒ ربط محادثة العميل بطلبه (تحديثات الحالة تصله)
+//         /id                   ⇒ يعرض معرّف المحادثة (للتشخيص)
+//         /orders               ⇒ آخر 5 طلبات (للمدير فقط)
+//         أزرار ✅ تأكيد / 🚚 خرج للتوصيل / 📦 تم التسليم / 🚫 إلغاء
+//                               ⇒ تنادي admin_set_order_status() التي تضبط المخزون
 //
-//  متطلبات النشر (مرة واحدة):
-//    1) أنشئ بوتًا من @BotFather وخذ التوكن.
-//    2) supabase secrets set TELEGRAM_BOT_TOKEN=...  TELEGRAM_ADMIN_CHAT_ID=...
-//       (اختياري) TELEGRAM_WEBHOOK_SECRET=...  لتأمين نقطة الـ webhook
-//    3) supabase functions deploy telegram-order-bot --no-verify-jwt
-//    4) اضبط الـ webhook:
-//       curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<PROJECT>.supabase.co/functions/v1/telegram-order-bot"
-//    5) في Supabase → Database → Webhooks: أنشئ Webhook على جدول invoices
-//       للأحداث INSERT و UPDATE يرسل POST إلى:
-//       https://<PROJECT>.supabase.co/functions/v1/telegram-order-bot
+//  لماذا بلا مكتبات؟ نسخة 2026-10-26 اتصلت بـ PostgREST مباشرةً عبر fetch،
+//  لأن استيراد supabase-js من CDN كان يُفشل تشغيل الدالة (BOOT_ERROR).
+//  صفر اعتماديات = تشغيل أسرع وأثبت.
 //
-//  ⚠️ لا يحتوي هذا الملف على أي توكن — كله من أسرار Supabase (Secrets).
+//  الأمان: كل طلب يحمل ترويسة X-Telegram-Bot-Api-Secret-Token مطابقة لـ webhook_secret.
+//  لا يوجد أي توكن داخل الملف — كله من جدول telegram_config المحجوب (RLS بلا سياسات).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Deno runtime (Supabase Edge Functions)
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-
-const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
-const ADMIN_CHAT = Deno.env.get("TELEGRAM_ADMIN_CHAT_ID") || "";
-const WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const STATUS_LABEL: Record<string, string> = {
-  "قيد المعالجة": "🆕 جديد",
-  "مؤكد": "✅ مؤكد",
-  "في الطريق": "🚚 في الطريق",
-  "تم التوصيل": "📦 تم التوصيل",
-  "ملغي": "🚫 ملغي",
-  "تم رفض الطلب": "❌ مرفوض"
-};
-const PAY_LABEL: Record<string, string> = {
-  cod: "💵 عند الاستلام", cash: "💵 نقدي",
-  vodafone: "📱 فودافون كاش", instapay: "⚡ إنستاباي", bank: "🏦 تحويل بنكي"
-};
+let cfgCache = null;
 
-const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+function headers(extra) {
+  return Object.assign(
+    {
+      apikey: SERVICE_KEY,
+      Authorization: "Bearer " + SERVICE_KEY,
+      "content-type": "application/json"
+    },
+    extra || {}
+  );
+}
 
-async function tg(method: string, body: Record<string, unknown>) {
-  if (!BOT_TOKEN) return { ok: false, description: "TELEGRAM_BOT_TOKEN غير مضبوط" };
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+async function rest(path, init) {
+  const opts = Object.assign({}, init || {});
+  opts.headers = headers(opts.headers);
+  const res = await fetch(SUPABASE_URL + "/rest/v1/" + path, opts);
+  const txt = await res.text();
+  let data = null;
+  try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
+  return { ok: res.ok, status: res.status, data: data };
+}
+
+async function cfg() {
+  if (cfgCache) return cfgCache;
+  const { data } = await rest("telegram_config?id=eq.1&select=bot_token,bot_username,webhook_secret,admin_claim_code,store_url");
+  cfgCache = (data && data[0]) || { bot_token: null, webhook_secret: null, admin_claim_code: null, store_url: null };
+  return cfgCache;
+}
+
+async function tg(method, body) {
+  const c = await cfg();
+  if (!c.bot_token) return { ok: false, description: "no token" };
+  const res = await fetch("https://api.telegram.org/bot" + c.bot_token + "/" + method, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   });
-  return await res.json();
+  return await res.json().catch(() => ({ ok: false }));
 }
 
-const money = (n: number | string) => (Math.round(Number(n || 0) * 100) / 100).toLocaleString("en-EG");
+const esc = (s) =>
+  String(s === null || s === undefined ? "" : s)
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-function orderKeyboard(invoiceId: number, status: string) {
-  const next: Record<string, { t: string; s: string }> = {
-    "قيد المعالجة": { t: "✅ تأكيد الطلب", s: "مؤكد" },
-    "مؤكد": { t: "🚚 خرج للتوصيل", s: "في الطريق" },
-    "في الطريق": { t: "📦 تم التسليم", s: "تم التوصيل" }
-  };
-  const rows: { text: string; callback_data: string }[][] = [];
-  const n = next[status];
-  if (n) rows.push([{ text: n.t, callback_data: `st:${invoiceId}:${n.s}` }]);
-  if (status !== "ملغي" && status !== "تم التوصيل") {
-    rows.push([{ text: "🚫 إلغاء", callback_data: `st:${invoiceId}:ملغي` }]);
-  }
-  return { inline_keyboard: rows };
+const money = (n) => (Math.round(Number(n || 0) * 100) / 100).toLocaleString("en-EG");
+
+async function isAdmin(chatId) {
+  const { data } = await rest("telegram_admins?chat_id=eq." + chatId + "&select=chat_id&limit=1");
+  return !!(data && data.length);
 }
 
-/** نص إشعار المدير بطلب جديد أو محدَّث */
-function adminOrderText(inv: Record<string, any>, items: Record<string, any>[]) {
-  const lines = (items || [])
-    .map((i) => `  • ${i.item_name} × ${i.qty} = ${money(Number(i.price) * Number(i.qty))} ج`)
-    .join("\n");
-  const src = { web: "🌐 الموقع", telegram: "✈️ تيليجرام", pos: "🧾 الكاشير", whatsapp: "💬 واتساب" }[inv.source as string] || "🌐 الموقع";
-  return [
-    `🛒 <b>طلب جديد #${inv.invoice_no}</b>`,
-    "",
-    `👤 <b>${inv.customer_name}</b>`,
-    inv.customer_phone ? `📞 <code>${inv.customer_phone}</code>` : "",
-    inv.fulfillment === "pickup"
-      ? "🏬 استلام من المحل"
-      : `🚚 ${[inv.customer_city, inv.customer_area].filter(Boolean).join(" · ")}\n📍 ${inv.customer_address || ""}`,
-    inv.notes ? `📝 ${inv.notes}` : "",
-    "",
-    lines,
-    "",
-    `🧮 المجموع: ${money(inv.subtotal)} ج`,
-    Number(inv.discount) > 0 ? `🏷️ الخصم: ${money(inv.discount)} ج` : "",
-    Number(inv.tax) > 0 ? `🧾 الضريبة: ${money(inv.tax)} ج` : "",
-    `🚚 الشحن: ${Number(inv.total) - Number(inv.subtotal) + Number(inv.discount) - Number(inv.tax) > 0 ? money(Number(inv.total) - Number(inv.subtotal) + Number(inv.discount) - Number(inv.tax)) + " ج" : "مجاني"}`,
-    `💰 <b>الإجمالي: ${money(inv.total)} ج.م</b>`,
-    "",
-    `💳 ${PAY_LABEL[inv.payment_method] || inv.payment_method || "—"}`,
-    `📌 الحالة: ${STATUS_LABEL[inv.status] || inv.status}`,
-    `🔗 المصدر: ${src}`
-  ].filter(Boolean).join("\n");
+async function adminCount() {
+  const { data } = await rest("telegram_admins?select=chat_id");
+  return (data && data.length) || 0;
 }
 
-/** إشعار العميل بتغيّر حالة طلبه */
-async function notifyCustomer(inv: Record<string, any>) {
-  if (!inv.order_token) return;
-  const { data: link } = await db
-    .from("order_chat_links")
-    .select("chat_id")
-    .eq("order_token", inv.order_token)
-    .maybeSingle();
-  if (!link || !link.chat_id) return;
-  await tg("sendMessage", {
-    chat_id: link.chat_id,
-    parse_mode: "HTML",
-    text: [
-      `🔔 <b>تحديث طلبك #${inv.invoice_no}</b>`,
-      "",
-      `الحالة الآن: <b>${STATUS_LABEL[inv.status] || inv.status}</b>`,
-      `الإجمالي: ${money(inv.total)} ج.م`,
-      "",
-      "شكرًا لتسوّقك معنا 🛍️"
-    ].join("\n")
-  });
-}
+const json = (body, status) =>
+  new Response(JSON.stringify(body), { status: status || 200, headers: { "content-type": "application/json" } });
 
 Deno.serve(async (req) => {
-  // ── (أ) Webhook من قاعدة البيانات: طلب جديد أو تغيّر حالة ──
-  if (req.method === "POST" && req.headers.get("content-type")?.includes("application/json")) {
-    let body: any = null;
-    try { body = await req.json(); } catch { /* قد يكون تحديثًا من تيليجرام */ }
+  if (req.method !== "POST") return json({ ok: true, service: "telegram-order-bot" });
 
-    // شكل رسائل تيليجرام: { update_id, message | callback_query }
-    if (body && (body.message || body.callback_query)) return await handleTelegramUpdate(body);
+  const c = await cfg();
 
-    // شكل Webhook قاعدة البيانات: { type: 'INSERT'|'UPDATE', record: {...}, old_record: {...} }
-    if (body && body.record && (body.type === "INSERT" || body.type === "UPDATE")) {
-      if (WEBHOOK_SECRET && req.headers.get("x-webhook-secret") !== WEBHOOK_SECRET) {
-        return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), { status: 401 });
-      }
-      const inv = body.record;
-      const prev = body.old_record || null;
-      const isNew = body.type === "INSERT";
-      const statusChanged = prev && prev.status !== inv.status;
-
-      if (!isNew && !statusChanged) {
-        return new Response(JSON.stringify({ ok: true, skipped: "no status change" }), { status: 200 });
-      }
-
-      const { data: items } = await db.from("invoice_items").select("*").eq("invoice_id", inv.id);
-
-      // للمدير: كل طلب جديد + كل تغيّر حالة
-      if (ADMIN_CHAT) {
-        await tg("sendMessage", {
-          chat_id: ADMIN_CHAT,
-          parse_mode: "HTML",
-          text: adminOrderText(inv, items || []),
-          reply_markup: orderKeyboard(inv.id, inv.status)
-        });
-      }
-      // للعميل: عند تغيّر الحالة فقط (لا عند إنشاء الطلب — هو يعرفه)
-      if (!isNew) await notifyCustomer(inv);
-
-      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-
-    return new Response(JSON.stringify({ ok: true, note: "nothing to do" }), { status: 200 });
+  // ── تحقّق من الترويسة السرّية التي يرسلها تيليجرام ──
+  if (c.webhook_secret) {
+    const got = req.headers.get("x-telegram-bot-api-secret-token") || "";
+    if (got !== c.webhook_secret) return json({ ok: false, error: "unauthorized" }, 401);
   }
 
-  return new Response(JSON.stringify({ ok: true, service: "telegram-order-bot" }), { status: 200 });
+  let update = null;
+  try { update = await req.json(); } catch { return json({ ok: true, note: "empty" }); }
+
+  try {
+    if (update.callback_query) await onCallback(update.callback_query);
+    else if (update.message) await onMessage(update.message);
+  } catch (e) {
+    console.error("update error", e);
+  }
+  return json({ ok: true });
 });
 
-// ── (ب) رسائل وأزرار تيليجرام ──
-async function handleTelegramUpdate(update: any) {
-  // زر حالة طلب من لوحة المدير داخل تيليجرام
-  if (update.callback_query) {
-    const cq = update.callback_query;
-    const data: string = cq.data || "";
-    if (data.startsWith("st:")) {
-      const [, idStr, status] = data.split(":");
-      const id = Number(idStr);
-      const allowed = ["مؤكد", "في الطريق", "تم التوصيل", "ملغي"];
-      if (!allowed.includes(status)) {
-        await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "حالة غير صحيحة", show_alert: true });
-        return new Response("ok");
-      }
-      const { error } = await db
-        .from("invoices")
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq("id", id);
-      await tg("answerCallbackQuery", {
-        callback_query_id: cq.id,
-        text: error ? "❌ تعذّر التحديث" : `✅ صار الطلب: ${STATUS_LABEL[status] || status}`
-      });
-      return new Response("ok");
-    }
+// ── أزرار الحالة ────────────────────────────────────────────────────────────
+async function onCallback(cq) {
+  const data = cq.data || "";
+  const chatId = (cq.message && cq.message.chat && cq.message.chat.id) || (cq.from && cq.from.id);
+  const msgId = cq.message && cq.message.message_id;
+
+  if (!data.startsWith("st:")) {
     await tg("answerCallbackQuery", { callback_query_id: cq.id });
-    return new Response("ok");
+    return;
   }
 
-  const msg = update.message;
-  if (!msg || !msg.chat) return new Response("ok");
-  const chatId = msg.chat.id;
-  const text: string = msg.text || "";
+  if (!(await isAdmin(chatId))) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cq.id,
+      text: "⛔ هذه الأزرار للمتجر فقط",
+      show_alert: true
+    });
+    return;
+  }
 
-  // /start o_<token> ⇒ ربط محادثة العميل بطلبه
-  const m = /^\/start\s+o_([A-Za-z0-9]+)/.exec(text);
-  if (m) {
-    const token = m[1];
-    const { data: inv } = await db
-      .from("invoices")
-      .select("invoice_no,status,total,order_token")
-      .eq("order_token", token)
-      .maybeSingle();
+  const parts = data.split(":");
+  const id = Number(parts[1]);
+  const status = parts[2];
+  const allowed = ["مؤكد", "في الطريق", "تم التوصيل", "ملغي"];
+  if (!isFinite(id) || allowed.indexOf(status) === -1) {
+    await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "حالة غير صحيحة", show_alert: true });
+    return;
+  }
+
+  const r = await rest("rpc/admin_set_order_status", {
+    method: "POST",
+    body: JSON.stringify({ p_id: id, p_status: status, p_note: "chat:" + chatId })
+  });
+  const res = r.data || {};
+
+  if (!r.ok || !res.ok) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cq.id,
+      text: "❌ " + (res.error || "تعذّر التحديث"),
+      show_alert: true
+    });
+    return;
+  }
+
+  const label = {
+    "قيد المعالجة": "🆕 جديد",
+    "مؤكد": "✅ مؤكد",
+    "في الطريق": "🚚 في الطريق",
+    "تم التوصيل": "📦 تم التوصيل",
+    "ملغي": "🚫 ملغي",
+    "تم رفض الطلب": "❌ مرفوض"
+  };
+  const extra = res.stock_moved ? " · أُرجع " + res.stock_moved + " صنف للمخزون" : "";
+
+  await tg("answerCallbackQuery", {
+    callback_query_id: cq.id,
+    text: "✅ الطلب #" + res.invoice_no + ": " + (label[status] || status) + extra
+  });
+
+  // نُحدّث الرسالة نفسها حتى لا يبقى زر «تأكيد» على طلب مؤكد
+  if (msgId) {
+    const caption = (cq.message && cq.message.text) || "";
+    const stripped = caption.split("\n🔘")[0];
+    await tg("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      parse_mode: "HTML",
+      text: stripped + "\n\n🔘 الحالة الآن: <b>" + (label[status] || status) + "</b>",
+      reply_markup: { inline_keyboard: [] }
+    }).catch(() => {});
+  }
+}
+
+// ── الرسائل النصية ──────────────────────────────────────────────────────────
+async function onMessage(msg) {
+  const chatId = msg.chat && msg.chat.id;
+  const text = String(msg.text || "").trim();
+  const c = await cfg();
+  let storeUrl = String(c.store_url || "").trim();
+  while (storeUrl.endsWith("/")) storeUrl = storeUrl.slice(0, -1);
+
+  // /start admin_<CODE> ⇒ ربط المدير
+  if (text.startsWith("/start admin_")) {
+    const code = text.slice("/start admin_".length).trim().toUpperCase();
+    if (!c.admin_claim_code || code !== String(c.admin_claim_code).toUpperCase()) {
+      await tg("sendMessage", { chat_id: chatId, text: "❌ كود غير صحيح. اطلب الكود الحالي من صاحب المتجر." });
+      return;
+    }
+    const from = msg.from || {};
+    const up = await rest("telegram_admins?on_conflict=chat_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{
+        chat_id: chatId,
+        title: [from.first_name, from.last_name].filter(Boolean).join(" ") || null,
+        username: from.username || null,
+        added_at: new Date().toISOString()
+      }])
+    });
+    const n = await adminCount();
+    await tg("sendMessage", {
+      chat_id: chatId,
+      parse_mode: "HTML",
+      text: up.ok
+        ? "✅ <b>تم ربط هذه المحادثة كمدير المتجر.</b>\n" +
+          (n > 1 ? "(عدد المدراء الآن: " + n + ")\n" : "") +
+          "سيصلك هنا كل طلب جديد فورًا، مع أزرار لتغيير حالته دون فتح الموقع."
+        : "❌ تعذّر الربط: " + esc(typeof up.data === "string" ? up.data : JSON.stringify(up.data))
+    });
+    return;
+  }
+
+  // /start o_<TOKEN> ⇒ ربط العميل بطلبه
+  if (text.startsWith("/start o_")) {
+    const token = text.slice("/start o_".length).trim();
+    const { data } = await rest("invoices?order_token=eq." + encodeURIComponent(token) + "&select=invoice_no,status,total&limit=1");
+    const inv = data && data[0];
     if (!inv) {
       await tg("sendMessage", { chat_id: chatId, text: "لم أجد طلبًا بهذا الرابط — تأكد من نسخه كاملًا." });
-      return new Response("ok");
+      return;
     }
-    await db.from("order_chat_links").upsert({
-      order_token: token,
-      chat_id: chatId,
-      linked_at: new Date().toISOString()
-    }, { onConflict: "order_token" });
+    await rest("order_chat_links?on_conflict=order_token", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ order_token: token, chat_id: chatId, linked_at: new Date().toISOString() }])
+    });
     await tg("sendMessage", {
       chat_id: chatId,
       parse_mode: "HTML",
-      text: `✅ تم ربط طلبك <b>#${inv.invoice_no}</b> بهذه المحادثة.\nهيرسلك هنا أي تحديث على حالة الطلب، ويمكنك متابعته من زر «تتبّع طلبك» في الموقع.`
+      text: "✅ تم ربط طلبك <b>#" + inv.invoice_no + "</b> بهذه المحادثة.\nهيرسلك هنا أي تحديث على حالة الطلب، ويمكنك متابعته من الموقع."
     });
-    return new Response("ok");
+    return;
   }
 
-  if (/^\/start/.test(text) || /^\/help/.test(text)) {
+  if (text === "/id" || text.startsWith("/id ")) {
+    await tg("sendMessage", { chat_id: chatId, text: "معرّف محادثتك: " + chatId });
+    return;
+  }
+
+  if (text === "/orders" || text.startsWith("/orders ")) {
+    if (!(await isAdmin(chatId))) {
+      await tg("sendMessage", { chat_id: chatId, text: "⛔ هذا الأمر للمتجر فقط." });
+      return;
+    }
+    const { data } = await rest("invoices?select=invoice_no,status,total,created_at&order=created_at.desc&limit=5");
+    const lines = (data || []).map((r) => "#" + r.invoice_no + " · " + esc(r.status) + " · " + money(r.total) + " ج");
     await tg("sendMessage", {
       chat_id: chatId,
       parse_mode: "HTML",
-      text: "أهلًا بك 👋\nللاطلاع على منتجاتنا، افتح المتجر من زر القائمة.\nلمتابعة طلب: استخدم رابط «تتبّع الطلب» الذي وصلك بعد الشراء."
+      text: lines.length ? "<b>آخر 5 طلبات</b>\n" + lines.join("\n") : "لا توجد طلبات بعد."
     });
-    return new Response("ok");
+    return;
+  }
+
+  if (text.startsWith("/start") || text.startsWith("/help")) {
+    const btn = [];
+    if (storeUrl) btn.push([{ text: "🛍️ افتح المتجر", web_app: { url: storeUrl } }]);
+    await tg("sendMessage", {
+      chat_id: chatId,
+      parse_mode: "HTML",
+      text:
+        "أهلًا بك في متجر <b>آل السيد</b> 👋\n\n" +
+        "• للشراء: افتح المتجر من الزر بالأسفل.\n" +
+        "• لمتابعة طلب: استخدم رابط «تتبّع الطلب» الذي يظهر لك بعد الشراء.\n" +
+        "• للمتجر: /orders لآخر الطلبات · /id لمعرفة رقم المحادثة.",
+      reply_markup: btn.length ? { inline_keyboard: btn } : undefined
+    });
+    return;
   }
 
   await tg("sendMessage", {
     chat_id: chatId,
-    text: "استخدم زر «تتبّع طلبك» في صفحة الطلب للربط، أو تواصل مع المتجر مباشرة."
+    text: "استخدم /help للبدء، أو رابط «تتبّع طلبك» من صفحة الطلب لربط المحادثة بطلبك."
   });
-  return new Response("ok");
 }

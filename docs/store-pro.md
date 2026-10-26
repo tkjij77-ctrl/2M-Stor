@@ -92,24 +92,54 @@
 
 ---
 
-## 6) تفعيل بوت تيليجرام (اختياري — يحتاج توكن منك)
+## 6) بوت تيليجرام — مُفعَّل ومُختبَر (26 أكتوبر 2026)
 
-```bash
-# 1) أسرار المشروع
-supabase secrets set TELEGRAM_BOT_TOKEN="123456:ABC..." TELEGRAM_ADMIN_CHAT_ID="123456789"
+القرار المعماري بعد التنفيذ: **الإشعارات تُرسل من قاعدة البيانات نفسها** (امتداد `pg_net`)،
+والدالة الخلفية لا تفعل شيئًا إلا استقبال ما يأتي **من** تيليجرام (أوامر وأزرار).
 
-# 2) نشر الدالة
-supabase functions deploy telegram-order-bot --no-verify-jwt
+| الطبقة | الملف | الوظيفة | الحالة |
+|---|---|---|---|
+| الإرسال | `supabase/migrations/20261026120000_telegram_notify.sql` | مشغّل `trg_invoices_telegram` على `invoices`: كل طلب جديد أو تغيّر حالة ⇒ رسالة لكل مدير مربوط، ورسالة للعميل إن ربط طلبه | ✅ مُطبَّق |
+| الاستقبال | `supabase/functions/telegram-order-bot/index.ts` | `/start admin_CODE` · `/start o_TOKEN` · `/id` · `/orders` · أزرار الحالة | ✅ منشورة (v4) |
+| الحالة | دالة `admin_set_order_status()` | تغيير الحالة من التيليجرام **مع ضبط المخزون** (نفس منطق الواجهة) | ✅ |
 
-# 3) ضبط الـ webhook
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://uzzxhbotbshsgpdnbrmd.supabase.co/functions/v1/telegram-order-bot"
+### الأوامر المتاحة في المحادثة
 
-# 4) في لوحة Supabase → Database → Webhooks:
-#    جدول invoices · الأحداث INSERT و UPDATE · POST إلى نفس الرابط
+| الأمر | لمن | ماذا يفعل |
+|---|---|---|
+| `/start admin_<CODE>` | المدير (مرة واحدة) | يربط المحادثة كمدير — الكود في `telegram_config.admin_claim_code` |
+| `/start o_<TOKEN>` | العميل | يربط محادثته بطلبه فيصله كل تغيّر حالة |
+| `/id` | أي شخص | يعرض `chat_id` (للتشخيص) |
+| `/orders` | المدير | آخر 5 طلبات |
+| أزرار الرسالة | المدير | ✅ تأكيد · 🚚 خرج للتوصيل · 📦 تم التسليم · 🚫 إلغاء |
+
+### الصيانة
+
+```sql
+-- حالة الإعداد (لا يظهر التوكن أبدًا في السجلات)
+select id, bot_username, notify_admin, notify_customer, notify_pos,
+       length(bot_token) as token_len, store_url from public.telegram_config;
+
+-- إيقاف الإشعارات مؤقتًا (بدون حذف البوت)
+update public.telegram_config set notify_admin = false where id = 1;
+
+-- المدراء المربوطون
+select chat_id, title, username, added_at from public.telegram_admins;
+delete from public.telegram_admins where chat_id = <id>;   -- فصل مدير
+
+-- كود ربط جديد (لو ضاع القديم)
+update public.telegram_config set admin_claim_code = upper(substr(md5(random()::text), 1, 8)) where id = 1;
+
+-- سجل آخر الإرسالات ونتيجتها من تيليجرام
+select id, status_code, left(content, 120) from net._http_response order by id desc limit 10;
 ```
 
-بعدها: كل طلب جديد يصلك على تيليجرام مع أزرار **✅ تأكيد · 🚚 شحن · 🚫 إلغاء**
-تعمل بضغطة من داخل المحادثة نفسها.
+**ملاحظات تشغيلية:**
+
+- تأكد أن `Database → Webhooks` **لا** ينشئ إشعارًا موازيًا على `invoices`، وإلا وصلتك رسالتان.
+- رفع طلب من شاشة الكاشير (`source = 'pos'`) لا يُشعر افتراضيًا؛ للتشغيل: `notify_pos = true`.
+- إن أردت إيقاف زر «تابع على تيليجرام» في صفحة الطلب: اترك `bot_token` فارغًا في `telegram_config` (الواجهة تعتمد على وجود توكن صالح).
+- توكن البوت **داخل جدول** `telegram_config` المحجوب (`RLS` بلا سياسات + `revoke`)، ومكتوب فوقه: لا يُوضع في git أبدًا.
 
 ---
 
@@ -135,5 +165,5 @@ node scripts/smoke-ui.mjs                  # فحص الواجهة بمتصفح 
 | التتبّع | الرمز 32 حرفًا عشوائيًا · يُخفى الهاتف جزئيًا (`0100****678`) · لا يكشف أي طلب آخر |
 | الإغراق | حد 8 طلبات/ساعة لنفس الرقم + حد 60 صنفًا و200 قطعة للطلب |
 | الإيصالات | تُرفع إلى Storage ثم يُرسل الرابط فقط |
-| تيليجرام | `order_chat_links` **ممنوع تمامًا** على `anon`/`authenticated` (revoke كامل) |
+| تيليجرام | `order_chat_links` و`telegram_config` و`telegram_admins` **ممنوعة تمامًا** على `anon`/`authenticated` (revoke كامل + RLS بلا سياسات) · الوصول فقط عبر المشغّل والدالة بمفتاح `service_role` |
 | CSP | أُضيف `https://telegram.org` لسكربت الميني-آب فقط |
