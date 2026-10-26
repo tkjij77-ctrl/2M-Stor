@@ -170,9 +170,9 @@ describe("المستودع الحقيقي (T3.7)", () => {
 
   // 🐞 T5.3: تسعة جداول بإضافة client_errors · 🏪 2026-10-25: أحد عشر بإضافة banners وorder_chat_links
   // ✈️ 2026-10-26: ثلاثة عشر بإضافة telegram_config وtelegram_admins (إشعارات البوت)
-  it("ثلاثة عشر جدولًا وRLS على كلها", () => {
+  it("أربعة عشر جدولًا وRLS على كلها", () => {
     expect(Object.keys(inv.tables).sort()).toEqual(
-      ["audit_log", "banners", "categories", "client_errors", "invoice_items", "invoices", "items", "login_attempts", "order_chat_links", "profiles", "settings", "telegram_admins", "telegram_config"]
+      ["audit_log", "banners", "categories", "client_errors", "invoice_items", "invoices", "items", "login_attempts", "order_chat_links", "profiles", "settings", "telegram_admins", "telegram_config", "telegram_inbox"]
     );
     for (const t of Object.keys(inv.tables)) expect(inv.rls.has(t)).toBe(true);
   });
@@ -181,7 +181,7 @@ describe("المستودع الحقيقي (T3.7)", () => {
     const withPolicy = new Set(Object.values(inv.policies).map((p: { table: string }) => p.table));
     const without = Object.keys(inv.tables).filter((t) => !withPolicy.has(t));
     // الفاحص يقبل هذه الاستثناءات فقط لأنها مكتوبة بالاسم في docs/rls.md — لا لأنها مُدرَجة في كود
-    expect(without.sort()).toEqual(["login_attempts", "order_chat_links", "telegram_admins", "telegram_config"]);
+    expect(without.sort()).toEqual(["login_attempts", "order_chat_links", "telegram_admins", "telegram_config", "telegram_inbox"]);
     const doc = fs.readFileSync(path.join(ROOT, "docs", "rls.md"), "utf8");
     expect(doc).toContain("login_attempts");
     expect(doc).toContain("order_chat_links");

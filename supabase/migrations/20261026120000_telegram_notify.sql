@@ -43,6 +43,7 @@ create table if not exists public.telegram_config (
   notify_admin    boolean not null default true,
   notify_customer boolean not null default true,
   notify_pos      boolean not null default false,
+  auto_claim_until timestamptz,          -- نافذة ربط تلقائي لأول محادثة (تُغلق بعد أول ربط)
   updated_at      timestamptz not null default now()
 );
 
@@ -65,6 +66,22 @@ create table if not exists public.telegram_admins (
 
 alter table public.telegram_admins enable row level security;
 revoke all on table public.telegram_admins from anon, authenticated;
+
+-- ── 2.ب) سجل الوارد: كل رسالة/ضغطة تصل البوت (خدمة فقط) ────────────────────
+--  بلا هذا السجل يصبح تشخيص «البوت مش بيرد» تخمينًا؛ به نعرف هل وصل الطلب
+--  إلى الدالة أصلًا، ومن أي محادثة، وماذا أرسل صاحبها.
+create table if not exists public.telegram_inbox (
+  id        bigint generated always as identity primary key,
+  chat_id   bigint,
+  username  text,
+  title     text,
+  text      text,
+  kind      text,
+  at        timestamptz not null default now()
+);
+alter table public.telegram_inbox enable row level security;
+revoke all on table public.telegram_inbox from anon, authenticated;
+create index if not exists telegram_inbox_at_idx on public.telegram_inbox (at desc);
 
 -- ── 3) أدوات مساعدة ─────────────────────────────────────────────────────────
 create or replace function public.tg_esc(p text)
@@ -486,6 +503,13 @@ begin
   end if;
   if not exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'telegram_admins') then
     v_missing := array_append(v_missing, 'telegram_admins');
+  end if;
+  if not exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'telegram_inbox') then
+    v_missing := array_append(v_missing, 'telegram_inbox');
+  end if;
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'telegram_config' and column_name = 'auto_claim_until') then
+    v_missing := array_append(v_missing, 'telegram_config.auto_claim_until');
   end if;
   if not exists (select 1 from pg_trigger where tgname = 'trg_invoices_telegram') then
     v_missing := array_append(v_missing, 'trg_invoices_telegram');

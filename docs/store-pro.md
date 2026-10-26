@@ -108,6 +108,7 @@
 | الأمر | لمن | ماذا يفعل |
 |---|---|---|
 | `/start admin_<CODE>` | المدير (مرة واحدة) | يربط المحادثة كمدير — الكود في `telegram_config.admin_claim_code` |
+| `/start` (بلا كود) | أول محادثة فقط | **ربط تلقائي** ما دام `auto_claim_until` في المستقبل وقائمة المدراء فارغة — ثم يُقفل الباب |
 | `/start o_<TOKEN>` | العميل | يربط محادثته بطلبه فيصله كل تغيّر حالة |
 | `/id` | أي شخص | يعرض `chat_id` (للتشخيص) |
 | `/orders` | المدير | آخر 5 طلبات |
@@ -132,6 +133,13 @@ update public.telegram_config set admin_claim_code = upper(substr(md5(random()::
 
 -- سجل آخر الإرسالات ونتيجتها من تيليجرام
 select id, status_code, left(content, 120) from net._http_response order by id desc limit 10;
+
+-- تشخيص «البوت مش بيرد»: هل وصلت الرسالة للدالة؟ من أي محادثة؟ وماذا كتب صاحبها؟
+select at, chat_id, title, username, kind, left(text, 60) as text
+  from public.telegram_inbox order by at desc limit 20;
+
+-- إعادة فتح نافذة الربط التلقائي (لو احتجت ربط مدير جديد بلا كود)
+update public.telegram_config set auto_claim_until = now() + interval '1 hour' where id = 1;
 ```
 
 **ملاحظات تشغيلية:**

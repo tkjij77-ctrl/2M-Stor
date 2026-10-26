@@ -8,17 +8,17 @@
 
 | البند | العدد | المصدر |
 |---|---|---|
-| جداول في `public` | **13** | الترحيلات كلها (7 أساس + `login_attempts` + `client_errors` + `banners` + `order_chat_links` + `telegram_config` + `telegram_admins`) |
+| جداول في `public` | **14** | الترحيلات كلها (7 أساس + `login_attempts` + `client_errors` + `banners` + `order_chat_links` + `telegram_config` + `telegram_admins` + `telegram_inbox`) |
 | سياسات RLS | **28** | الترحيلات كلها بالترتيب (منها 3 لـ`client_errors` و2 لـ`banners`) |
 | دوال | 38 | منها 4 مساعدة أمنية · 4 دوال قفل دخول · `public_settings` للزائر · `client_errors_purge` · `place_store_order` · `get_order_by_token` · 8 دوال تيليجرام (`tg_*` · `admin_set_order_status`) |
 | مشغّلات (Triggers) | 10 | منها حارس تصعيد الدور · `trg_banners_touch` · `trg_invoices_telegram` |
-| فهارس | 20 | منها فهرسان نصيان عربيان · 3 لجدول محاولات الدخول · فهرس زمني لأخطاء المستخدمين · 4 لطلبات الأونلاين والبنرات |
+| فهارس | 21 | منها فهرسان نصيان عربيان · 3 لجدول محاولات الدخول · فهرس زمني لأخطاء المستخدمين · 4 لطلبات الأونلاين والبنرات |
 
 > **الأرقام في هذا الجدول مُفحوصة آليًا صفًّا صفًّا** (`verify-schema-drift.js --repo`): لا يكفي
 > أن يظهر الرقم في الملف، بل يجب أن يكون في الصف الصحيح — وهذا ما كشف تأخّر الملف عن
 > إضافة `login_attempts`.
 
-**الجداول الثلاثة عشر:** `profiles` · `categories` · `items` · `invoices` · `invoice_items` · `settings` · `audit_log` · `login_attempts` · `client_errors` · `banners` · `order_chat_links` · `telegram_config` · `telegram_admins`
+**الجداول الأربعة عشر:** `profiles` · `categories` · `items` · `invoices` · `invoice_items` · `settings` · `audit_log` · `login_attempts` · `client_errors` · `banners` · `order_chat_links` · `telegram_config` · `telegram_admins` · `telegram_inbox`
 — كلها عليها `enable row level security` (يُفحَص آليًا).
 
 ### `login_attempts` — الاستثناء الوحيد: RLS مُفعَّل **وبلا سياسات عن قصد**
@@ -41,7 +41,7 @@
 | ماذا يخزّن | `order_token` · `chat_id` · `linked_at` — لا اسم ولا هاتف |
 | هل هذا استثناء مقبول آليًا؟ | نعم — لكنه **مُقفل**: الفاحص لا يتجاوز «كل جدول عليه سياسة» إلا لجدول مذكور بالاسم هنا، ويشترط وجود `revoke` فعلًا في الترحيل |
 
-### `telegram_config` و`telegram_admins` — استثناءان ثالث ورابع: RLS مُفعَّل **وبلا سياسات**
+### `telegram_config` و`telegram_admins` و`telegram_inbox` — استثناءات ثالث ورابع وخامس: RLS مُفعَّل **وبلا سياسات**
 
 | البند | الحقيقة |
 |---|---|
