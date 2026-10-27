@@ -1,3 +1,4 @@
+successfully downloaded text file (SHA: 9867b4a4be9c1c8fe86679f354e2aa516812b64e)
 // ═══════════════════════════════════════════════════════════════════════════
 //  🏪 pro-store.js — واجهة المتجر الاحترافية + تثبيت التطبيق + تيليجرام
 //
@@ -276,6 +277,7 @@ function proCatCirclesHtml() {
     if (!db || !db.length) return '';
     const items = db.map((c, i) => {
         const n = (c.items || []).filter(it => getQs(it) > 0).length;
+        if (!n) return ''; /* إخفاء الأقسام الفارغة من متجر الزائر */
         const inner = c.image
             ? '<img src="' + esc(c.image) + '" alt="" loading="lazy">'
             : (c.icon || '📦');
@@ -310,7 +312,7 @@ function proRenderHome() {
     }
     const offers = proOffers(8);
     const best = proBestsellers(8);
-    const newest = proAllItems().slice().sort((a, b) => {
+    const newest = proAllItems().filter(x => getQs(x.it) > 0).slice().sort((a, b) => {
         const ta = a.it._ts || '', tb = b.it._ts || '';
         return tb > ta ? 1 : (tb < ta ? -1 : 0);
     }).slice(0, 8);
