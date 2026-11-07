@@ -123,3 +123,68 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
       - if: steps.gate.outputs.run == 'no'
         run: echo "ℹ️ لا أسرار Supabase — تُخطّيت اختبارات E2E. أضِفها من Settings ← Secrets ← Actions" 
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  🔒 T7.1 (2026-11-07) — بوابة قاعدة البيانات: كانت الفحوصات الحقيقية
+  #  (RLS · دوال المخزون · إسقاطات القراءة SEC-1/SEC-2) تعمل **محليًا فقط**.
+  #  أي تعديل على سياسة أو صلاحية كان يمرّ إلى الإنتاج بلا فحص — وهو أخطر ما
+  #  يمكن أن يحدث لثغرة أُغلقت بالفعل. هذه المهمة تبني النظام من الصفر على
+  #  PostgreSQL 17 حقيقي وتُفشل الـPR عند أي انحدار.
+  # ═══════════════════════════════════════════════════════════════════════════
+  db-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      # نفس الإصدار المُختبَر محليًا (17) — لا نفترض أن سلوك RLS/الدوال واحد على 14
+      - name: تثبيت PostgreSQL 17
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-17 postgresql-client-17
+      - name: تشغيل الخادم
+        run: sudo service postgresql start
+      # pg_net غير متاح خارج Supabase — بلا المحاكي لا يُبنى النظام كاملًا
+      - name: محاكي pg_net (بلا شبكة)
+        run: bash scripts/pg-net-stub.sh
+      - name: بناء النظام من الصفر + RLS + المخزون + SEC-1/SEC-2
+        run: bash scripts/verify-sql-live.sh
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  🔒 T7.2 — بوابة الواجهة في متصفح حقيقي:
+  #   • المتجر لا يطلب جدول items الخام ولا يعرض أرقام مخزون (SEC-1)
+  #   • زر الحفظ يستدعي upsert_item ولا يكتب على الجدول (SEC-2)
+  #   • مسار /admin محمي فعليًا (تحويل لا مجرد وجود middleware)
+  # ═══════════════════════════════════════════════════════════════════════════
+  ui-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: التطبيق الرئيسي — SEC-1 · SEC-2 في متصفح حقيقي
+        run: |
+          python3 -m http.server 8123 --bind 127.0.0.1 >/tmp/static.log 2>&1 &
+          sleep 1
+          node scripts/verify-stock-projection-ui.js
+      - name: بناء Next.js (بلا أسرار — قيم بديلة)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
+      - name: حماية /admin + ترويسات الأمان (خادم إنتاجي حقيقي)
+        run: |
+          npx next start -H 127.0.0.1 -p 3100 >/tmp/next.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:3100/ && break; sleep 1; done
+          APP_URL=http://127.0.0.1:3100 node scripts/verify-next-admin-guard.js
+          # عند الفشل: اطبع سجل الخادم ليظهر السبب في تبويب Actions
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
+      - name: سجل خادم Next عند الفشل
+        if: failure()
+        run: tail -50 /tmp/next.log || true

@@ -20,7 +20,14 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 DB="t_2mstor_$$"   # ⚠️ لا يبدأ برقم (PostgreSQL يرفض ذلك بلا تنصيص)
-PSQL_SU="sudo -n -u postgres psql"
+
+# مكان تشغيل psql كمدير قاعدة:
+#   • محليًا (افتراضي): sudo -u postgres psql  — لا كلمة مرور ولا شبكة
+#   • في CI أو أي قاعدة بعيدة: صدِّر PSQL_SU قبل التشغيل، مثالًا:
+#       PSQL_SU="psql -h 127.0.0.1 -U postgres" PGPASSWORD=postgres bash scripts/verify-sql-live.sh
+#     (على GitHub Actions يعمل الافتراضي بلا تعديل: sudo بلا كلمة مرور)
+#   (كان السكربت يعمل محليًا فقط لأنه يفترض وجود مستخدم postgres المحلي.)
+PSQL_SU="${PSQL_SU:-sudo -u postgres psql}"
 STAFF_UID="11111111-1111-1111-1111-111111111111"
 ADMIN_UID="22222222-2222-2222-2222-222222222222"
 CUST_UID="33333333-3333-3333-3333-333333333333"

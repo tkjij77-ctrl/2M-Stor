@@ -198,6 +198,52 @@ check(
     ", ".join(broken) if broken else f"{len(opened)} نافذة",
 )
 
+# ═══════════════════════════════════════════════════════════════════
+#  T7.1/T7.2 (2026-11-07) — الفحوصات الحقيقية ليست في CI؟ إذًا لا حماية.
+#  الدرس من ثغرتي SEC-1/SEC-2: كانت RLS سليمة والثغرة في صلاحيات الأعمدة،
+#  وكل فحص يكشفها كان يعمل **محليًا فقط**. هذه البوابات تمنع تكرار ذلك.
+# ═══════════════════════════════════════════════════════════════════
+ci_raw = (WF / "ci.yml").read_text(encoding="utf-8") if (WF / "ci.yml").exists() else ""
+
+
+def job_block(name: str) -> str:
+    """يستخرج نص مهمة واحدة من ci.yml (حتى بداية مهمة أخرى)."""
+    m = re.search(rf"^  {re.escape(name)}:\n(.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", ci_raw, re.S | re.M)
+    return m.group(1) if m else ""
+
+
+db_job = job_block("db-verify")
+check("CI: مهمة db-verify موجودة (بوابة قاعدة البيانات)", bool(db_job.strip()), "" if db_job.strip() else "غير موجودة")
+check(
+    "CI: db-verify تثبيت PostgreSQL 17 (نفس الإصدار المُختبَر)",
+    bool(re.search(r"postgresql-17", db_job)),
+    "" if re.search(r"postgresql-17", db_job) else "لا تثبيت لإصدار 17",
+)
+check(
+    "CI: db-verify تُشغّل محاكي pg_net (وإلا لا يُبنى النظام كاملًا)",
+    "pg-net-stub.sh" in db_job,
+    "" if "pg-net-stub.sh" in db_job else "بدون المحاكي يفشل ترحيل الإشعارات",
+)
+check(
+    "CI: db-verify تُشغّل verify-sql-live.sh (RLS · المخزون · SEC-1/SEC-2)",
+    "verify-sql-live.sh" in db_job,
+    "" if "verify-sql-live.sh" in db_job else "الفحص غير مربوط بالـPR",
+)
+
+ui_job = job_block("ui-verify")
+check("CI: مهمة ui-verify موجودة (بوابة الواجهة)", bool(ui_job.strip()), "" if ui_job.strip() else "غير موجودة")
+check(
+    "CI: ui-verify تُشغّل فحص إسقاط المخزون في متصفح حقيقي",
+    "verify-stock-projection-ui.js" in ui_job,
+    "" if "verify-stock-projection-ui.js" in ui_job else "فحص SEC-1/SEC-2 مقطوع",
+)
+check(
+    "CI: ui-verify تُشغّل فحص حماية /admin على خادم إنتاجي",
+    "verify-next-admin-guard.js" in ui_job,
+    "" if "verify-next-admin-guard.js" in ui_job else "حماية اللوحة غير مُختبرة في CI",
+)
+check("سكربت محاكي pg_net موجود في المستودع", (ROOT / "scripts" / "pg-net-stub.sh").exists())
+
 # ── التقرير ──
 print("═══════════════════════════════════════════════════════════════")
 print("  T2.3 — فحص إعدادات الحوكمة (Dependabot · CodeQL · CI)")
