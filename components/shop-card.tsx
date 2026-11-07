@@ -1,5 +1,5 @@
 import type { DbItem } from "@/lib/db/types";
-import { getQs } from "@/lib/db/lid";
+import { getQs, availabilityText } from "@/lib/db/lid";
 import Link from "next/link";
 
 export function ShopCard({ item, onAdd, qtyInCart }: { item: DbItem; onAdd: (qty:number)=>void; qtyInCart: number }) {
@@ -13,7 +13,7 @@ export function ShopCard({ item, onAdd, qtyInCart }: { item: DbItem; onAdd: (qty
       <div className="shop-body">
         <Link href={href} style={{ textDecoration: "none", color: "inherit" }}><div className="shop-name">{item.n}</div></Link>
         <div className="shop-price">{item.p} <span>ج.م</span></div>
-        <div className={`shop-avail ${available ? "ok" : "no"}`}>{available ? `متاح (${qs})` : "غير متوفر"}</div>
+        <div className={`shop-avail ${available ? "ok" : "no"}`}>{availabilityText(qs)}</div>
       </div>
       {qtyInCart > 0 ? (
         <div className="shop-cartbar">

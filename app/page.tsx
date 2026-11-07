@@ -2,7 +2,7 @@
 import { useShop } from "@/lib/hooks/useShop";
 import { AddToCartBar } from "@/components/add-to-cart";
 import Link from "next/link";
-import { getQ, getQs } from "@/lib/db/lid";
+import { getQ, getQs, availabilityText } from "@/lib/db/lid";
 
 export default function ShopPage() {
   const { items, loading } = useShop();
@@ -35,7 +35,7 @@ export default function ShopPage() {
                   </Link>
                   <div className="shop-price">{it.p} <span>ج.م</span></div>
                   <div className={`shop-avail ${available > 0 ? "ok" : "no"}`}>
-                    {available > 0 ? `متاح (${available})` : "غير متوفر"}
+                    {availabilityText(available)}
                   </div>
                 </div>
                 {/* 🛒 T2.5: كان الزر يعدّل حالة محلية داخل هذه الصفحة فقط —

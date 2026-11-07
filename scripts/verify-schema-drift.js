@@ -125,6 +125,7 @@ const clean = (s) => s.replace(/\s+/g, " ").trim();
 function parseSql(sql) {
   const inv = {
     tables: {},      // name -> [أعمدة]
+    views: {},       // name -> نص التعريف (إسقاطات القراءة مثل items_public)
     rls: new Set(),  // جداول عليها RLS
     indexes: {},     // name -> جدول
     policies: {},    // "جدول.اسم" -> { table, command, roles, body }
@@ -133,6 +134,7 @@ function parseSql(sql) {
     publications: new Set(), // جداول داخل supabase_realtime
     buckets: new Set(),
     grants: [],      // نصوص grant/revoke على الدوال
+    tablePrivileges: [], // نصوص grant/revoke على الجداول (SEC-1)
     raw: {},         // "نوع:اسم" -> نص العبارة (لإصدار مسوّدة الترحيل)
   };
   const stmts = splitStatements(sql); // العبارات الأصلية (بلا حذف تعليقات داخل النصوص)
@@ -164,6 +166,17 @@ function parseSql(sql) {
         inv.tables[name] = cols;
         keep("table", name);
       }
+    }
+
+    // ── إسقاطات القراءة (views) ──
+    // 🔒 SEC-1 (2026-11-07): الواجهة العامة تقرأ `items_public` و`items_staff`
+    // بدل جدول `items` الخام (فيه أرقام المخزون). الفاحص كان يعرف الجداول فقط،
+    // فبدا هذان الاسمان «جدولين مفقودين» — وهو إنذار كاذب يُفقد الثقة بالأداة.
+    const vm = /create (?:or replace )?view (?:public\.)?([a-z_][\w]*)/i.exec(st);
+    if (vm) {
+      const name = vm[1].toLowerCase();
+      inv.views[name] = st;
+      keep("view", name);
     }
 
     // ── تعديلات الأعمدة (alter table … add/drop column) ──
@@ -267,6 +280,8 @@ function parseSql(sql) {
 
     // ── الصلاحيات على الدوال ──
     if (/^(grant|revoke)\b/i.test(st) && /function/i.test(st)) inv.grants.push(st);
+    // SEC-1: صلاحيات القراءة على الجداول تُحفظ أيضًا — تُفحص لاحقًا (revoke select on items from anon)
+    if (/^(grant|revoke)\b/i.test(st) && /\bon\s+(?:table\s+)?(?:public\.)?[a-z_][\w]*/i.test(st)) inv.tablePrivileges.push(st);
 
     // ── الدلاء (Storage) ──
     m = /insert into storage\.buckets\s*\([^)]*\)\s*values\s*\(\s*'([a-z_-]+)'/i.exec(st) ||
@@ -446,12 +461,23 @@ function selfCheck() {
     };
     walk(p);
   }
-  const missingTables = [...appTables].filter((t) => !inv.tables[t]);
-  check("كل جدول يقرأه التطبيق موجود في المخطط", missingTables.length === 0, missingTables.join(" · "));
+  // الجدول يُعدّ موجودًا إن كان جدولًا أو إسقاط قراءة (view) — الاثنان يُقرآن من PostgREST
+  const missingTables = [...appTables].filter((t) => !inv.tables[t] && !inv.views[t]);
+  check("كل جدول/إسقاط يقرأه التطبيق موجود في المخطط", missingTables.length === 0, missingTables.join(" · "));
   const missingRpcs = [...appRpcs].filter((f) => !inv.functions[f]);
   check("كل دالة rpc يستدعيها التطبيق موجودة", missingRpcs.length === 0, missingRpcs.join(" · "));
   const missingBuckets = [...appBuckets].filter((b) => !inv.buckets.has(b));
   check("دلو الصور الذي يستخدمه التطبيق مُعرَّف في SQL", missingBuckets.length === 0, missingBuckets.join(" · "));
+
+  // 3-ب) إسقاطات SEC-1 موجودة (الزائر لا يقرأ جدول items الخام)
+  for (const v of ["items_public", "items_staff"]) {
+    check(`إسقاط القراءة ${v} معرَّف في الترحيلات`, !!inv.views[v], "غير موجود");
+  }
+  check(
+    "الزائر لا يملك select على items الخام (SEC-1)",
+    inv.tablePrivileges.some((g) => /revoke\s+select\s+on\s+public\.items\s+from\s+anon/i.test(g)),
+    "لا يوجد revoke select on public.items from anon"
+  );
 
   // 4) Realtime مُغطّى للجداول الحيّة
   const LIVE_TABLES = ["items", "categories", "settings", "invoices"];

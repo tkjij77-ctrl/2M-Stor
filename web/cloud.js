@@ -419,6 +419,21 @@
     }
 
     // ── سحب البيانات من السحابة ودمجها (الأحدث يربح، والمتغيّر محلياً له الأولوية) ──
+    // 🔒 SEC-1: الأرقام التي يراها غير الموظف مشتقّة من *حالة* المخزون لا من جرده.
+    //    'out' ⇒ 0 · 'low' ⇒ العدد الحقيقي (≤3 وهو ما تعرضه الواجهة أصلًا) ·
+    //    'in'  ⇒ سقف واسع: التحقق الحقيقي من الإتاحة يحدث على الخادم
+    //    (place_store_order / decrement_stock)، فلا يُتلاعب به من المتصفح.
+    const GUEST_IN_QTY = 9999;
+    function guestQtyFromState(state, lowQty) {
+      if (state === 'out') return 0;
+      if (state === 'low') return (lowQty === null || lowQty === undefined) ? 3 : lowQty;
+      return GUEST_IN_QTY;
+    }
+    function normalizeItemRow(r) {
+      if (!r || r.stock_state === undefined) return r;   // صف كامل (موظف/قاعدة قديمة)
+      const qs = guestQtyFromState(r.stock_state, r.low_qty);
+      return Object.assign({}, r, { stock_q: qs, display_qs: qs, min_alert: 0 });
+    }
     async function pullAll() {
       if (!cloudReady()) return;
       if (!isOnline()) { setCloudStatus('offline'); return; }
@@ -432,16 +447,33 @@
           invoicesQuery = invoicesQuery.eq('seller_id', cloudProfile.id);
         }
         // admin: يرى الكل (لا فلترة إضافية)
-        const [catsR, itemsR, invsR, setsR] = await Promise.all([
+        // 🔒 SEC-1 (2026-11-07): ممنوع قراءة جدول items الخام من الزائر — فيه
+        //    أرقام المخزون (stock_q/display_qs/min_alert) وكانت تُحمَّل إلى متصفح
+        //    كل زائر ثم تُخفى «في العرض» فقط. الآن:
+        //      • الموظف (عامل/مدير) ⇒ items_staff  (كل الأعمدة)
+        //      • غيره (زائر/عميل)   ⇒ items_public (بيانات المنتج + حالة مُبهمة)
+        //    السقوط إلى items يبقي التوافق مع قاعدة لم يُنفَّذ عليها الترحيل بعد
+        //    (نشر الواجهة قبل الترحيل لا يعطّل المتجر).
+        const staffMode = (typeof isStaff === 'function') && isStaff();
+        const itemsReq = staffMode
+          ? sb.from('items_staff').select('*')
+          : sb.from('items_public').select('*');
+        const [catsR, itemsRaw, invsR, setsR] = await Promise.all([
           sb.from('categories').select('*'),
-          sb.from('items').select('*'),
+          itemsReq,
           invoicesQuery,
           sb.from('settings').select('*')
         ]);
         if (catsR.error) throw catsR.error;
+        // قاعدة قديمة (قبل SEC-1) أو صلاحية ناقصة ⇒ السلوك السابق بدل تعطيل المتجر
+        let itemsR = itemsRaw;
+        if (itemsR.error) {
+          console.warn('[SEC-1] قراءة الإسقاط فشلت — سقوط إلى items:', itemsR.error.message);
+          itemsR = await sb.from('items').select('*');
+        }
         // 🗑️ T3.4: نستبعد المحذوف ناعمًا — وإلا عاد للظهور بعد كل مزامنة
         const aliveCats = (catsR.data || []).filter(r => !r.deleted_at);
-        const aliveItems = (itemsR.data || []).filter(r => !r.deleted_at);
+        const aliveItems = (itemsR.data || []).map(normalizeItemRow).filter(r => !r.deleted_at);
         mergeCats(aliveCats);
         mergeItems(aliveItems);
         mergeInvoices(invsR.data || []);

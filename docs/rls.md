@@ -31,6 +31,23 @@
 | ماذا تخزّن | `username_hash = md5(lower(username))` — لا اسم ولا إيميل صريحًا · `device_id` · `ip` · `success` · `at` |
 | الاحتفاظ | تنظيف تلقائي لما تجاوز **30 يومًا** عند كل فحص |
 
+### إسقاطات القراءة — `items_public` · `items_staff` (SEC-1 · 7 نوفمبر 2026)
+
+| الإسقاط | من يقرأه | ماذا يعطي |
+|---|---|---|
+| `public.items_public` | `anon` + `authenticated` | بيانات المنتج + **حالة** المخزون (`out` · `low` · `in`) و`low_qty` (العدد الحقيقي فقط عندما ≤ 3) — بلا `stock_q`/`display_qs`/`min_alert` |
+| `public.items_staff` | `authenticated` فقط | كل أعمدة `items` — ويفلتر بـ`public.is_staff()` فيرجع **صفر صفوف** للعميل العادي |
+
+**لماذا:** سياسة `items_read` صفّية لا عمودية، وكان `anon` يملك `select` على الجدول كله ⇒
+`GET /rest/v1/items?select=stock_q,display_qs` يقرأ جرد المتجر كاملًا. إخفاء الرقم في الواجهة
+(`availText`) لا يحمي شيئًا: البيانات كانت تُحمَّل إلى متصفح الزائر أصلًا.
+
+**الإغلاق:** `revoke select on public.items from anon` — القراءة العامة تمرّ عبر `items_public`
+حصرًا. التطبيق يختار الإسقاط بحسب الدور (`web/cloud.js` → `pullAll`)، ويسقط إلى `items` تلقائيًا
+إن لم يكن الترحيل منفَّذًا بعد (فلا ينكسر المتجر بترتيب النشر).
+التحقق: `bash scripts/verify-sql-live.sh` — القسم 【10】 يفتح قاعدة حقيقية ويحاول القراءة بصلاحية
+`anon` فعلًا (96/96).
+
 ### `order_chat_links` — استثناء ثانٍ: RLS مُفعَّل **وبلا سياسات**
 
 | البند | الحقيقة |

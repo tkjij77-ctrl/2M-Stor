@@ -1,5 +1,5 @@
-// Service Worker — 2M-Stor v34 (مكتبات محلية + CSP + كود التطبيق مفكوك في web/)
-const CACHE = 'al-sayed-v35';   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
+// Service Worker — 2M-Stor v35 (SEC-1: إسقاط المخزون للزائر + مكتبات محلية + CSP)
+const CACHE = 'al-sayed-v36';   // 🔒 SEC-1 (2026-11-07): رفع الإصدار يوصل الإصلاح للأجهزة   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
 const URLS = [
   'index.html',
   'manifest.json',

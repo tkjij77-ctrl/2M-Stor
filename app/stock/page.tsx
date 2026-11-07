@@ -4,7 +4,7 @@ import { ProductCard } from "@/components/product-card";
 import { useState } from "react";
 
 export default function StockPage(){
-  const { items, loading } = useShop();
+  const { items, loading } = useShop("staff");
   const [q, setQ] = useState("");
   const filtered = items.filter(it => !q || it.n.toLowerCase().includes(q.toLowerCase()));
   return (

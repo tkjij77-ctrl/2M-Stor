@@ -212,10 +212,11 @@ Q "insert into public.items (category_id,name,price_text,price_num,stock_q,displ
    values ($CAT,'صنف ظاهر للزائر','30',30,3,3,1)" >/dev/null
 Q "insert into public.items (category_id,name,price_text,price_num,stock_q,display_qs,min_alert,deleted_at)
    values ($CAT,'صنف محذوف','30',30,3,3,1, now())" >/dev/null
-V=$(as_role anon - "select count(*) from public.items" | tr -d ' ')
-[ "${V:-0}" -ge 1 ] && ok "الزائر يقرأ الأصناف الحيّة ($V) — المتجر يعمل بلا تسجيل" || bad "الزائر لا يقرأ الأصناف" "$V"
-V=$(as_role anon - "select count(*) from public.items where name='صنف محذوف'" | tr -d ' ')
-[ "${V:-1}" = "0" ] && ok "الزائر لا يرى المحذوف ناعمًا (يُستبعد في السياسة)" || bad "الزائر يرى صنفًا محذوفًا!" "$V"
+# 🔒 SEC-1: قراءة الزائر تمرّ عبر items_public (جدول items الخام ممنوع عليه)
+V=$(as_role anon - "select count(*) from public.items_public" | tr -d ' ')
+[ "${V:-0}" -ge 1 ] && ok "الزائر يقرأ الأصناف الحيّة عبر items_public ($V) — المتجر يعمل بلا تسجيل" || bad "الزائر لا يقرأ الأصناف" "$V"
+V=$(as_role anon - "select count(*) from public.items_public where name='صنف محذوف'" | tr -d ' ')
+[ "${V:-1}" = "0" ] && ok "الزائر لا يرى المحذوف ناعمًا (يُستبعد في الإسقاط)" || bad "الزائر يرى صنفًا محذوفًا!" "$V"
 V=$(as_role authenticated "$STAFF_UID" "select count(*) from public.items where name='صنف محذوف'" | tr -d ' ')
 [ "${V:-0}" = "1" ] && ok "العامل يرى المحذوف (لسلة المهملات)" || bad "العامل لا يرى المحذوف" "$V"
 V=$(as_role anon - "select count(*) from public.categories" | tr -d ' ')
@@ -300,6 +301,48 @@ echo "【9】 ملفات فحص جاهزة للقاعدة (T3.6 · T5.4)"
 for f in scripts/clean-test-data.sql scripts/monthly-review.sql scripts/health-check.sql; do
   [ -f "$f" ] && run_sql "$f" "$(basename "$f")" || warn "غير موجود: $f"
 done
+
+echo ""
+echo "【10】 🔒 SEC-1 — أرقام المخزون ليست للزائر (إسقاط items_public · items_staff)"
+# الثغرة: items_read صفّية لا عمودية + select كامل لـanon ⇒ أي زائر يقرأ
+#   GET /rest/v1/items?select=stock_q,display_qs  = جرد المتجر مجانًا.
+# الاختبار هنا يفتح قاعدة حقيقية ويحاول القراءة **بصلاحية anon** فِعلًا.
+Q "insert into public.items (category_id, name, price_text, price_num, stock_q, display_qs, min_alert)
+   values ($CAT, 'صنف متوفر', '50', 50, 40, 40, 5),
+          ($CAT, 'صنف قارب النفاد', '60', 60, 9, 2, 5),
+          ($CAT, 'صنف نافد', '70', 70, 0, 0, 5)" >/dev/null
+
+E=$(as_role anon - "select stock_q from public.items limit 1" | grep -iE 'denied|permission' | head -1)
+[ -n "$E" ] && ok "الزائر لا يقرأ stock_q من الجدول الخام (permission denied)" \
+  || bad "الزائر ما زال يقرأ أرقام المخزون من items!" "$E"
+
+E=$(as_role anon - "select count(*) from public.items" | grep -iE 'denied|permission' | head -1)
+[ -n "$E" ] && ok "حتى select(*) على items مرفوض للزائر" || bad "الزائر يقرأ صفوف items" "$E"
+
+N=$(as_role anon - "select count(*) from public.items_public" | tr -d ' ')
+[ "${N:-0}" -ge 3 ] && ok "الزائر يقرأ items_public فعلًا ($N صنفًا) — المتجر يعمل" || bad "items_public لا تُقرأ للزائر" "$N"
+
+COLS=$(Q "select count(*) from information_schema.columns where table_schema='public' and table_name='items_public'
+           and column_name in ('stock_q','display_qs','min_alert')")
+[ "${COLS:-1}" = "0" ] && ok "items_public بلا أي عمود مخزون رقمي" || bad "items_public يكشف أعمدة مخزون" "$COLS"
+
+ST=$(as_role anon - "select stock_state from public.items_public where name='صنف نافد'" | tr -d ' ')
+[ "$ST" = "out" ] && ok "الحالة للصنف النافد: out" || bad "حالة الصنف النافد خطأ" "$ST"
+
+LOW=$(as_role anon - "select stock_state || '|' || coalesce(low_qty::text,'-') from public.items_public where name='صنف قارب النفاد'" | tr -d ' ')
+[ "$LOW" = "low|2" ] && ok "الكمية الحقيقية تُكشف فقط عند <4 ($LOW)" || bad "قياس «قارب النفاد» خطأ" "$LOW"
+
+IN=$(as_role anon - "select stock_state || '|' || coalesce(low_qty::text,'-') from public.items_public where name='صنف متوفر'" | tr -d ' ')
+[ "$IN" = "in|-" ] && ok "الصنف المتوفر: in وبلا رقم ($IN) — لا يُستنتج حجم الجرد" || bad "الصنف المتوفر يكشف رقمًا" "$IN"
+
+S=$(as_role authenticated "$STAFF_UID" "select count(*) from public.items_staff" | tr -d ' ')
+[ "${S:-0}" -ge 3 ] && ok "العامل يقرأ items_staff كاملة ($S)" || bad "العامل لا يرى الأرقام" "$S"
+
+C=$(as_role authenticated "$CUST_UID" "select count(*) from public.items_staff" | tr -d ' ')
+[ "${C:-1}" = "0" ] && ok "العميل المسجَّل يحصل على صفر صفوف من items_staff" || bad "العميل يرى أرقام المخزون!" "$C"
+
+E=$(as_role anon - "insert into public.items (name) values ('تسلل')" | grep -iE 'denied|permission|policy' | head -1)
+[ -n "$E" ] && ok "الزائر لا يضيف صنفًا" || bad "الزائر أضاف صنفًا!" "$E"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
