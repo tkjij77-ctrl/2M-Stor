@@ -217,8 +217,9 @@ V=$(as_role anon - "select count(*) from public.items_public" | tr -d ' ')
 [ "${V:-0}" -ge 1 ] && ok "الزائر يقرأ الأصناف الحيّة عبر items_public ($V) — المتجر يعمل بلا تسجيل" || bad "الزائر لا يقرأ الأصناف" "$V"
 V=$(as_role anon - "select count(*) from public.items_public where name='صنف محذوف'" | tr -d ' ')
 [ "${V:-1}" = "0" ] && ok "الزائر لا يرى المحذوف ناعمًا (يُستبعد في الإسقاط)" || bad "الزائر يرى صنفًا محذوفًا!" "$V"
-V=$(as_role authenticated "$STAFF_UID" "select count(*) from public.items where name='صنف محذوف'" | tr -d ' ')
-[ "${V:-0}" = "1" ] && ok "العامل يرى المحذوف (لسلة المهملات)" || bad "العامل لا يرى المحذوف" "$V"
+# 🔒 SEC-2: قراءة الموظف تمرّ عبر items_staff (الجدول الخام مقفل على الجميع)
+V=$(as_role authenticated "$STAFF_UID" "select count(*) from public.items_staff where name='صنف محذوف'" | tr -d ' ')
+[ "${V:-0}" = "1" ] && ok "العامل يرى المحذوف عبر items_staff (لسلة المهملات)" || bad "العامل لا يرى المحذوف" "$V"
 V=$(as_role anon - "select count(*) from public.categories" | tr -d ' ')
 [ "${V:-0}" -ge 1 ] && ok "الزائر يقرأ الأقسام ($V)" || bad "الزائر لا يقرأ الأقسام" "$V"
 V=$(as_role anon - "select public.public_settings() ? 'store_name'" | tr -d ' ')
@@ -242,8 +243,11 @@ V=$(as_role anon - "select count(*) from public.invoices" | tr -d ' ')
 [ "${V:-1}" = "0" ] && ok "الزائر لا يرى أي فاتورة" || bad "الزائر يرى فواتير" "$V"
 V=$(as_role anon - "select count(*) from public.audit_log" | tr -d ' ')
 [ "${V:-1}" = "0" ] && ok "الزائر لا يرى سجل النشاط" || bad "الزائر يرى سجل النشاط" "$V"
+# 🔒 SEC-2: الكتابة المباشرة سُحبت — المسار الوحيد upsert_item
 V=$(as_role authenticated "$STAFF_UID" "insert into public.items (category_id,name,price_text,price_num,stock_q,display_qs) values ($CAT,'من العامل','2',2,2,2)")
-echo "$V" | grep -qiE "denied|policy|permission|error" && bad "العامل مُنع من الإضافة" "$V" || ok "العامل يضيف صنفًا"
+echo "$V" | grep -qiE "denied|permission" && ok "الكتابة المباشرة على items مرفوضة للعامل (SEC-2)" || bad "العامل كتب في items مباشرة!" "$V"
+V=$(as_role authenticated "$STAFF_UID" "select (public.upsert_item(jsonb_build_object('category_id',$CAT,'name','من العامل','price_text','2','price_num',2,'stock_q',5,'display_qs',5))->>'id')")
+[ "${V:-0}" -gt 0 ] 2>/dev/null && ok "العامل يضيف صنفًا عبر upsert_item (#$V)" || bad "upsert_item لم تُضف صنفًا" "$V"
 ROLE_BEFORE=$(Q "select role from public.profiles where id='$STAFF_UID'")
 as_role authenticated "$STAFF_UID" "update public.profiles set role='admin' where id='$STAFF_UID'" >/dev/null
 ROLE=$(Q "select role from public.profiles where id='$STAFF_UID'")
@@ -343,6 +347,52 @@ C=$(as_role authenticated "$CUST_UID" "select count(*) from public.items_staff" 
 
 E=$(as_role anon - "insert into public.items (name) values ('تسلل')" | grep -iE 'denied|permission|policy' | head -1)
 [ -n "$E" ] && ok "الزائر لا يضيف صنفًا" || bad "الزائر أضاف صنفًا!" "$E"
+
+echo ""
+echo "【11】 🔒 SEC-2 — الكتابة عبر upsert_item · لا صلاحية جدولية لأي دور"
+E=$(as_role authenticated "$CUST_UID" "select count(*) from public.items" | grep -iE 'denied|permission' | head -1)
+[ -n "$E" ] && ok "العميل المسجَّل لا يقرأ items الخام (انتهى المسار الأخير)" || bad "العميل ما زال يقرأ items!" "$E"
+
+E=$(as_role authenticated "$STAFF_UID" "select count(*) from public.items" | grep -iE 'denied|permission' | head -1)
+[ -n "$E" ] && ok "حتى العامل لا يقرأ الجدول الخام — قراءته عبر items_staff" || bad "العامل يقرأ items مباشرة" "$E"
+
+R=$(as_role authenticated "$STAFF_UID" "select public.upsert_item('{\"category_id\":$CAT,\"name\":\"صنف RPC\",\"price_text\":\"25\",\"price_num\":25,\"stock_q\":7,\"display_qs\":6,\"min_alert\":2}'::jsonb)")
+IID2=$(Q "select id from public.items where name='صنف RPC' limit 1")
+[ "${IID2:-0}" -gt 0 ] && ok "upsert_item أضافت صنفًا (#$IID2) وردّت: $(echo "$R" | tr -d ' ' | cut -c1-40)" || bad "الإضافة عبر RPC فشلت" "$R"
+
+Q_NEW=$(as_role authenticated "$STAFF_UID" "select (public.upsert_item('{\"id\":$IID2,\"name\":\"صنف RPC معدّل\",\"price_text\":\"30\",\"price_num\":30,\"stock_q\":9,\"display_qs\":8,\"min_alert\":2}'::jsonb)->>'id')")
+V=$(Q "select name || '|' || display_qs from public.items where id=$IID2")
+[ "$V" = "صنف RPC معدّل|8" ] && ok "upsert_item تعدّل الصنف فعلًا ($V)" || bad "التعديل عبر RPC لم يقع" "$V ($Q_NEW)"
+
+# إحياء صنف محذوف عبر التعديل (كان عطلًا حقيقيًا: يبقى محذوفًا)
+Q "update public.items set deleted_at = now() where id = $IID2" >/dev/null
+as_role authenticated "$STAFF_UID" "select public.upsert_item('{\"id\":$IID2,\"name\":\"صنف RPC معدّل\",\"price_text\":\"30\",\"price_num\":30,\"stock_q\":9,\"display_qs\":8}'::jsonb)" >/dev/null
+D=$(Q "select deleted_at is null from public.items where id=$IID2")
+[ "$D" = "t" ] && ok "تعديل صنف محذوف يُحييه (deleted_at = null)" || bad "الصنف بقي محذوفًا بعد التعديل" "$D"
+
+E=$(as_role authenticated "$STAFF_UID" "select public.upsert_item('{\"name\":\"  \"}'::jsonb)" | grep -iE 'اسم|exception' | head -1)
+[ -n "$E" ] && ok "اسم فارغ يُرفض على السيرفر" || bad "قُبل اسم فارغ!" "$E"
+E=$(as_role authenticated "$STAFF_UID" "select public.upsert_item('{\"name\":\"سالب\",\"price_num\":-5}'::jsonb)" | grep -iE 'سالب|exception' | head -1)
+[ -n "$E" ] && ok "سعر سالب يُرفض على السيرفر" || bad "قُبل سعر سالب!" "$E"
+E=$(as_role authenticated "$STAFF_UID" "select public.upsert_item('{\"name\":\"كمية سالبة\",\"display_qs\":-3}'::jsonb)" | grep -iE 'سالبة|exception' | head -1)
+[ -n "$E" ] && ok "كمية سالبة تُرفض على السيرفر" || bad "قُبلت كمية سالبة!" "$E"
+
+E=$(as_role authenticated "$CUST_UID" "select public.upsert_item('{\"name\":\"تسلل عميل\"}'::jsonb)" | grep -iE 'مصرّح|denied|exception' | head -1)
+[ -n "$E" ] && ok "العميل المسجَّل لا يضيف صنفًا (الحارس على السيرفر)" || bad "العميل أضاف صنفًا!" "$E"
+E=$(as_role anon - "select public.upsert_item('{\"name\":\"تسلل زائر\"}'::jsonb)" | grep -iE 'مصرّح|denied|permission|exception' | head -1)
+[ -n "$E" ] && ok "الزائر لا يضيف صنفًا" || bad "الزائر أضاف صنفًا!" "$E"
+
+N=$(as_role authenticated "$STAFF_UID" "select public.archive_all_items()" | tr -d ' ')
+V=$(Q "select count(*) from public.items where deleted_at is null")
+[ "${N:-0}" -ge 1 ] && [ "${V:-1}" = "0" ] && ok "archive_all_items أرشفت $N صنفًا (لا مسح نهائي)" || bad "الأرشفة لم تعمل" "n=$N · حيّ=$V"
+E=$(as_role authenticated "$CUST_UID" "select public.archive_all_items()" | grep -iE 'مصرّح|denied|exception' | head -1)
+[ -n "$E" ] && ok "العميل لا يستطيع أرشفة المتجر" || bad "العميل أرشف المتجر!" "$E"
+
+# الطلب من الزائر ما زال يعمل بعد كل هذا الإغلاق
+Q "update public.items set deleted_at = null where id = $IID2" >/dev/null
+Q "insert into public.settings (key, value) values ('store_open','1') on conflict (key) do update set value='1'" >/dev/null
+R=$(as_role anon - "select public.place_store_order('{\"name\":\"زبون الفحص\",\"phone\":\"01012345678\",\"fulfillment\":\"pickup\",\"payment\":\"cod\",\"items\":[{\"id\":$IID2,\"qty\":1}]}'::jsonb)" | tr -d ' ' | cut -c1-60)
+echo "$R" | grep -qiE .ok.:true. && ok "الزائر ما زال يُنشئ طلبًا عبر place_store_order" || bad "طلب الزائر تعطّل بعد الإغلاق" "$R"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"

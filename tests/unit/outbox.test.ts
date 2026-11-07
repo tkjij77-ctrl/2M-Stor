@@ -22,9 +22,18 @@ let responder: (table: string, op: string, payload?: Row | Row[]) => { data?: un
   error: null,
 });
 
+// 🔒 SEC-2: الكتابة صارت عبر دوال RPC. الافتراضي هنا **قاعدة قديمة** (الدوال غير
+// موجودة ⇒ PGRST202) حتى تُبقي الاختبارات القديمة تفحص مسار السقوط نفسه.
+// والاختبارات الجديدة أسفل الملف تُفعّل rpcImpl لتفحص المسار الحديث.
+type RpcRes = { data?: unknown; error?: unknown };
+let rpcImpl: (fn: string, args?: Row) => RpcRes = () => ({
+  data: null,
+  error: { code: "PGRST202", message: "Could not find the function public.upsert_item" },
+});
+
 // pullAll يجلب الأقسام والأصناف كمصفوفات — نضمن ذلك مهما كان المُجيب
 const respond = (table: string, op: string, payload?: Row | Row[]) => {
-  if (op === "select" && (table === "categories" || table === "items")) {
+  if (op === "select" && (table === "categories" || table === "items" || table === "items_staff")) {
     const r = responder(table, op, payload);
     if (r && Array.isArray(r.data)) return r;
     return { data: [], error: null };
@@ -53,6 +62,14 @@ function fakeClient() {
     return p;
   };
   return {
+    rpc: (fn: string, args?: Row) => {
+      calls.push({ table: "rpc:" + fn, op: "rpc", payload: args });
+      const res = rpcImpl(fn, args);
+      return Object.assign(Promise.resolve(res), {
+        single: () => Promise.resolve(res),
+        maybeSingle: () => Promise.resolve(res),
+      });
+    },
     from: (table: string) => ({
       insert: (payload: Row | Row[]) => chain(table, "insert", payload),
       update: (payload: Row) => chain(table, "update", payload),
@@ -87,6 +104,7 @@ beforeEach(() => {
   calls = [];
   clearQueue();   // حالة الطابور في الذاكرة لا تُصفَّر مع localStorage
   responder = () => ({ data: { id: 1, updated_at: "t" }, error: null });
+  rpcImpl = () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function public.upsert_item" } });
 });
 
 describe("تصنيف أخطاء المزامنة", () => {
@@ -192,5 +210,57 @@ describe("طابور المزامنة", () => {
     expect(st.pending).toBe(0);          // رُفعت فعلًا
     expect(st.failed).toBe(0);           // ولم تعد في قائمة الفشل
     expect(calls.some((c) => c.table === "items" && c.op === "update")).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  🔒 SEC-2 — قاعدة حديثة: الدوال موجودة ⇒ يجب ألا تُلمس جداول items إطلاقًا
+// ═══════════════════════════════════════════════════════════════════════════
+// صنف **بلا** معرّف سحابي — أي أنه لم يُرفع بعد (مسار item-ins الحقيقي)
+const DB_NEW = (): Db => [
+  {
+    name: "قسم",
+    lid: "Lc1",
+    cid: 1,
+    _ts: "t",
+    items: [{ n: "جديد", p: "5", pn: 5, q: 0, qs: 0, min: 1, b: "", img: "", lid: "Lnew" }],
+  },
+];
+
+describe("SEC-2 — الكتابة عبر الدوال المحصورة", () => {
+  it("الإضافة تمر بـupsert_item ولا تُدرج في الجدول", async () => {
+    rpcImpl = () => ({ data: { id: 55, updated_at: "t2" }, error: null });
+    queue({ t: "item-ins", lid: "Lnew", catLid: "Lc1" });
+    await flushOutbox(DB_NEW());
+    expect(calls.some((c) => c.table === "rpc:upsert_item" && c.op === "rpc")).toBe(true);
+    expect(calls.some((c) => c.table === "items" && c.op === "insert")).toBe(false);
+  });
+
+  it("التعديل يمر بـupsert_item مع معرّف الصنف", async () => {
+    store.set("al-sayed_db", JSON.stringify(DB()));
+    rpcImpl = () => ({ data: { id: 101, updated_at: "t3" }, error: null });
+    queue({ t: "item-upd", lid: "La", catLid: "Lc1" });
+    await flushOutbox(DB());
+    const rpc = calls.find((c) => c.table === "rpc:upsert_item");
+    expect(rpc).toBeTruthy();
+    expect((rpc!.payload as { p?: Row })?.p?.id).toBe(101);
+    expect(calls.some((c) => c.table === "items" && c.op === "update")).toBe(false);
+  });
+
+  it("الحذف يمر بـsoft_delete_item (لا حذف نهائي ولا كتابة مباشرة)", async () => {
+    rpcImpl = () => ({ data: null, error: null });
+    queue({ t: "item-del", lid: "La", cid: 101 });
+    await flushOutbox(DB());
+    expect(calls.some((c) => c.table === "rpc:soft_delete_item")).toBe(true);
+    expect(calls.some((c) => c.table === "items" && c.op === "update")).toBe(false);
+    expect(calls.some((c) => c.op === "delete")).toBe(false);
+  });
+
+  it("خطأ حقيقي من الدالة (لا PGRST202) لا يُسقط للمسار القديم", async () => {
+    rpcImpl = () => ({ data: null, error: { code: "42501", message: "permission denied" } });
+    queue({ t: "item-ins", lid: "Lnew", catLid: "Lc1" });
+    await flushOutbox(DB_NEW());
+    expect(calls.some((c) => c.table === "items" && c.op === "insert")).toBe(false);
+    expect(outboxStatus().failed + outboxStatus().pending).toBeGreaterThan(0);
   });
 });

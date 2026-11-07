@@ -5,9 +5,11 @@ export default async function DashboardPage(){
   let totalItems: number | null = null, lowItems: number | null = null, top: TopRow[] | null = null;
   try{
     const supabase = await createClient();
+    // 🔒 SEC-2: العدّ من items_staff (إسقاط الموظف) لا من الجدول الخام المقفل.
+    //    لغير الموظف تُرجع صفرًا بدل خطأ — وmiddleware يمنع الوصول أصلًا.
     const [t, l, tp] = await Promise.all([
-      supabase.from("items").select("*", {count:"exact", head:true}).is("deleted_at", null),
-      supabase.from("items").select("*", {count:"exact", head:true}).lte("stock_q", 5).is("deleted_at", null),
+      supabase.from("items_staff").select("*", {count:"exact", head:true}).is("deleted_at", null),
+      supabase.from("items_staff").select("*", {count:"exact", head:true}).lte("stock_q", 5).is("deleted_at", null),
       supabase.from("invoice_items").select("item_name, qty").order("qty", {ascending:false}).limit(5)
     ]);
     totalItems = t.count; lowItems = l.count; top = (tp.data ?? []) as TopRow[];

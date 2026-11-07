@@ -101,7 +101,7 @@ describe("SEC-1 — التطبيق الرئيسي يقرأ الإسقاط الص
 
   it("خدمة الـService Worker رُفع إصدارها (الإصلاح يصل للأجهزة)", () => {
     const sw = read("sw.js");
-    expect(sw).toMatch(/const CACHE = 'al-sayed-v3[6-9]'/);
+    expect(sw).toMatch(/const CACHE = 'al-sayed-v3[7-9]'/);
   });
 });
 

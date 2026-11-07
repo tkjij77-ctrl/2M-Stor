@@ -460,7 +460,8 @@
         if (cloudReady()) {
             try {
                 const [ci, cc] = await Promise.all([
-                    sb.from('items').select('id, name, deleted_at, category_id').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(100),
+                    // 🔒 SEC-2: الزائر/العميل لا يقرأ items — والموظف يقرأ عبر items_staff
+                    sb.from('items_staff').select('id, name, deleted_at, category_id').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(100),
                     sb.from('categories').select('id, name, deleted_at').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(50)
                 ]);
                 cloud.items = ci.data || [];
@@ -501,8 +502,18 @@
 
     async function restoreCloudTrash(kind, id) {
         if (!cloudReady()) return toast('⚠️ استعادة السحابي تحتاج اتصال');
-        const table = kind === 'cat' ? 'categories' : 'items';
-        const { error } = await sb.from(table).update({ deleted_at: null }).eq('id', id);
+        // 🔒 SEC-2: الاستعادة عبر دالة محصورة تتحقق أن المستخدم **مدير**
+        //    (كانت update مباشرة على الجدول — تُتجاوز لو أُسندت الصلاحيات لعامل).
+        let error = null;
+        const fn = kind === 'cat' ? 'restore_category' : 'restore_item';
+        const r = await sb.rpc(fn, { p_id: id });
+        error = r.error;
+        if (error && (error.code === 'PGRST202' || /could not find the function|schema cache/i.test(error.message || ''))) {
+            // قاعدة قديمة (قبل SEC-2): المسار السابق
+            const table = kind === 'cat' ? 'categories' : 'items';
+            const q = await sb.from(table).update({ deleted_at: null }).eq('id', id);
+            error = q.error;
+        }
         if (error) return toast('❌ ' + (error.message || 'فشل الاستعادة'));
         logAction('استعادة من المحذوفات', kind + ' #' + id);
         toast('✅ تمت الاستعادة — ستظهر بعد المزامنة');

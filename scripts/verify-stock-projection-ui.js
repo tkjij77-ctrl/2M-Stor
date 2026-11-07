@@ -38,16 +38,23 @@ const SETTINGS = [
   { key: 'shipping_fee', value: '0' }, { key: 'store_open', value: '1' },
 ];
 
-async function mock(page, { failPublic }) {
+async function mock(page, { failPublic, failRpc }) {
   const seen = [];
+  const calls = [];
   await page.route('**/rest/v1/**', async (route) => {
     const url = route.request().url();
     const path = new URL(url).pathname.replace('/rest/v1/', '');
     const table = path.split('?')[0];
     seen.push(table);
+    calls.push(route.request().method() + ' ' + table);
     const cors = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range', 'content-type': 'application/json' };
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     const send = (rows, status = 200) => route.fulfill({ status, headers: cors, body: JSON.stringify(rows) });
+    // 🔒 SEC-2: دوال الكتابة المحصورة
+    if (table === 'rpc/upsert_item' || table === 'rpc/soft_delete_item' || table === 'rpc/archive_all_items') {
+      if (failRpc) return send({ code: 'PGRST202', message: 'Could not find the function public.' + table.split('/')[1] }, 404);
+      return send({ id: 99, updated_at: '2026-11-07T11:00:00Z', count: 3 });
+    }
     if (table === 'items_public') {
       // محاكاة قاعدة لم يُنفَّذ عليها الترحيل: PostgREST يردّ 404 للجدول غير الموجود
       if (failPublic) return send({ code: 'PGRST205', message: "Could not find the table 'public.items_public'" }, 404);
@@ -61,7 +68,7 @@ async function mock(page, { failPublic }) {
     if (table === 'banners') return send([]);
     return send([]);
   });
-  return seen;
+  return { seen, calls };
 }
 
 const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/${name}.png`, fullPage: false }); };
@@ -75,7 +82,8 @@ const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/$
   page.on('pageerror', (e) => errs.push(e.message.slice(0, 120)));
 
   console.log('\n【1】 الزائر على التطبيق الرئيسي — أي طلب شبكة يرسل؟');
-  const seenA = await mock(page, { failPublic: false });
+  const A = await mock(page, { failPublic: false });
+  const seenA = A.seen;
   await page.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
   // ملاحظة: db مُعلنة بـ`let` في نطاق عام ⇒ ليست خاصية على window، تُقرأ بالاسم
   await page.waitForFunction(() => { try { return Array.isArray(db); } catch { return false; } }, { timeout: 20000 });
@@ -117,7 +125,8 @@ const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/$
 
   console.log('\n【4】 توافق خلفي — قاعدة لم يُنفَّذ عليها الترحيل بعد');
   const page2 = await ctx.newPage();
-  const seenB = await mock(page2, { failPublic: true });
+  const B = await mock(page2, { failPublic: true });
+  const seenB = B.seen;
   await page2.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
   await page2.waitForFunction(() => { try { return Array.isArray(db); } catch { return false; } }, { timeout: 20000 });
   await page2.waitForTimeout(2500);
@@ -129,6 +138,31 @@ const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/$
   ok('المتجر ما زال يعرض منتجاته بعد السقوط', /لمبة ليد متوفرة/.test(grid2), grid2.slice(0, 60));
   await shot(page2, 'main-app-legacy-fallback');
   console.log('     📸 /home/user/shots/main-app-legacy-fallback.png');
+
+  console.log('\n【5】 🔒 SEC-2 — كتابة الموظف عبر الدوال المحصورة (لا كتابة مباشرة)');
+  const page3 = await ctx.newPage();
+  const C = await mock(page3, { failPublic: false, failRpc: false });
+  await page3.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page3.waitForFunction(() => { try { return typeof pushItemUpsert === 'function'; } catch { return false; } }, { timeout: 20000 });
+  await page3.waitForTimeout(600);
+
+  const up = await page3.evaluate(async () => await pushItemUpsert({ name: 'صنف اختبار', price_text: '10', price_num: 10, stock_q: 5, display_qs: 5 }));
+  ok('إضافة صنف تستدعي rpc/upsert_item', C.calls.some((c) => c === 'POST rpc/upsert_item'), C.calls.join(' · '));
+  ok('ولا ترسل أي كتابة مباشرة إلى /items', !C.calls.some((c) => /^(POST|PATCH|DELETE) items$/.test(c)), C.calls.join(' · '));
+  ok('تستلم معرّف الصنف من السيرفر', up && up.id === 99, JSON.stringify(up));
+
+  await page3.evaluate(async () => await pushItemDelete(123));
+  ok('الحذف يستدعي rpc/soft_delete_item', C.calls.some((c) => c === 'POST rpc/soft_delete_item'), C.calls.join(' · '));
+
+  console.log('\n【6】 توافق خلفي — قاعدة قبل SEC-2 (الدوال غير موجودة)');
+  const page4 = await ctx.newPage();
+  const D = await mock(page4, { failPublic: false, failRpc: true });
+  await page4.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page4.waitForFunction(() => { try { return typeof pushItemUpsert === 'function'; } catch { return false; } }, { timeout: 20000 });
+  await page4.waitForTimeout(600);
+  await page4.evaluate(async () => await pushItemUpsert({ name: 'صنف قديم', price_text: '7', price_num: 7 }));
+  ok('جرّبت upsert_item أولًا', D.calls.includes('POST rpc/upsert_item'), D.calls.join(' · '));
+  ok('ثم سقطت إلى الإدراج المباشر (كاشير لا يتوقف)', D.calls.some((c) => /^POST items$/.test(c)), D.calls.join(' · '));
 
   console.log('\n═══════════════════════════════════════════════════════════════');
   console.log(`  النتيجة:  ✅ ${pass} ناجح   ❌ ${fail} فاشل`);

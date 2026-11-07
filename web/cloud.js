@@ -147,6 +147,50 @@
       };
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  🔒 SEC-2 (2026-11-07): لا صلاحية كتابة مباشرة على جدول items.
+    //  السبب: أي كتابة على الجدول تحتاج `select` على أعمدته ⇒ سحب القراءة
+    //  من العميل كان مستحيلًا بلا سحب الكتابة أولًا (وإلا تعطّل الكاشير).
+    //  الآن كل كتابة تمر بدالة محصورة تتحقق من الدور على السيرفر:
+    //     upsert_item(p) · archive_all_items() · soft_delete_item(id)
+    //  وإن لم تكن الدالة موجودة (قاعدة قديمة) نعود للمسار السابق — فالترتيب
+    //  بين نشر الواجهة وتنفيذ الترحيل لا يهم.
+    // ═══════════════════════════════════════════════════════════════
+    function rpcMissing(err) {
+      return !!err && (err.code === 'PGRST202' || /could not find the function|schema cache|does not exist/i.test(err.message || ''));
+    }
+    async function pushItemUpsert(payload) {
+      try {
+        const { data, error } = await sb.rpc('upsert_item', { p: payload });
+        if (!error) return { id: data && data.id, updated_at: data && data.updated_at, error: null, path: 'rpc' };
+        if (!rpcMissing(error)) return { error };
+      } catch (e) { if (!rpcMissing(e)) return { error: e }; }
+      // مسار التوافق: قاعدة بلا SEC-2
+      const q = payload.id
+        ? await sb.from('items').update({ ...payload, deleted_at: null }).eq('id', payload.id)
+        : await sb.from('items').insert(payload).select().single();
+      return { id: q.data && q.data.id, updated_at: q.data && q.data.updated_at, error: q.error, path: 'table' };
+    }
+    async function pushItemDelete(cid) {
+      try {
+        const { error } = await sb.rpc('soft_delete_item', { p_id: cid });
+        if (!error) return { error: null, path: 'rpc' };
+        if (!rpcMissing(error)) return { error };
+      } catch (e) { if (!rpcMissing(e)) return { error: e }; }
+      const q = await sb.from('items').update({ deleted_at: new Date().toISOString() }).eq('id', cid);
+      return { error: q.error, path: 'table' };
+    }
+    async function pushArchiveAll() {
+      try {
+        const { data, error } = await sb.rpc('archive_all_items');
+        if (!error) return { count: data, error: null, path: 'rpc' };
+        if (!rpcMissing(error)) return { error };
+      } catch (e) { if (!rpcMissing(e)) return { error: e }; }
+      const now = new Date().toISOString();
+      const q = await sb.from('items').update({ deleted_at: now }).is('deleted_at', null);
+      return { error: q.error, path: 'table' };
+    }
+
     // ── رفع صورة الصنف لـ Storage (مضغوطة 1024px 0.7) ──
     async function compressImageDataUrl(dataUrl, maxW = 1024, quality = 0.7) {
       return new Promise((resolve) => {
@@ -206,9 +250,9 @@
           return;
         }
         if (it.img && !it.imgUrl) it.imgUrl = await uploadItemImage(it);
-        const { data, error } = await sb.from('items').insert(itemPayload(it, cat)).select().single();
-        if (error) throw error;
-        it.cid = data.id; it._ts = data.updated_at;
+        const res = await pushItemUpsert(itemPayload(it, cat));
+        if (res.error) throw res.error;
+        it.cid = res.id; it._ts = res.updated_at || null;
       } else if (e.t === 'item-upd') {
         const it = findLocalItem(e.lid); if (!it) return;
         if (!it.cid) { queue({ t: 'item-ins', lid: it.lid, catLid: e.catLid }); return; }
@@ -218,17 +262,16 @@
         // تعديل صنف مُستعاد من «سلة المحذوفات» يُبقي deleted_at عليه على السحابة ⇒
         // المزامنة التالية ترى الصنف محذوفًا فتمسحه محليًا (الاستعادة تنقلب بلا رسالة).
         // الحل: أي تعديل لصنف موجود محليًا = إحياء صريح له على السحابة.
-        const { error } = await sb.from('items').update({ ...itemPayload(it, cat), deleted_at: null }).eq('id', it.cid);
-        if (error) throw error;
+        const res = await pushItemUpsert({ ...itemPayload(it, cat), id: it.cid });
+        if (res.error) throw res.error;
       } else if (e.t === 'item-del') {
         if (!e.cid) return;
         // 🔒 T3.4 (2026-09-21): حذف ناعم بدل الحذف النهائي.
         // السبب: الحذف النهائي لا رجعة فيه (ولا يوجد Versioning على الخطة المجانية)،
         // وحذف قسم بالخطأ كان يمحو كل أصنافه عبر ON DELETE CASCADE.
         // الآن: deleted_at = وقت الحذف، ويمكن الاستعادة من «سلة المحذوفات».
-        const { error } = await sb.from('items')
-          .update({ deleted_at: new Date().toISOString() }).eq('id', e.cid);
-        if (error) throw error;
+        const del = await pushItemDelete(e.cid);
+        if (del.error) throw del.error;
       } else if (e.t === 'inv-ins') {
         const inv = invoices.find(x => x.lid === e.lid);
         if (!inv || inv.cid) return;
@@ -683,7 +726,8 @@
       try {
         const now = new Date().toISOString();
         // أرشفة بدل المسح — الحذف ناعم فيمكن الاسترجاع
-        await sb.from('items').update({ deleted_at: now }).is('deleted_at', null);
+        const arch = await pushArchiveAll();
+        if (arch.error) throw arch.error;
         await sb.from('categories').update({ deleted_at: now }).is('deleted_at', null);
 
         // فك ارتباط المعرّفات السحابية فقط (الفواتير تبقى كما هي)

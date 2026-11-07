@@ -338,10 +338,9 @@ async function applyEntry(e: OutboxEntry, db: DbCategory[], sb: ReturnType<typeo
       return;
     }
     if (it.img && !it.imgUrl) it.imgUrl = (await uploadImage(it, sb)) || it.imgUrl;
-    const { data, error } = await sb.from("items").insert(itemPayload(it, cat)).select().single();
-    if (error) throw error;
-    it.cid = data.id;
-    it._ts = data.updated_at;
+    const res = await pushItemUpsert(sb, itemPayload(it, cat));
+    it.cid = res.id;
+    it._ts = res.updated_at;
   } else if (e.t === "item-upd") {
     const it = findLocalItem(e.lid, db);
     if (!it) return;
@@ -351,16 +350,12 @@ async function applyEntry(e: OutboxEntry, db: DbCategory[], sb: ReturnType<typeo
     }
     const cat = findLocalCat(e.catLid || "", db);
     if (it.img && !it.imgUrl) it.imgUrl = (await uploadImage(it, sb)) || it.imgUrl;
-    const { error } = await sb.from("items").update(itemPayload(it, cat)).eq("id", it.cid);
-    if (error) throw error;
+    await pushItemUpsert(sb, { ...itemPayload(it, cat), id: it.cid });
   } else if (e.t === "item-del") {
     if (!e.cid) return;
     // 🔒 T3.4: حذف ناعم — الصنف يبقى قابلًا للاستعادة من «سلة المحذوفات»
-    const { error } = await sb
-      .from("items")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", e.cid);
-    if (error) throw error;
+    // 🔒 SEC-2: عبر soft_delete_item (تتحقق أن المستخدم موظف على السيرفر)
+    await pushItemDelete(sb, e.cid);
   } else if (e.t === "inv-ins") {
     // 📄 دعم الفواتير (جاهز لسلة Next الحقيقية — T2.5)
     const v = e.inv;
@@ -438,10 +433,59 @@ async function applyEntry(e: OutboxEntry, db: DbCategory[], sb: ReturnType<typeo
   }
 }
 
+// 🔒 SEC-2 (2026-11-07): الجدول الخام `items` مقفل تمامًا (لا قراءة ولا كتابة
+// لأي دور عام). الكتابة عبر upsert_item/soft_delete_item، والقراءة عبر
+// items_staff. و`rpcMissing` تسمح بالعمل على قاعدة لم يُنفَّذ عليها الترحيل
+// بعد — نفس سلوك التطبيق الرئيسي.
+function rpcMissing(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  return !!e && (e.code === "PGRST202" || /could not find the function|schema cache|does not exist/i.test(e.message || ""));
+}
+
+async function pushItemUpsert(
+  sb: ReturnType<typeof createClient>,
+  payload: Record<string, unknown>
+): Promise<{ id?: number; updated_at?: string }> {
+  try {
+    const { data, error } = await sb.rpc("upsert_item", { p: payload });
+    if (!error) {
+      const d = data as { id?: number; updated_at?: string } | null;
+      return { id: d?.id, updated_at: d?.updated_at };
+    }
+    if (!rpcMissing(error)) throw error;
+  } catch (e) {
+    if (!rpcMissing(e)) throw e;
+  }
+  // قاعدة بلا SEC-2 — المسار السابق
+  if (payload.id) {
+    const q = await sb.from("items").update(payload).eq("id", payload.id as number);
+    if (q.error) throw q.error;
+    return {};
+  }
+  const q = await sb.from("items").insert(payload).select().single();
+  if (q.error) throw q.error;
+  const row = q.data as { id?: number; updated_at?: string } | null;
+  return { id: row?.id, updated_at: row?.updated_at };
+}
+
+async function pushItemDelete(sb: ReturnType<typeof createClient>, cid: number): Promise<void> {
+  try {
+    const { error } = await sb.rpc("soft_delete_item", { p_id: cid });
+    if (!error) return;
+    if (!rpcMissing(error)) throw error;
+  } catch (e) {
+    if (!rpcMissing(e)) throw e;
+  }
+  const q = await sb.from("items").update({ deleted_at: new Date().toISOString() }).eq("id", cid);
+  if (q.error) throw q.error;
+}
+
 export async function pullAll(db: DbCategory[]) {
   const sb = createClient();
-  const [catsR, itemsR] = await Promise.all([sb.from("categories").select("*"), sb.from("items").select("*")]);
+  const [catsR, itemsR0] = await Promise.all([sb.from("categories").select("*"), sb.from("items_staff").select("*")]);
   if (catsR.error) throw catsR.error;
+  // 🔁 توافق خلفي: قاعدة لم يُنفَّذ عليها SEC-2 بعد ⇒ الجدول الخام
+  const itemsR = itemsR0.error ? await sb.from("items").select("*") : itemsR0;
   if (itemsR.error) throw itemsR.error;
   // merge كما في index.html — مع استبعاد المحذوف ناعمًا (T3.4)
   const aliveCats = new Set(

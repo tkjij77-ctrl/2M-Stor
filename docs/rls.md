@@ -10,7 +10,7 @@
 |---|---|---|
 | جداول في `public` | **14** | الترحيلات كلها (7 أساس + `login_attempts` + `client_errors` + `banners` + `order_chat_links` + `telegram_config` + `telegram_admins` + `telegram_inbox`) |
 | سياسات RLS | **28** | الترحيلات كلها بالترتيب (منها 3 لـ`client_errors` و2 لـ`banners`) |
-| دوال | 38 | منها 4 مساعدة أمنية · 4 دوال قفل دخول · `public_settings` للزائر · `client_errors_purge` · `place_store_order` · `get_order_by_token` · 8 دوال تيليجرام (`tg_*` · `admin_set_order_status`) |
+| دوال | **40** | منها 4 مساعدة أمنية · 4 دوال قفل دخول · `public_settings` للزائر · `client_errors_purge` · `place_store_order` · `get_order_by_token` · 8 دوال تيليجرام (`tg_*` · `admin_set_order_status`) · **`upsert_item` · `archive_all_items` (SEC-2)** |
 | مشغّلات (Triggers) | 10 | منها حارس تصعيد الدور · `trg_banners_touch` · `trg_invoices_telegram` |
 | فهارس | 22 | منها فهرسان نصيان عربيان · 3 لجدول محاولات الدخول · فهرس زمني لأخطاء المستخدمين · 4 لطلبات الأونلاين والبنرات |
 
@@ -47,6 +47,25 @@
 إن لم يكن الترحيل منفَّذًا بعد (فلا ينكسر المتجر بترتيب النشر).
 التحقق: `bash scripts/verify-sql-live.sh` — القسم 【10】 يفتح قاعدة حقيقية ويحاول القراءة بصلاحية
 `anon` فعلًا (96/96).
+
+### الجدول `items` — مقفل تمامًا (SEC-2 · 7 نوفمبر 2026)
+
+| العملية | المسار الوحيد المسموح |
+|---|---|
+| قراءة الزائر/العميل | `public.items_public` (بلا أرقام مخزون) |
+| قراءة الموظف | `public.items_staff` (كل الأعمدة · صفر صفوف لغير الموظف) |
+| إضافة/تعديل صنف | `public.upsert_item(p jsonb)` — `security definer` + `is_staff()` + تحقق من المدخلات |
+| أرشفة الكل | `public.archive_all_items()` |
+| حذف ناعم / استعادة | `soft_delete_item(id)` / `restore_item(id)` (استعادة للمدير) |
+
+`revoke select, insert, update, delete on public.items from anon, authenticated;`
+
+**لماذا سُحبت الكتابة أيضًا؟** لأن أي `insert/update` من PostgREST يحتاج `select` على
+أعمدة الصف العائد (`return=representation`) وعلى أعمدة شرط `where` — فلا يمكن سحب
+القراءة وبقاء الكتابة من المتصفح. ونقل الكتابة للدالة أفاد أمنيًا مرتين: التحقق من
+الدور صار **في القاعدة**، والمدخلات (اسم فارغ · سعر سالب · كمية سالبة) تُرفض على
+السيرفر لا في المتصفح.
+التحقق: `bash scripts/verify-sql-live.sh` القسم 【11】 (111/111).
 
 ### `order_chat_links` — استثناء ثانٍ: RLS مُفعَّل **وبلا سياسات**
 
