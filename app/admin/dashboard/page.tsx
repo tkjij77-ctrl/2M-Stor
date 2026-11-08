@@ -13,14 +13,18 @@ export default async function DashboardPage(){
       supabase.from("invoice_items").select("item_name, qty").order("qty", {ascending:false}).limit(5)
     ]);
     totalItems = t.count; lowItems = l.count; top = (tp.data ?? []) as TopRow[];
-  }catch{ totalItems = 229; lowItems = 2; top = []; }
+  }catch{
+    // 🔒 T7.2: لا أرقام ملفَّقة. كان السقوط يعرض 229/2 وكأنها بيانات حقيقية،
+    //    فيُخفي أن RLS منعت القراءة. الآن null ← تُعرض «—».
+    totalItems = null; lowItems = null; top = null;
+  }
   return (
     <main className="content">
       <h1 className="section-title">📊 لوحة التحكم</h1>
       <div className="dash-stat-row">
-        <div className="dash-stat"><div className="num">{totalItems ?? 229}</div><div className="lbl">إجمالي الأصناف</div></div>
-        <div className="dash-stat"><div className="num">{lowItems ?? 2}</div><div className="lbl">على وشك النفاد</div></div>
-        <div className="dash-stat"><div className="num">{top?.length ?? 0}</div><div className="lbl">أكثر مبيعاً</div></div>
+        <div className="dash-stat"><div className="num">{totalItems ?? "—"}</div><div className="lbl">إجمالي الأصناف</div></div>
+        <div className="dash-stat"><div className="num">{lowItems ?? "—"}</div><div className="lbl">على وشك النفاد</div></div>
+        <div className="dash-stat"><div className="num">{top?.length ?? "—"}</div><div className="lbl">أكثر مبيعاً</div></div>
       </div>
       <div className="dash-card" style={{marginTop:16}}>
         <h3>🏆 الأكثر مبيعاً</h3>

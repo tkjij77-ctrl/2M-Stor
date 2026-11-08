@@ -60,6 +60,41 @@ const BASE = process.env.APP_URL || 'http://127.0.0.1:3100';
   check('الصفحة الرئيسية تستجيب 200 وتحوي واجهة المتجر', !!home && home.status() === 200 && /المتجر|السلة|بحث/.test(homeBody), `HTTP ${home ? home.status() : '—'}`);
   check('التذييل وصفحات السياسات موجودة', /سياسة|الإرجاع|الخصوصية|الشروط/.test(homeBody));
 
+  // ═══ 2.5) جلسة مزيّفة/تالفة — لا تكفي الكوكي وحدها لدخول اللوحة ═══
+  //  T7.2: الثغرة القديمة كانت `if (profile && …)` أي «بلا صف دور = مرور».
+  //  هنا نثبت أن أي شيء لا يثبته الخادم يُرفَض، وأن الردود غير قابلة للتخزين.
+  console.log('\n【2.5】 جلسة تالفة وترويسات المنع');
+  {
+    const forged = await browser.newContext({ serviceWorkers: 'block' });
+    const ref = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co')
+      .replace(/^https?:\/\//, '').split('.')[0];
+    // كوكي يبدو ككوكي Supabase لكنه ليس جلسة صالحة
+    await forged.addCookies(['sb-' + ref + '-auth-token', 'sb-' + ref + '-auth-token.0', 'supabase-auth-token']
+      .map(name => ({
+        name, value: 'FORGED.' + Buffer.from(JSON.stringify({ sub: '00000000-0000-0000-0000-000000000000', role: 'authenticated' })).toString('base64url') + '.x',
+        domain: '127.0.0.1', path: '/', httpOnly: false, secure: false, sameSite: 'Lax',
+      })));
+    const fp = await forged.newPage();
+    await fp.route('**/*', r => (/supabase\.co/.test(r.request().url()) ? r.abort() : r.continue()));
+    for (const path of ['/admin', '/admin/dashboard']) {
+      const res = await fp.goto(BASE + path, { waitUntil: 'domcontentloaded' }).catch(() => null);
+      await fp.waitForTimeout(500);
+      const finalUrl = new URL(fp.url()).pathname;
+      const body = await fp.innerText('body').catch(() => '');
+      check(
+        `جلسة مزيّفة: ${path} لا تفتح اللوحة`,
+        finalUrl !== path && !finalUrl.startsWith('/admin') && !/إجمالي الأصناف|لوحة التحكم/.test(body),
+        `النهاية: ${finalUrl} · HTTP ${res ? res.status() : '—'}`,
+      );
+    }
+    await forged.close();
+
+    // إعادة توجيه الإدارة غير قابلة للتخزين المؤقت (لا تُحفظ نسخة مفتوحة في وسيط)
+    const raw = await ctx.request.get(BASE + '/admin', { maxRedirects: 0 }).catch(() => null);
+    const cc = raw ? (raw.headers()['cache-control'] || '') : '';
+    check('رد /admin غير قابل للتخزين (no-store)', /no-store/i.test(cc), cc || 'غائب');
+  }
+
   // ═══ 3) ترويسات الأمان (T1.3) ═══
   console.log('\n【3】 ترويسات الأمان على الاستجابات');
   const h = (home && home.headers()) || {};

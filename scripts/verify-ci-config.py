@@ -244,6 +244,39 @@ check(
 )
 check("سكربت محاكي pg_net موجود في المستودع", (ROOT / "scripts" / "pg-net-stub.sh").exists())
 
+# ── T7.2: لا يُعاد «الفشل المفتوح» في /admin ──
+mw_path = ROOT / "middleware.ts"
+mw = mw_path.read_text(encoding="utf-8") if mw_path.exists() else ""
+check(
+    "T7.2: middleware يستخدم قرار الوصول المشترك (لا شرط محلي)",
+    "decideAdminAccess" in mw,
+    "" if "decideAdminAccess" in mw else "منطق الدور غير موحَّد",
+)
+check(
+    "T7.2: لا وجود لنمط الفشل المفتوح `if (profile && …)`",
+    not re.search(r"profile\s*&&\s*!", mw),
+    "" if not re.search(r"profile\s*&&\s*!", mw) else "عاد الشرط الذي يسمح لمن لا سجل له",
+)
+check(
+    "T7.2: طبقة ثانية على السيرفر (app/admin/layout.tsx)",
+    (ROOT / "app" / "admin" / "layout.tsx").exists(),
+    "" if (ROOT / "app" / "admin" / "layout.tsx").exists() else "الحماية في middleware وحدها",
+)
+gate_path = ROOT / "tests" / "unit" / "middleware-admin-gate.test.ts"
+gate = gate_path.read_text(encoding="utf-8") if gate_path.exists() else ""
+check(
+    "T7.2: اختبار انحدار يغطي «بلا صف في profiles»",
+    "بلا صف في profiles" in gate,
+    "" if "بلا صف في profiles" in gate else "الثغرة بلا اختبار يحرسها",
+)
+guard = (ROOT / "scripts" / "verify-next-admin-guard.js")
+gt = guard.read_text(encoding="utf-8") if guard.exists() else ""
+check(
+    "T7.2: فحص المتصفح يجرّب جلسة مزيّفة",
+    "جلسة مزيّفة" in gt,
+    "" if "جلسة مزيّفة" in gt else "لا اختبار لكوكي مزوّر",
+)
+
 # ── التقرير ──
 print("═══════════════════════════════════════════════════════════════")
 print("  T2.3 — فحص إعدادات الحوكمة (Dependabot · CodeQL · CI)")
