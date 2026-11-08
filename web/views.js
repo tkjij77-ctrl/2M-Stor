@@ -1,3 +1,25 @@
+// ── T7.4: أفعال data-act المستخدمة في هذا الملف ─────────────────────────────
+/** من الصفحة الرئيسية: انتقل إلى المتجر ثم افتح المنتج بعد الرسم */
+function vOpenFromHome(ci, ii) {
+    setView('shop');
+    setTimeout(function () { openProductDetail(ci, ii); }, 120);
+}
+
+/** من صفحة الحساب: بدّل المفضلة ثم أعد رسم الصفحة */
+function vToggleFavAccount(ci, ii) {
+    toggleFav(ci, ii);
+    renderAccount();
+}
+
+// ── T7.4: حجج data-* بدل onclick المضمّنة (CSP بلا 'unsafe-inline') ──────────
+//  البطاقات هي أكثر مكان يتكرّر فيه onclick؛ صارت تُمرّر وسائطها عبر data-json
+//  ويتولاها web/actions.js بلا أي eval.
+function vArgs() {
+    const out = [];
+    for (let i = 0; i < arguments.length; i++) out.push(arguments[i]);
+    return " data-json='" + JSON.stringify(out) + "'";
+}
+
     // ===== RENDER ENGINE =====
     function renderAll() {
         updateStats();
@@ -33,7 +55,7 @@
         let featHtml=featured.length?featured.map(({cat,ci,it,ii})=>{
             let img=it.img?'<img src="'+esc(it.img)+'" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'<span style="font-size:2.2rem">📦</span>';
             let qs=getQs(it);
-            return '<div class="shop-card" style="cursor:pointer" onclick="setView(\'shop\'); setTimeout(()=>openProductDetail('+ci+','+ii+'),120)">'
+            return '<div class="shop-card" style="cursor:pointer" data-act="vOpenFromHome"' + vArgs(ci, ii) + '>'
                 +'<div class="shop-img" style="height:150px">'+img+'</div>'
                 +'<div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div style="font-size:.82rem;color:var(--text-muted)">'+esc(cat.name)+'</div><div class="shop-price">'+esc(it.p)+' <span>ج.م</span></div>'+(qs>0?'<div class="shop-avail ok">'+availText(it)+'</div>':'<div class="shop-avail no">غير متوفر</div>')+'</div>'
                 +'<button class="cart-add" onclick="event.stopPropagation();addToCart('+ci+','+ii+');toast(\'✅ أُضيف للسلة\')">🛒 أضف</button></div>';
@@ -169,7 +191,7 @@
             else {
                 content='<div class="shop-grid">'+favProducts.map(({cat,ci,it,ii})=>{
                     let img=it.img?'<img src="'+esc(it.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'📦';
-                    return '<div class="shop-card" onclick="openProductDetail('+ci+','+ii+')"><div class="shop-img" style="height:130px;position:relative"><button style="position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:1" onclick="event.stopPropagation();toggleFav('+ci+','+ii+');renderAccount()">❤️</button>'+img+'</div><div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div class="shop-price">'+esc(it.p)+' ج.م</div></div></div>';
+                    return '<div class="shop-card" data-act="openProductDetail"' + vArgs(ci, ii) + '><div class="shop-img" style="height:130px;position:relative"><button style="position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:1" data-act="vToggleFavAccount" data-stop' + vArgs(ci, ii) + '>❤️</button>'+img+'</div><div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div class="shop-price">'+esc(it.p)+' ج.م</div></div></div>';
                 }).join('')+'</div>';
             }
         }
@@ -377,7 +399,7 @@
             let delay = anim ? ' style="animation-delay:' + Math.min(idx * 35, 320) + 'ms"' : '';
             let qs = getQs(item);
             let favActive=isFav(ci,ii);
-            let favBtnHtml='<button class="fav-btn '+(favActive?'active':'')+'" style="position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;font-size:1rem;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:1;transition:transform .2s" onclick="event.stopPropagation();toggleFav('+ci+','+ii+')">'+(favActive?'❤️':'🤍')+'</button>';
+            let favBtnHtml='<button class="fav-btn '+(favActive?'active':'')+'" style="position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;font-size:1rem;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:1;transition:transform .2s" data-act="toggleFav" data-stop' + vArgs(ci, ii) + '>'+(favActive?'❤️':'🤍')+'</button>';
             // 🔒 T1.1: esc() تمنع كسر خاصية src (XSS). ملاحظة مهمة: لا نقيّد بالـ https فقط
             // لأن التطبيق يستخدم data: URLs للمعاينة قبل رفع الصورة إلى Storage.
             let imgHtml = item.img ? '<img src="' + esc(item.img) + '" alt="" loading="lazy" decoding="async">' : '<span>📦</span>';
@@ -387,15 +409,15 @@
             if (ex) {
                 cartBtn =
                     '<div class="shop-cartbar">' +
-                        '<button class="cart-step" onclick="event.stopPropagation();decCart(' + ci + ',' + ii + ')">−</button>' +
+                        '<button class="cart-step" data-act="decCart" data-stop' + vArgs(ci, ii) + '>−</button>' +
                         '<span class="cart-badge-icon">🛒 ' + ex.qty + '</span>' +
-                        '<button class="cart-step" onclick="event.stopPropagation();incCart(' + ci + ',' + ii + ')">+</button>' +
+                        '<button class="cart-step" data-act="incCart" data-stop' + vArgs(ci, ii) + '>+</button>' +
                     '</div>';
             } else {
-                cartBtn = '<button class="cart-add' + (qs <= 0 ? ' disabled' : '') + '" onclick="event.stopPropagation();addToCart(' + ci + ',' + ii + ')">🛒 + إضافة للسلة</button>';
+                cartBtn = '<button class="cart-add' + (qs <= 0 ? ' disabled' : '') + '" data-act="addToCart" data-stop' + vArgs(ci, ii) + '>🛒 + إضافة للسلة</button>';
             }
             html +=
-                '<div class="shop-card"' + delay + ' onclick="openProductDetail(' + ci + ',' + ii + ')">' +
+                '<div class="shop-card"' + delay + ' data-act="openProductDetail"' + vArgs(ci, ii) + '>' +
                     '<div class="shop-img" style="position:relative;overflow:hidden">' + favBtnHtml + imgHtml + '</div>' +
                     '<div class="shop-body">' +
                         '<div class="shop-name">' + highlightName(item.n, search) + '</div>' +

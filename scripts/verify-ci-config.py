@@ -290,6 +290,22 @@ check(
     "verify-static-headers.js" in ci_text,
     "" if "verify-static-headers.js" in ci_text else "انحراف الترويسات لن يُكتشف",
 )
+check(
+    "T7.4: موزّع الأحداث web/actions.js موجود ومحمَّل أولًا",
+    (ROOT / "web" / "actions.js").exists()
+    and (ROOT / "index.html").read_text(encoding="utf-8").find("web/actions.js")
+        < (ROOT / "index.html").read_text(encoding="utf-8").find("web/core.js"),
+    "" if (ROOT / "web" / "actions.js").exists() else "الموزّع غائب",
+)
+check(
+    "T7.4: ملف سقف المعالجات المضمّنة موجود",
+    (ROOT / "scripts" / "inline-handlers-budget.json").exists(),
+)
+check(
+    "T7.4: فحص السقف مربوط بـCI",
+    "verify-inline-handlers.js" in ci_text,
+    "" if "verify-inline-handlers.js" in ci_text else "الدَّين قد ينمو بصمت",
+)
 
 # ── التقرير ──
 print("═══════════════════════════════════════════════════════════════")

@@ -17,8 +17,11 @@ import path from "node:path";
 const ROOT = path.resolve(__dirname, "../..");
 const html = readFileSync(path.join(ROOT, "index.html"), "utf8");
 
-/** ترتيب التحميل الملزم — تغييره يكسر التطبيق (كل ملف يعتمد على ما قبله) */
-const ORDER = ["core", "views", "ui", "ops", "admin", "lock", "cloud", "boot",
+/**
+ * ترتيب التحميل الملزم — تغييره يكسر التطبيق (كل ملف يعتمد على ما قبله)
+ * T7.4: `actions` أولًا — موزّع الأحداث الذي يُنفّذ data-act بدل onclick.
+ */
+const ORDER = ["actions", "core", "views", "ui", "ops", "admin", "lock", "cloud", "boot",
   "pro-store", "pro-admin", "pro-checkout"];
 
 /** الملفات التي لا تدخل في هذا الفحص (مكتبات محلية أو خارجية مثل SDK تيليجرام) */
@@ -33,6 +36,18 @@ function scriptSources(): string[] {
 describe("T5.1 — تفكيك الكود إلى web/*.js", () => {
   it("index.html يحمّل ملفات التطبيق بالترتيب الصحيح فقط", () => {
     expect(scriptSources()).toEqual(ORDER.map((n) => `web/${n}.js`));
+  });
+
+  it("موزّع الأحداث يُحمَّل قبل كل الوحدات (وإلا لن يعمل أي data-act)", () => {
+    const srcs = scriptSources();
+    expect(srcs[0]).toBe("web/actions.js");
+    expect(srcs.filter((s) => s === "web/actions.js")).toHaveLength(1);
+  });
+
+  it("T7.4: سقف المعالجات المضمّنة في index.html لا يزيد", () => {
+    const budget = JSON.parse(readFileSync(path.join(ROOT, "scripts", "inline-handlers-budget.json"), "utf8"));
+    const hits = (html.replace(/<!--[\s\S]*?-->/g, "").match(/\bon[a-z]{3,12}="[^"]*"/g) || []).length;
+    expect(hits).toBeLessThanOrEqual(budget.files["index.html"]);
   });
 
   it("لا يبقى أي كود جافاسكربت مضمَّن داخل index.html", () => {

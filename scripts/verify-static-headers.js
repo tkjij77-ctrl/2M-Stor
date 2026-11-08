@@ -137,6 +137,21 @@ const swBlock = blocks['/sw.js'] || {};
 check('sw.js بلا تخزين مؤقت', /no-store|no-cache/.test(swBlock['cache-control'] || ''), swBlock['cache-control'] || 'غائب');
 check('vendor يُخزَّن طويلًا (immutable)', /immutable/.test((blocks['/vendor/*'] || {})['cache-control'] || ''), (blocks['/vendor/*'] || {})['cache-control'] || 'غائب');
 
+console.log('\n【6】 CSP المضمّنة في index.html (Pages لا يدعم الترويسات)');
+const metaCsp = (htmlRaw.match(/<meta[^>]+http-equiv="Content-Security-Policy"[^>]+content="([^"]+)"/) || [])[1] || '';
+check('توجد <meta> CSP في المستند', !!metaCsp, metaCsp.slice(0, 46) + (metaCsp ? '…' : 'غائبة'));
+if (metaCsp) {
+  const m1 = parseCsp(metaCsp);
+  for (const d of ['default-src', 'script-src', 'style-src', 'font-src', 'img-src', 'connect-src']) {
+    const extras = STATIC_ONLY_EXTRA[d] || [];
+    const a1 = (m1[d] || []).filter(v => !extras.includes(v)).slice().sort().join(' ');   // meta
+    const b1 = (a[d] || []).filter(v => !extras.includes(v)).slice().sort().join(' ');    // headers
+    check(`meta CSP تطابق _headers في ${d}`, a1 === b1, a1 === b1 ? a1.slice(0, 44) : `meta=[${a1}] · headers=[${b1}]`);
+  }
+  check("meta CSP: بلا 'unsafe-eval'", !/unsafe-eval/.test(metaCsp));
+  check('meta CSP: frame-ancestors أو object-src مقيَّد', /object-src|frame-ancestors/.test(metaCsp));
+}
+
 console.log('\n═══════════════════════════════════════════════════════════════');
 console.log(fail === 0 ? `  ✅ السطحان متطابقان — ${pass} فحصًا ناجحًا` : `  ❌ ${fail} خلل من ${pass + fail}`);
 console.log('═══════════════════════════════════════════════════════════════\n');

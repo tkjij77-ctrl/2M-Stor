@@ -6,7 +6,8 @@
     <!-- 🔒 T1.3 (2026-09-21): سياسة أمان المحتوى (CSP)
          GitHub Pages لا يسمح برؤوس HTTP، ولهذا تُضبط هنا عبر meta.
          ملاحظات:
-         · 'unsafe-inline' في script-src ضروري لأن الواجهة تستخدم onclick= بكثافة
+         · T7.4: تحويل onclick → data-act جارٍ (سقف في scripts/inline-handlers-budget.json)
+         · عند صفر معالج مضمّن تُحذف 'unsafe-inline' من CSP في _headers و next.config.js
            (إزالته تحتاج إعادة هيكلة الأحداث — مهمة T5.1)
          · https://telegram.org مسموح لسكربت Telegram Mini App فقط (SDK رسمي
            لا يعمل بدونه زر الرجوع/الاهتزاز داخل تيليجرام) — 2026-10-25
@@ -1324,6 +1325,8 @@
     <div class="modal-card" id="modalBody"></div>
 </div>
 
+<!-- موزّع الأحداث: يجب أن يسبق بقية الوحدات (بديل onclick المضمّنة) -->
+<script src="web/actions.js"></script>
 <script src="web/core.js"></script>
 <script src="web/views.js"></script>
 <script src="web/ui.js"></script>

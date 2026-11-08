@@ -13,6 +13,15 @@
 //  ناتجها في الـDOM، حتى لا تنحرف نسختان من نفس منطق الأسعار والمخزون.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── T7.4: حجج data-* بدل onclick المضمّنة (CSP بلا unsafe-inline) ──────────
+//  كل معالج مضمّن يُجبر CSP على السماح بكل سكربت مضمّن. هنا نُمرّر الوسائط
+//  عبر data-json فقط، ويُنفّذها web/actions.js دون أي eval.
+function proArgs() {
+    const out = [];
+    for (let i = 0; i < arguments.length; i++) out.push(arguments[i]);
+    return " data-json='" + JSON.stringify(out) + "'";
+}
+
 // ── أدوات صغيرة ────────────────────────────────────────────────────────────
 function proNum(v) { const n = parseFloat(v); return isFinite(n) ? n : 0; }
 
@@ -190,22 +199,22 @@ function proCardHtml(entry, opts) {
         (oldP > itemPrice(it) ? '<span class="pro-old-price">' + fmt(oldP) + '</span>' : '') + '</div>';
     const favActive = isFav(ci, ii);
     const favBtn = (opts && opts.noFav) ? '' :
-        '<button class="fav-btn ' + (favActive ? 'active' : '') + '" style="position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;font-size:.95rem;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:2" onclick="event.stopPropagation();toggleFav(' + ci + ',' + ii + ')">' + (favActive ? '❤️' : '🤍') + '</button>';
-    return '<div class="shop-card" onclick="openProductDetail(' + ci + ',' + ii + ')">' +
+        '<button class="fav-btn ' + (favActive ? 'active' : '') + '" style="position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.95);cursor:pointer;font-size:.95rem;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:2" data-act="toggleFav" data-stop' + proArgs(ci, ii) + '>' + (favActive ? '❤️' : '🤍') + '</button>';
+    return '<div class="shop-card" data-act="openProductDetail"' + proArgs(ci, ii) + '>' +
         '<div class="shop-img" style="position:relative;overflow:hidden">' + favBtn + badges + img + '</div>' +
         '<div class="shop-body">' +
             '<div class="shop-name">' + esc(it.n) + '</div>' +
             priceRow +
             '<div class="shop-avail ' + (qs > 0 ? 'ok' : 'no') + '">' + availText(it) + '</div>' +
         '</div>' +
-        '<button class="cart-add' + (qs <= 0 ? ' disabled' : '') + '" onclick="event.stopPropagation();addToCart(' + ci + ',' + ii + ')">🛒 + إضافة للسلة</button>' +
+        '<button class="cart-add' + (qs <= 0 ? ' disabled' : '') + '" data-act="addToCart" data-stop' + proArgs(ci, ii) + '>🛒 + إضافة للسلة</button>' +
     '</div>';
 }
 
 function proRailHtml(title, icon, entries, linkView) {
     if (!entries.length) return '';
     return '<div class="pro-sec-head"><h2>' + icon + ' ' + esc(title) + '</h2>' +
-        (linkView ? '<button class="pro-sec-more" onclick="setView(\'' + linkView + '\')">عرض الكل ←</button>' : '') +
+        (linkView ? '<button class="pro-sec-more" data-act="setView"' + proArgs(String(linkView)) + '>عرض الكل ←</button>' : '') +
         '</div><div class="pro-rail-track">' + entries.map(e => proCardHtml(e)).join('') + '</div>';
 }
 
@@ -214,7 +223,7 @@ function proBannersHtml() {
         // بنر افتراضي ذكي عند عدم وجود بنرات — لا يظهر فارغًا أبدًا
         const total = proAllItems().filter(x => getQs(x.it) > 0).length;
         return '<div class="pro-banner-sec"><div class="pro-banner-track">' +
-            '<div class="pro-banner-slide" onclick="setView(\'shop\')">' +
+            '<div class="pro-banner-slide" data-act="setView"' + proArgs("shop") + '>' +
                 '<div class="pro-banner-overlay"></div>' +
                 '<div class="pro-banner-content">' +
                     '<span class="pro-banner-tag">✨ ' + esc(settings.store || 'متجرنا') + '</span>' +
@@ -226,14 +235,10 @@ function proBannersHtml() {
             '</div></div></div>';
     }
     const slides = proBanners.map((b, i) => {
-        const link = b.link_type === 'category' && b.link_value ? 'setView(\'shop\');selectCat(' + parseInt(b.link_value, 10) + ')' :
-                     b.link_type === 'product' && b.link_value !== null ? 'setView(\'shop\');setTimeout(function(){openProductDetail(0,0)},150)' :
-                     /^https?:/i.test(b.link_value || '') ? 'window.open(\'' + esc(b.link_value) + '\',\'_blank\')' :
-                     'setView(\'shop\')';
         const bg = b.image_url
             ? '<img class="pro-banner-bg" src="' + esc(b.image_url) + '" alt="" loading="lazy">'
             : '';
-        return '<div class="pro-banner-slide" data-idx="' + i + '" onclick="' + link + '">' +
+        return '<div class="pro-banner-slide" data-idx="' + i + '" data-act="proBannerClick"' + proArgs(i) + '>' +
             bg + '<div class="pro-banner-overlay"></div>' +
             '<div class="pro-banner-content">' +
                 (b.cta_text ? '<span class="pro-banner-tag">' + esc(b.cta_text) + '</span>' : '') +
@@ -246,10 +251,57 @@ function proBannersHtml() {
     }).join('');
     const dots = proBanners.length > 1
         ? '<div class="pro-banner-dots">' + proBanners.map((b, i) =>
-            '<button class="pro-banner-dot' + (i === 0 ? ' active' : '') + '" onclick="event.stopPropagation();proBannerGo(' + i + ')"></button>').join('') + '</div>'
+            '<button class="pro-banner-dot' + (i === 0 ? ' active' : '') + '" data-act="proBannerGo" data-stop' + proArgs(i) + '></button>').join('') + '</div>'
         : '';
     return '<div class="pro-banner-sec"><div class="pro-banner-track" id="proBannerTrack">' + slides + '</div>' + dots + '</div>';
 }
+// ── T7.4: أفعال data-act (بديل onclick المضمّنة) ────────────────────────────
+/** نقرة البنر: نفس سلوك الكود النصّي القديم، لكن بلا توليد شيفرة إطلاقًا */
+function proBannerClick(i) {
+    const b = (typeof proBanners !== 'undefined' && proBanners) ? proBanners[i] : null;
+    if (!b) { setView('shop'); return; }
+    if (b.link_type === 'category' && b.link_value) {
+        setView('shop');
+        selectCat(parseInt(b.link_value, 10));
+        return;
+    }
+    if (b.link_type === 'product' && b.link_value !== null && b.link_value !== undefined) {
+        setView('shop');
+        setTimeout(function () { openProductDetail(0, 0); }, 150);
+        return;
+    }
+    if (/^https?:/i.test(b.link_value || '')) {
+        window.open(b.link_value, '_blank');
+        return;
+    }
+    setView('shop');
+}
+
+/** قسم من الصفحة الرئيسية: انتقال إلى المتجر ثم تصفية القسم */
+function proOpenCategory(i) {
+    setView('shop');
+    selectCat(i);
+}
+
+/** «أضف للسلة» من صفحة المنتج: إضافة ثم إغلاق التفاصيل ثم فتح السلة */
+function proBuyAndOpenCart(ci, ii) {
+    addToCart(ci, ii);
+    closeProductDetail();
+    openCart();
+}
+
+/** عرض السلة من صفحة المنتج */
+function proOpenCartFromDetail() {
+    closeProductDetail();
+    openCart();
+}
+
+/** إغلاق شرح التثبيت على آيفون */
+function proCloseIosOverlay() {
+    const el = document.getElementById('proIosOverlay');
+    if (el) el.classList.remove('open');
+}
+
 function proBannerGo(idx) {
     const track = document.getElementById('proBannerTrack');
     if (!track) return;
@@ -279,14 +331,14 @@ function proCatCirclesHtml() {
         const inner = c.image
             ? '<img src="' + esc(c.image) + '" alt="" loading="lazy">'
             : (c.icon || '📦');
-        return '<button class="pro-cat-item" onclick="setView(\'shop\');selectCat(' + i + ')">' +
+        return '<button class="pro-cat-item" data-act="proOpenCategory"' + proArgs(i) + '>' +
             '<span class="pro-cat-ring">' + inner + '</span>' +
             '<span class="pro-cat-lbl">' + esc(c.name) + '</span>' +
             '<span class="pro-cat-cnt">' + n + ' منتج</span>' +
         '</button>';
     }).join('');
     return '<div class="pro-sec-head"><h2>📂 تسوّق حسب القسم</h2>' +
-        '<button class="pro-sec-more" onclick="setView(\'shop\')">كل الأقسام ←</button></div>' +
+        '<button class="pro-sec-more" data-act="setView"' + proArgs("shop") + '>كل الأقسام ←</button></div>' +
         '<div class="pro-cat-circles">' + items + '</div>';
 }
 
@@ -347,7 +399,7 @@ function proRenderHome() {
             '</div>' +
         '</section>' +
         '<div style="text-align:center;margin:30px 0 10px">' +
-            '<button class="btn btn-primary" onclick="setView(\'shop\')" style="padding:14px 30px;font-size:1rem">🏪 تصفّح كل المنتجات ←</button>' +
+            '<button class="btn btn-primary" data-act="setView"' + proArgs("shop") + ' style="padding:14px 30px;font-size:1rem">🏪 تصفّح كل المنتجات ←</button>' +
         '</div>' +
     '</div>';
 
@@ -383,7 +435,9 @@ function proDecorateCards(root) {
     if (!cards.length) return;
     cards.forEach(card => {
         if (card.dataset.prod === '1') return;
-        const m = /openProductDetail\((\d+),\s*(\d+)\)/.exec(card.getAttribute('onclick') || '');
+        // T7.4: البطاقات صارت data-act — نقرأ الوسائط من data-json (مع توافق خلفي)
+        const m = /openProductDetail\((\d+),\s*(\d+)\)/.exec(card.getAttribute('onclick') || '')
+            || /^\[(\d+),(\d+)\]$/.exec(card.getAttribute('data-json') || '');
         if (!m) return;
         card.dataset.prod = '1';
         const cat = db[+m[1]]; const it = cat && cat.items[+m[2]];
@@ -440,7 +494,7 @@ function proEnhanceProductDetail(ci, ii) {
         if (thumbs) {
             amzThumbs = imgs.map(u => ({ img: u }));
             thumbs.innerHTML = imgs.map((u, k) =>
-                '<div class="amz-thumb' + (k === 0 ? ' active' : '') + '" onclick="amzSetMain(' + k + ')">' +
+                '<div class="amz-thumb' + (k === 0 ? ' active' : '') + '" data-act="amzSetMain"' + proArgs(k) + '>' +
                 '<img src="' + esc(u) + '" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">' +
                 '</div>').join('');
             thumbs.style.display = imgs.length > 1 ? '' : 'none';
@@ -479,7 +533,7 @@ function proEnhanceProductDetail(ci, ii) {
             '<div><div style="font-size:1.05rem;font-weight:900">' + esc(it.p) + ' <small style="font-size:.72rem">ج.م</small></div>' +
             '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700">' + (qs > 0 ? availText(it) : 'غير متوفر') + '</div></div>' +
             '<button class="btn btn-primary" style="padding:12px 20px;font-size:.9rem" ' + (qs <= 0 ? 'disabled style="opacity:.5"' : '') +
-            ' onclick="addToCart(' + ci + ',' + ii + ');closeProductDetail();openCart()">🛒 أضف للسلة</button>';
+            ' data-act="proBuyAndOpenCart"' + proArgs(ci, ii) + '>🛒 أضف للسلة</button>';
         card.appendChild(bar);
     }
 
@@ -535,7 +589,7 @@ function proShowAddedToast(ci, ii) {
         (imgs.length ? '<img src="' + esc(imgs[0]) + '" alt="" style="width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0">' : '<span style="font-size:1.6rem">📦</span>') +
         '<div style="flex:1;min-width:0"><div style="font-size:.82rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(it.n) + '</div>' +
         '<div style="font-size:.72rem;opacity:.7;font-weight:700">تمت الإضافة إلى السلة</div></div>' +
-        '<button class="pro-added-btn" onclick="closeProductDetail();openCart()">عرض السلة ←</button>';
+        '<button class="pro-added-btn" data-act="proOpenCartFromDetail">عرض السلة ←</button>';
     el.classList.add('show');
     if (proToastTimer) clearTimeout(proToastTimer);
     proToastTimer = setTimeout(() => el.classList.remove('show'), 4200);
@@ -563,8 +617,8 @@ function proInstallCardHtml() {
             '<b>📲 ثبّت التطبيق على جهازك</b>' +
             '<span>' + (inTg ? 'أضِفه لشاشة تيليجرام الرئيسية للوصول السريع' : ios ? 'خطوات بسيطة من Safari — بلا متجر تطبيقات' : 'يفتح أسرع ويعمل أوفلاين بضغطة واحدة') + '</span>' +
         '</div>' +
-        '<button class="btn btn-primary" style="padding:9px 16px;font-size:.8rem;white-space:nowrap" onclick="proInstallNow()">تثبيت</button>' +
-        '<button class="pro-install-dismiss" onclick="proDismissInstall()" aria-label="إخفاء">✕</button>' +
+        '<button class="btn btn-primary" style="padding:9px 16px;font-size:.8rem;white-space:nowrap" data-act="proInstallNow">تثبيت</button>' +
+        '<button class="pro-install-dismiss" data-act="proDismissInstall" aria-label="إخفاء">✕</button>' +
     '</div>';
 }
 function proUpdateInstallCard() {
@@ -617,13 +671,13 @@ function proShowIosInstall() {
     ov.innerHTML = '<div class="pro-ios-sheet">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
             '<h3 style="font-size:1.05rem;font-weight:900">📲 تثبيت على الآيفون</h3>' +
-            '<button onclick="document.getElementById(\'proIosOverlay\').classList.remove(\'open\')" style="border:none;background:var(--bg-soft);width:32px;height:32px;border-radius:50%;cursor:pointer">✕</button>' +
+            '<button data-act="proCloseIosOverlay" style="border:none;background:var(--bg-soft);width:32px;height:32px;border-radius:50%;cursor:pointer">✕</button>' +
         '</div>' +
         '<p style="font-size:.82rem;color:var(--text-muted);font-weight:700;margin-top:8px">افتح المتجر من متصفح <b>Safari</b> ثم اتبع الخطوات:</p>' +
         '<div class="pro-ios-step"><span class="pro-ios-num">1</span><span>اضغط زر <b>المشاركة</b> ⬆️ في أسفل الشاشة</span></div>' +
         '<div class="pro-ios-step"><span class="pro-ios-num">2</span><span>اختر <b>«إضافة إلى الشاشة الرئيسية»</b> ➕</span></div>' +
         '<div class="pro-ios-step"><span class="pro-ios-num">3</span><span>اضغط <b>«إضافة»</b> — وسيظهر أيقونة المتجر على هاتفك</span></div>' +
-        '<button class="btn btn-primary" style="width:100%;margin-top:18px" onclick="document.getElementById(\'proIosOverlay\').classList.remove(\'open\')">فهمت، شكرًا</button>' +
+        '<button class="btn btn-primary" style="width:100%;margin-top:18px" data-act="proCloseIosOverlay">فهمت، شكرًا</button>' +
     '</div>';
     ov.classList.add('open');
 }

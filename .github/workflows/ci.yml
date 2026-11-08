@@ -33,6 +33,9 @@ jobs:
       # ADR-0001: لا سطح محمي وسطح مكشوف — الترويسات يجب أن تتطابق
       - name: تطابق ترويسات الأمان بين السطح الثابت والـNext
         run: node scripts/verify-static-headers.js
+      # T7.4: سقف المعالجات المضمّنة لا يزيد (onclick → data-act)
+      - name: سقف المعالجات المضمّنة (لا نموّ للدَّين التقني)
+        run: node scripts/verify-inline-handlers.js
 
   test:
     runs-on: ubuntu-latest
@@ -174,6 +177,8 @@ jobs:
           python3 -m http.server 8123 --bind 127.0.0.1 >/tmp/static.log 2>&1 &
           sleep 1
           node scripts/verify-stock-projection-ui.js
+          # T7.4: الموزّع يُنفّذ السلوك فعلًا (لا مجرد غياب onclick)
+          node scripts/verify-actions-dispatch.js
       - name: بناء Next.js (بلا أسرار — قيم بديلة)
         run: npm run build
         env:

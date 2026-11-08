@@ -51,7 +51,7 @@
             '<div class="form-group"><label>تأكيد الرمز</label>' +
             '<input type="password" id="set-pin-conf" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="••••"></div>' +
             '<p style="font-size:.73rem;color:var(--text-muted);font-weight:700">اتركه فارغًا لإلغاء الرمز. الرمز يُخزَّن مشفَّرًا على هذا الجهاز وحده — الحماية الحقيقية تبقى كلمة المرور.</p>' +
-            '<div style="margin:8px 0 4px"><button class="btn btn-outline" onclick="saveCounterPin()">🔒 حفظ رمز PIN</button></div>';
+            '<div style="margin:8px 0 4px"><button class="btn btn-outline" data-act="saveCounterPin">🔒 حفظ رمز PIN</button></div>';
     }
 
     async function saveCounterPin() {
@@ -86,15 +86,15 @@
         let dots = '';
         for (let i = 0; i < rec.len; i++) dots += '<div class="pin-dot' + (i < lockPinBuf.length ? ' filled' : '') + '"></div>';
         let btns = '';
-        for (let n = 1; n <= 9; n++) btns += '<button class="pin-btn" onclick="lockPadPress(\'' + n + '\')">' + n + '</button>';
-        btns += '<button class="pin-btn action" onclick="lockPadClear()" aria-label="مسح">⌫</button>' +
-                '<button class="pin-btn" onclick="lockPadPress(\'0\')">0</button>' +
-                '<button class="pin-btn action" onclick="lockPinSubmit()" aria-label="تأكيد">✓</button>';
+        for (let n = 1; n <= 9; n++) btns += '<button class="pin-btn" data-act="lockPadPress" data-json=\'["' + n + '"]\'>' + n + '</button>';
+        btns += '<button class="pin-btn action" data-act="lockPadClear" aria-label="مسح">⌫</button>' +
+                '<button class="pin-btn" data-act="lockPadPress" data-json=\'["0"]\'>0</button>' +
+                '<button class="pin-btn action" data-act="lockPinSubmit" aria-label="تأكيد">✓</button>';
         area.innerHTML =
             '<div class="pin-container"><div class="pin-dots">' + dots + '</div>' +
             (msg ? '<div style="font-size:.78rem;font-weight:800;color:var(--danger)">' + msg + '</div>' : '') +
             '<div class="pin-pad">' + btns + '</div>' +
-            '<button class="login-switch-mode" onclick="lockShowPassword()">نسيت الرمز؟ ادخل بكلمة المرور</button></div>';
+            '<button class="login-switch-mode" data-act="lockShowPassword">نسيت الرمز؟ ادخل بكلمة المرور</button></div>';
     }
     function lockPadPress(d) {
         const rec = pinRecord();
@@ -127,9 +127,9 @@
         area.innerHTML =
             '<div class="form-group" style="text-align:right"><label style="font-size:.78rem">كلمة المرور</label>' +
             '<input type="password" id="lock-pass" autocomplete="current-password" placeholder="••••••" ' +
-            'onkeydown="if(event.key===\'Enter\')lockPasswordSubmit()"></div>' +
-            '<button class="btn btn-primary" id="btnLockUnlock" onclick="lockPasswordSubmit()" style="width:100%">🔓 فتح</button>' +
-            '<button class="login-switch-mode" style="margin-top:8px" onclick="renderLockPinArea(\'\')">↩ رجوع إلى رمز PIN</button>';
+            'data-on="keydown" data-key="Enter" data-act="lockPasswordSubmit"></div>' +
+            '<button class="btn btn-primary" id="btnLockUnlock" data-act="lockPasswordSubmit" style="width:100%">🔓 فتح</button>' +
+            '<button class="login-switch-mode" style="margin-top:8px" data-act="renderLockPinArea" data-json=\'[""]\'>↩ رجوع إلى رمز PIN</button>';
         const el = document.getElementById('lock-pass');
         if (el) el.focus();
     }
