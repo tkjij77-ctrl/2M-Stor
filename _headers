@@ -1,0 +1,35 @@
+# ═══════════════════════════════════════════════════════════════════
+#  ترويسات الأمان للسطح الثابت (index.html + web/ + vendor/)
+#  ADR-0001 — يُقرأ هذا الملف من Cloudflare Pages / Netlify عند النشر.
+#
+#  GitHub Pages لا يدعم الترويسات المخصّصة إطلاقًا — لذلك كانت الواجهة
+#  الحقيقية للمحل تعمل بلا CSP ولا X-Frame-Options منذ البداية.
+#
+#  القاعدة الملزمة: كل تغيير هنا يجب أن يُطابِق next.config.js أيضًا؛
+#  scripts/verify-static-headers.js يُفشل CI إذا انحرف السطحان.
+# ═══════════════════════════════════════════════════════════════════
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(self)
+  X-DNS-Prefetch-Control: off
+
+# Service Worker: لا يُخزَّن مؤقتًا أبدًا، وإلا بقي إصدار قديم في الأجهزة
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+# المستند الرئيسي: بلا تخزين (لضمان وصول التحديثات)
+/index.html
+  Cache-Control: no-cache
+
+# الأصول المُبصَّمة/الثابتة: تخزين طويل (vendor لا يتغير إلا بترقية)
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ملفات المزامنة والحالة ليست للعرض العام
+/cloud-schema.sql
+  X-Robots-Tag: noindex, nofollow

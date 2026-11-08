@@ -276,6 +276,20 @@ check(
     "جلسة مزيّفة" in gt,
     "" if "جلسة مزيّفة" in gt else "لا اختبار لكوكي مزوّر",
 )
+check(
+    "ADR-0001: قرار الاستضافة موثَّق في docs/adr",
+    any((ROOT / "docs" / "adr").glob("0001-*.md")) if (ROOT / "docs" / "adr").exists() else False,
+)
+check(
+    "ADR-0001: _headers موجود في جذر المستودع (ترويسات السطح الثابت)",
+    (ROOT / "_headers").exists(),
+    "" if (ROOT / "_headers").exists() else "السطح الحقيقي بلا CSP/XFO",
+)
+check(
+    "ADR-0001: فحص تطابق الترويسات مربوط بـCI",
+    "verify-static-headers.js" in ci_text,
+    "" if "verify-static-headers.js" in ci_text else "انحراف الترويسات لن يُكتشف",
+)
 
 # ── التقرير ──
 print("═══════════════════════════════════════════════════════════════")

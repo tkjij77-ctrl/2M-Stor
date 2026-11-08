@@ -1,0 +1,70 @@
+name: Deploy · Cloudflare Pages
+
+# ADR-0001 — نشر السطح الثابت (index.html + web/ + vendor/) على Cloudflare Pages.
+#
+# • بلا أسرار: المهمة تُتخطّى بهدوء بدل أن تفشل (النشر لا يكسر CI).
+# • لا بناء: نفس الملفات تُنشر كما هي — لا خطوة compile ولا إعادة كتابة.
+# • قبل النشر: فحص تطابق الترويسات، فلا تُنشر واجهة بلا CSP.
+#
+# المطلوب منك مرة واحدة (Settings → Secrets):
+#   CLOUDFLARE_API_TOKEN   (صلاحية Cloudflare Pages: Edit)
+#   CLOUDFLARE_ACCOUNT_ID
+# ثم Pages → Create project → اسم المشروع: 2m-stor
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: 2m-stor
+    steps:
+      - uses: actions/checkout@v7
+
+      # secrets داخل if يُبطل الـworkflow كله — لذلك نمرّ بمتغيّر بيئة (درس T2.3)
+      - name: هل أسرار Cloudflare متاحة؟
+        id: gate
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ تخطّي النشر: أضف CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID — راجع docs/adr/0001-surfaces-and-hosting.md"
+          fi
+
+      - name: فحص الترويسات قبل النشر (لا واجهة بلا CSP)
+        run: node scripts/verify-static-headers.js
+
+      - name: تجهيز مجلد النشر (ملفات السطح الثابت فقط)
+        run: |
+          mkdir -p _site
+          cp -v index.html sw.js manifest.json _headers _site/
+          cp -v icon-192.png icon-512.png apple-touch-icon.png _site/ 2>/dev/null || true
+          cp -rv web vendor _site/
+          echo "── حجم ما سيُنشر:"
+          du -sh _site
+          echo "── ملفات: $(find _site -type f | wc -l)"
+
+      - name: نشر على Cloudflare Pages (بلا بناء)
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          npx --yes wrangler@4 pages deploy _site \
+            --project-name="$PROJECT" \
+            --branch=main \
+            --commit-dirty=true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: ما بقي بعد النشر
+        if: steps.gate.outputs.ready != 'true'
+        run: echo "⚠️ لم يُنشر شيء — الأسرار غائبة. الموقع القديم ما زال يعمل، لا خطر."

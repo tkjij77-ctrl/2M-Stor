@@ -30,6 +30,9 @@ jobs:
       # فحصنا الخاص: يلتقط ما لا يلتقطه action-validator (مثل secrets داخل if)
       - name: فحص إعداد CI/Dependabot/CodeQL
         run: python3 scripts/verify-ci-config.py
+      # ADR-0001: لا سطح محمي وسطح مكشوف — الترويسات يجب أن تتطابق
+      - name: تطابق ترويسات الأمان بين السطح الثابت والـNext
+        run: node scripts/verify-static-headers.js
 
   test:
     runs-on: ubuntu-latest
