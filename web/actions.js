@@ -128,6 +128,8 @@
       var tok = el.getAttribute('data-tok');
       var entry = tok ? registry[tok] : null;
       var args = entry ? realArgs(entry.args, el, ev) : argsOf(el);
+      // data-event: بعض الدوال تحتاج الحدث نفسه أولًا (importData(event)…)
+      if (el.hasAttribute('data-event')) args = [ev].concat(args);
       fn.apply(el, args.concat([ev, el]));
     } catch (err) {
       if (window.console && console.error) console.error('[actions]', el.getAttribute('data-act'), err);

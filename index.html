@@ -1142,18 +1142,18 @@
     <div class="header-top">
         <h1>📦 2M-Stor</h1>
         <nav class="nav-links-desktop" id="navLinksDesktop">
-            <a onclick="setView('home')" data-route="home" class="active">الرئيسية</a>
-            <a onclick="setView('shop')" data-route="shop">المتجر</a>
-            <a onclick="document.getElementById('landing-features')&&document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</a>
-            <a onclick="document.getElementById('landing-footer')&&document.getElementById('landing-footer').scrollIntoView({behavior:'smooth'})">تواصل</a>
-            <a onclick="setView('account')" data-route="account">حسابي</a>
+            <a data-act="setView" data-json='["home"]' data-route="home" class="active">الرئيسية</a>
+            <a data-act="setView" data-json='["shop"]' data-route="shop">المتجر</a>
+            <a data-act="actScrollToFeatures">من نحن</a>
+            <a data-act="actScrollToFooter">تواصل</a>
+            <a data-act="setView" data-json='["account"]' data-route="account">حسابي</a>
         </nav>
         <div class="header-actions">
             <span class="role-chip" id="roleChip"></span>
-            <button id="authHeaderBtn" class="btn btn-primary" onclick="showLogin()" style="padding:8px 16px;font-size:.82rem;font-weight:800;white-space:nowrap;display:none">🔓 تسجيل الدخول</button>
-            <button id="favHeaderBtn" class="burger-btn" onclick="setView('shop'); shopFavOnly=true; setTimeout(()=>{const cb=document.getElementById('favOnly'); if(cb) cb.checked=true; renderAll(); updateFavBadge();},80)" title="المفضلة" aria-label="المفضلة" style="position:relative">❤️<span id="favCount" style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;min-width:18px;height:18px;border-radius:50%;display:none;place-items:center;font-size:.65rem;font-weight:800;padding:0 4px;box-shadow:0 2px 6px rgba(0,0,0,.2)">0</span></button>
-            <button id="lockBtn" class="burger-btn" onclick="quickLock()" title="قفل الكاونتر السريع" aria-label="قفل الكاونتر" style="display:none">🔒</button>
-            <button id="themeToggle" class="burger-btn" onclick="toggleDarkMode()" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي">🌙</button>
+            <button id="authHeaderBtn" class="btn btn-primary" data-act="showLogin" style="padding:8px 16px;font-size:.82rem;font-weight:800;white-space:nowrap;display:none">🔓 تسجيل الدخول</button>
+            <button id="favHeaderBtn" class="burger-btn" data-act="actFavOnly" title="المفضلة" aria-label="المفضلة" style="position:relative">❤️<span id="favCount" style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;min-width:18px;height:18px;border-radius:50%;display:none;place-items:center;font-size:.65rem;font-weight:800;padding:0 4px;box-shadow:0 2px 6px rgba(0,0,0,.2)">0</span></button>
+            <button id="lockBtn" class="burger-btn" data-act="quickLock" title="قفل الكاونتر السريع" aria-label="قفل الكاونتر" style="display:none">🔒</button>
+            <button id="themeToggle" class="burger-btn" data-act="toggleDarkMode" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي">🌙</button>
             <button id="burgerBtn" class="burger-btn" aria-label="القائمة">☰</button>
         </div>
     </div>
@@ -1166,7 +1166,7 @@
 </header>
 
 <!-- ===== BURGER MENU ===== -->
-<div class="burger-overlay" id="burgerOverlay" onclick="closeBurger()"></div>
+<div class="burger-overlay" id="burgerOverlay" data-act="closeBurger"></div>
 <div class="burger-menu" id="burgerMenu">
     <div class="side-profile">
         <div class="side-avatar" id="sideAvatar">👤</div>
@@ -1177,21 +1177,21 @@
         <span class="cloud-chip" id="cloudChip" style="display:none"></span>
     </div>
     <div class="burger-divider">🔀 الصفحات</div>
-    <div class="burger-item" id="burger-home" onclick="setView('home')">🏠 الرئيسية</div>
-    <div class="burger-item" id="burger-stock" onclick="setView('stock')">📦 صفحة المخزن</div>
-    <div class="burger-item" id="burger-shop" onclick="setView('shop')">🏪 صفحة العرض</div>
-    <div class="burger-item" id="burger-account" onclick="setView('account')">👤 حسابي</div>
+    <div class="burger-item" id="burger-home" data-act="setView" data-json='["home"]'>🏠 الرئيسية</div>
+    <div class="burger-item" id="burger-stock" data-act="setView" data-json='["stock"]'>📦 صفحة المخزن</div>
+    <div class="burger-item" id="burger-shop" data-act="setView" data-json='["shop"]'>🏪 صفحة العرض</div>
+    <div class="burger-item" id="burger-account" data-act="setView" data-json='["account"]'>👤 حسابي</div>
     <div class="burger-divider">⚙️ الأدوات</div>
-    <div class="burger-item" id="burger-dash" onclick="toggleDashboard()">📊 لوحة التحكم</div>
-    <div class="burger-item" id="burger-invoices" onclick="closeBurger();showInvoiceHistory()">🧾 الفواتير</div>
-    <div class="burger-item" id="burger-export" onclick="exportData()">📥 تصدير البيانات</div>
-    <div class="burger-item" id="burger-import" onclick="document.getElementById('importInput').click()">📤 استيراد البيانات</div>
+    <div class="burger-item" id="burger-dash" data-act="toggleDashboard">📊 لوحة التحكم</div>
+    <div class="burger-item" id="burger-invoices" data-act="actInvoicesFromBurger">🧾 الفواتير</div>
+    <div class="burger-item" id="burger-export" data-act="exportData">📥 تصدير البيانات</div>
+    <div class="burger-item" id="burger-import" data-act="actPickImportInput">📤 استيراد البيانات</div>
     <div class="burger-divider"></div>
-    <div class="burger-item" id="burger-settings" onclick="openSettingsModal()">⚙️ الإعدادات (المحل والضريبة)</div>
-    <div class="burger-item" id="burger-users" onclick="toggleStaffPage()">👥 العاملين والعملاء</div>
-    <div class="burger-item" id="burger-pass" onclick="openPassModal()">🔒 كلمة المرور والـ PIN</div>
-    <div class="burger-item" id="burger-quicklock" onclick="closeBurger();quickLock()">🔒 قفل الكاونتر مؤقتاً</div>
-    <button class="burger-logout" id="burger-logout" onclick="logout()">🚪 تسجيل الخروج</button>
+    <div class="burger-item" id="burger-settings" data-act="openSettingsModal">⚙️ الإعدادات (المحل والضريبة)</div>
+    <div class="burger-item" id="burger-users" data-act="toggleStaffPage">👥 العاملين والعملاء</div>
+    <div class="burger-item" id="burger-pass" data-act="openPassModal">🔒 كلمة المرور والـ PIN</div>
+    <div class="burger-item" id="burger-quicklock" data-act="actLockFromBurger">🔒 قفل الكاونتر مؤقتاً</div>
+    <button class="burger-logout" id="burger-logout" data-act="logout">🚪 تسجيل الخروج</button>
     <div class="side-footer">2M-Stor · نظام إدارة المحل · v3.3</div>
 </div>
 
@@ -1200,19 +1200,19 @@
 <div class="content" id="appContent">
     <!-- ===== VIEW TABS ===== -->
     <div class="view-tabs" id="viewTabs">
-        <button class="view-tab active" data-view="stock" onclick="setView('stock')">📦 المخزن</button>
-        <button class="view-tab" data-view="shop" onclick="setView('shop')">🏪 العرض</button>
+        <button class="view-tab active" data-view="stock" data-act="setView" data-json='["stock"]'>📦 المخزن</button>
+        <button class="view-tab" data-view="shop" data-act="setView" data-json='["shop"]'>🏪 العرض</button>
     </div>
     <div class="top-bar">
         <div class="search-row" style="margin-bottom:0;flex:1">
-            <input type="text" id="searchInput" placeholder="🔍 ابحث عن صنف..." oninput="debouncedRenderAll()">
-            <button class="icon-btn" onclick="document.getElementById('scanInput').click()" aria-label="مسح رمز من صورة">📷</button>
-            <button class="icon-btn" onclick="startCameraScan()" aria-label="مسح بالكاميرا الحية">🎥</button>
+            <input type="text" id="searchInput" placeholder="🔍 ابحث عن صنف..." data-act="debouncedRenderAll" data-on="input">
+            <button class="icon-btn" data-act="actPickScanInput" aria-label="مسح رمز من صورة">📷</button>
+            <button class="icon-btn" data-act="startCameraScan" aria-label="مسح بالكاميرا الحية">🎥</button>
         </div>
-        <button class="btn-invoice" onclick="openCart()">🧾 السلة</button>
+        <button class="btn-invoice" data-act="openCart">🧾 السلة</button>
     </div>
     <div class="cat-bar" id="catBar" aria-label="الأقسام"></div>
-    <div class="alert-bar" id="alertBar" onclick="openAlertsModal()" role="button" tabindex="0" aria-label="تنبيهات المخزون المنخفض">
+    <div class="alert-bar" id="alertBar" data-act="openAlertsModal" role="button" tabindex="0" aria-label="تنبيهات المخزون المنخفض">
         <span class="icon">⚠️</span>
         <span class="text" id="alertText"></span>
         <span class="count" id="alertCount">0</span>
@@ -1229,34 +1229,34 @@
       <div style="font-weight:900;font-size:1.3rem;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--primary-dark));border-radius:10px;display:grid;place-items:center">2M</span>2M<b style="color:var(--accent-2)">-Stor</b></div>
       <p style="opacity:.85" id="landing-desc"></p>
     </div>
-    <div><h4>روابط</h4><a onclick="setView('home')">الرئيسية</a><a onclick="setView('shop')">المتجر</a><a onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</a><a onclick="document.getElementById('landing-footer').scrollIntoView({behavior:'smooth'})">تواصل</a></div>
-    <div><h4>حسابي</h4><a onclick="can('history')&&showInvoiceHistory()">طلباتي</a><a onclick="openCart()">السلة</a><a onclick="toggleDashboard()">لوحة التحكم</a><a onclick="openSettingsModal()">الإعدادات</a></div>
+    <div><h4>روابط</h4><a data-act="setView" data-json='["home"]'>الرئيسية</a><a data-act="setView" data-json='["shop"]'>المتجر</a><a data-act="actScrollToFeatures">من نحن</a><a data-act="actScrollToFooter">تواصل</a></div>
+    <div><h4>حسابي</h4><a data-act="actInvoicesIfAllowed">طلباتي</a><a data-act="openCart">السلة</a><a data-act="toggleDashboard">لوحة التحكم</a><a data-act="openSettingsModal">الإعدادات</a></div>
     <!-- 🏪 T4.2: بيانات التواصل من الإعدادات — كانت أرقامًا ومعلومات مخترعة -->
     <div><h4>تواصل معنا</h4><div id="landing-contact"></div></div>
     <div><h4>قانوني</h4>
-      <a onclick="showLegal('privacy')">🔒 الخصوصية</a>
-      <a onclick="showLegal('terms')">📄 شروط الاستخدام</a>
-      <a onclick="showLegal('returns')">↩️ سياسة الإرجاع</a>
+      <a data-act="showLegal" data-json='["privacy"]'>🔒 الخصوصية</a>
+      <a data-act="showLegal" data-json='["terms"]'>📄 شروط الاستخدام</a>
+      <a data-act="showLegal" data-json='["returns"]'>↩️ سياسة الإرجاع</a>
     </div>
   </div>
   <div class="footer-bottom"><span id="landing-copyright"></span> جميع الحقوق محفوظة.</div>
 </footer>
-<button class="to-top" id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<button class="to-top" id="toTop" data-act="actScrollTop">↑</button>
 <div class="toast-container" id="toastContainer"></div>
 <button class="install-btn" id="installBtn">📲 تثبيت التطبيق</button>
-<input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
+<input type="file" id="importInput" accept=".json" style="display:none" data-act="importData" data-on="change" data-event>
 
 <!-- ===== CART OVERLAY ===== -->
 <div class="cart-overlay" id="cartOverlay">
     <div class="cart-header">
         <h2>🛒 سلة <span class="accent">التسوق</span></h2>
-        <button onclick="closeCart()">✕ إغلاق</button>
+        <button data-act="closeCart">✕ إغلاق</button>
     </div>
     <div class="cart-body" id="cartBody"></div>
 </div>
 
 <!-- ===== PRODUCT DETAIL ===== -->
-<div class="product-detail-overlay" id="productDetailOverlay" onclick="if(event.target===this)closeProductDetail()">
+<div class="product-detail-overlay" id="productDetailOverlay" data-act="actCloseDetailIfBackdrop">
     <div class="product-detail-card" id="productDetailCard"></div>
 </div>
 
@@ -1264,7 +1264,7 @@
 <div class="dash-overlay" id="staffOverlay">
     <div class="dash-header">
         <h2>👥 العاملين والعملاء</h2>
-        <button onclick="toggleStaffPage()">✕</button>
+        <button data-act="toggleStaffPage">✕</button>
     </div>
     <div class="dash-body" id="staffBody"></div>
 </div>
@@ -1273,22 +1273,22 @@
 <div class="dash-overlay" id="dashOverlay">
     <div class="dash-header">
         <h2>📊 لوحة التحكم</h2>
-        <button onclick="toggleDashboard()">✕</button>
+        <button data-act="toggleDashboard">✕</button>
     </div>
     <div class="dash-body" id="dashBody"></div>
 </div>
 
-<div class="fab-overlay" id="fabOverlay" onclick="toggleFabMenu()"></div>
+<div class="fab-overlay" id="fabOverlay" data-act="toggleFabMenu"></div>
 <div class="fab-wrap" id="fabWrap">
     <div class="fab-menu" id="fabMenu">
-        <div class="fab-menu-item" onclick="toggleFabMenu();addCategory()">📂 إضافة قسم</div>
-        <div class="fab-menu-item" onclick="toggleFabMenu();openModal('add')">➕ إضافة صنف</div>
+        <div class="fab-menu-item" data-act="actFabAddCategory">📂 إضافة قسم</div>
+        <div class="fab-menu-item" data-act="actFabAddItem">➕ إضافة صنف</div>
     </div>
-    <button class="fab" onclick="toggleFabMenu()" aria-label="إضافة">＋</button>
+    <button class="fab" data-act="toggleFabMenu" aria-label="إضافة">＋</button>
 </div>
 
 <!-- ===== CART FAB ===== -->
-<button class="cart-fab" id="cartFab" onclick="openCart()" aria-label="سلة التسوق">
+<button class="cart-fab" id="cartFab" data-act="openCart" aria-label="سلة التسوق">
     🛒 <span class="cart-fab-total" id="cartFabTotal">السلة</span>
     <span class="cart-badge" id="cartBadge" style="display:none">0</span>
 </button>
@@ -1303,16 +1303,16 @@
         <div id="lockPinArea"></div>
         <div class="login-error" id="lockError" style="display:none;margin-top:10px"></div>
         <div style="display:flex;justify-content:center;gap:12px;margin-top:10px">
-            <button class="login-switch-mode" onclick="unlockWithPasswordPrompt()">🔑 الدخول بكلمة المرور</button>
-            <button class="login-switch-mode" style="color:var(--danger)" onclick="logoutFromLock()">🚪 تبديل المستخدم</button>
+            <button class="login-switch-mode" data-act="unlockWithPasswordPrompt">🔑 الدخول بكلمة المرور</button>
+            <button class="login-switch-mode" style="color:var(--danger)" data-act="logoutFromLock">🚪 تبديل المستخدم</button>
         </div>
     </div>
 </div>
 
 <!-- ===== LOGIN ===== -->
-<div class="login-overlay" id="loginOverlay" onclick="if(event.target===this)hideLogin()">
+<div class="login-overlay" id="loginOverlay" data-act="actHideLoginIfBackdrop">
     <div class="login-card" id="loginCard" style="position:relative">
-        <button class="login-close" onclick="hideLogin()" aria-label="إغلاق" title="إغلاق">✕</button>
+        <button class="login-close" data-act="hideLogin" aria-label="إغلاق" title="إغلاق">✕</button>
         <div class="login-logo">📦</div>
         <h1>2M-Stor</h1>
         <p>إدارة المخزون والمبيعات · v3.3</p>

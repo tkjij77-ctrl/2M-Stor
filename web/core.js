@@ -1,3 +1,87 @@
+// ── T7.4/ج: أفعال صفحة index.html (بديل onclick المضمّنة في HTML) ───────────
+//  كل دالة هنا كانت تعبيرًا داخل سمة onclick. نُقلت إلى دوال مسمّاة لأن
+//  المتصفح لا يقبل «منطقًا» في data-act — ويجب ألّا يقبل (لا eval).
+
+/** زر الإضافة العائم: أغلق القائمة ثم افتح نموذج الصنف */
+function actFabAddItem() {
+    toggleFabMenu();
+    openModal('add');
+}
+
+/** زر الإضافة العائم: أغلق القائمة ثم أضف قسمًا */
+function actFabAddCategory() {
+    toggleFabMenu();
+    addCategory();
+}
+
+/** «المفضلة فقط» من الشريط العلوي: انتقل للمتجر ثم فعّل المرشّح */
+function actFavOnly() {
+    setView('shop');
+    shopFavOnly = true;
+    setTimeout(function () {
+        var cb = document.getElementById('favOnly');
+        if (cb) cb.checked = true;
+        renderAll();
+        updateFavBadge();
+    }, 80);
+}
+
+/** قائمة الهامبرغر: سجل الفواتير */
+function actInvoicesFromBurger() {
+    closeBurger();
+    showInvoiceHistory();
+}
+
+/** قائمة الهامبرغر: قفل الكاونتر */
+function actLockFromBurger() {
+    closeBurger();
+    quickLock();
+}
+
+/** سجل الفواتير إن كان الدور يسمح (كان: can('history') && …) */
+function actInvoicesIfAllowed() {
+    if (can('history')) showInvoiceHistory();
+}
+
+/** العودة إلى أعلى الصفحة */
+function actScrollTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/** «من نحن» — تمرير إلى قسم الميزات */
+function actScrollToFeatures() {
+    var el = document.getElementById('landing-features');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+/** «تواصل» — تمرير إلى التذييل */
+function actScrollToFooter() {
+    var el = document.getElementById('landing-footer');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+/** فتح منتقي صورة المسح */
+function actPickScanInput() {
+    var el = document.getElementById('scanInput');
+    if (el) el.click();
+}
+
+/** فتح منتقي ملف الاستيراد */
+function actPickImportInput() {
+    var el = document.getElementById('importInput');
+    if (el) el.click();
+}
+
+/** إغلاق نافذة الدخول فقط عند النقر على الخلفية نفسها */
+function actHideLoginIfBackdrop(ev, el) {
+    if (ev.target === el) hideLogin();
+}
+
+/** إغلاق تفاصيل المنتج فقط عند النقر على الخلفية نفسها */
+function actCloseDetailIfBackdrop(ev, el) {
+    if (ev.target === el) closeProductDetail();
+}
+
     // ☁️ T-A4 (2026-09-22): لا بيانات مضمَّنة في الصفحة — السحابة هي المصدر الوحيد.
     // السبب: كانت هناك قاعدة محلية بـ 456 صنفًا تُدمج مع السحابة ⇒ تكرار وتضليل إحصاءات
     // + تسريب قائمة الأسعار كاملة في كود الصفحة العلني.

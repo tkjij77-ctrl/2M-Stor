@@ -193,6 +193,38 @@ const check = (name, ok, detail) => {
   check('الداخلي نُفِّذ', stop.innerHits === 1, 'نداءات: ' + stop.innerHits);
   check('الخارجي لم يُنفَّذ (stopPropagation)', stop.outerHits === 0, 'نداءات: ' + stop.outerHits);
 
+  // ═══ 7) عناصر index.html المرسومة (بعد تحويل 56 معالجًا) ═══
+  console.log('\n【7】 عناصر صفحة index.html (data-act/data-json/data-event)');
+  const nav = await page.evaluate(async () => {
+    const els = [...document.querySelectorAll('[data-act="setView"]')];
+    const target = els.find(e => window.__actionsProbe(e).args[0] === 'shop');
+    if (!target) return { skip: true };
+    target.click();
+    await new Promise(r => setTimeout(r, 350));
+    return { view: typeof currentView !== 'undefined' ? currentView : null, shopMode: document.body.classList.contains('shop-mode') };
+  });
+  check('نقر «المتجر» في التنقّل يغيّر العرض فعلًا', !nav.skip && nav.view === 'shop' && nav.shopMode === true, JSON.stringify(nav));
+
+  const changed = await page.evaluate(async () => {
+    const input = document.querySelector('input[data-on="change"][data-event]');
+    if (!input) return { skip: true };
+    let got = null;
+    const original = window[input.getAttribute('data-act')];
+    window[input.getAttribute('data-act')] = function () { got = arguments[0]; };
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    window[input.getAttribute('data-act')] = original;
+    return { isEvent: !!(got && got.type === 'change') };
+  });
+  check('data-event يمرّر الحدث نفسه كأول حجة (importData)', !changed.skip && changed.isEvent === true, JSON.stringify(changed));
+
+  const noInlineInDoc = await page.evaluate(() => {
+    const attrs = ['onclick', 'oninput', 'onchange', 'onkeydown', 'onsubmit', 'onblur'];
+    let n = 0;
+    for (const el of document.querySelectorAll('*')) for (const a of attrs) if (el.hasAttribute(a)) n++;
+    return n;
+  });
+  console.log(`  ℹ️ معالجات مضمّنة في بقية الصفحة الآن: ${noInlineInDoc} (تتناقص مع كل مرحلة)`);
+
   // ═══ 6) سلامة التشغيل ═══
   console.log('\n【6】 سلامة التشغيل');
   const realErrors = errors.filter(e => !/abort|ERR_FAILED|Failed to fetch|net::/i.test(e));
