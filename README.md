@@ -307,7 +307,7 @@ select public.revert_invoice_stock(1234);       -- إرجاع كميات فات�
   في طلب منفصل لا يُدمج تلقائيًا
 - **CodeQL** يفحص كل دفع وطلب دمج وكل أسبوع — النتائج في تبويب Security
 - **بوابة في CI**: ثغرة عالية أو حرجة تُفشل البناء
-- فحص الإعدادات محليًا: `python3 scripts/verify-ci-config.py` (40 فحصًا — يشمل مهام القاعدة والمتصفح وحارس `/admin` وقرار الاستضافة)
+- فحص الإعدادات محليًا: `python3 scripts/verify-ci-config.py` (41 فحصًا — يشمل مهام القاعدة والمتصفح وحارس `/admin` وقرار الاستضافة)
 
 > ⚠️ استخدم `npm ci` لا `npm install --force` — الـoverrides هي ما يبقي العدد صفرًا.
 > ⚠️ **قيد معروف**: CodeQL لا يفحص الشيفرة المضمّنة داخل `index.html` — لذلك
@@ -375,7 +375,8 @@ data-act="addToCart" data-json="[3,5]" data-stop
 ```
 
 - **بلا `eval` ولا تنفيذ نصّي**: الاسم يُطابَق بنمط صارم ثم يُبحث في `window` كدالة.
-- حجج عبر `data-json` (مع `$value` / `$checked` / `$data:*` للحقول).
+- حجج عبر `data-json` (نصوص) أو `pAct(name, [args], on)` الذي يسجّل القيم **بأنواعها الحقيقية**
+  وقت الرسم (رقم يبقى رقمًا، `this.value` يُقرأ وقت الحدث عبر رمز `pAct.VALUE`).
 - يدعم `data-stop` و`data-prevent` و`data-key` و`data-nonempty`.
 - تفويض على `document` ⇒ يعمل بعد أي إعادة رسم `innerHTML`.
 
@@ -384,8 +385,9 @@ data-act="addToCart" data-json="[3,5]" data-stop
 
 | المرحلة | ما حُوِّل | المتبقّي |
 |---|---|---|
-| **T7.4 (اليوم)** | `pro-store.js` (17) · `lock.js` (9) · بطاقات المتجر في `views.js` (8) | **325 → 291** |
-| التالية | `pro-admin.js` (104) · `index.html` (56) · `ui.js` (10) … | تنازليًا |
+| **T7.4/أ** | `pro-store.js` (17) · `lock.js` (9) · بطاقات المتجر في `views.js` (8) | 325 → 291 |
+| **T7.4/ب** | `pro-admin.js` (104) — أكبر مستودع للمعالجات، وبفحص متصفح كامل للوحة | **291 → 187** |
+| التالية | `index.html` (56) · `views.js` (65) · `cloud.js` (20) · `pro-checkout.js` (16) … | تنازليًا |
 
 > عند وصول العدّ إلى **صفر**: تُحذف `'unsafe-inline'` من `script-src` في `_headers`
 > و`next.config.js` و`<meta>` — والفحص `verify-inline-handlers.js` يفرض ذلك تلقائيًا.
@@ -420,10 +422,10 @@ data-act="addToCart" data-json="[3,5]" data-stop
 | `verify-drift-modes.sh` | **30/30** | أوضاع الانحراف: مطابقة · ناقص · زائد · مسوّدة تُنفَّذ |
 | `verify-apply-backend-all.sh` | **20/20** | ملف اللصق الواحد قبل تنفيذه في SQL Editor |
 | `verify-grant-role.sh` | **15/15** | ترقية حسابك إلى مدير بلا كسر الأدوار |
-| `verify-ci-config.py` | **40/40** | CI/Dependabot/CodeQL + **بوابة قاعدة البيانات/المتصفح** (ومنها: `secrets` داخل `if` يُبطل الـworkflow كله) |
+| `verify-ci-config.py` | **41/41** | CI/Dependabot/CodeQL + **بوابة قاعدة البيانات/المتصفح** (ومنها: `secrets` داخل `if` يُبطل الـworkflow كله) |
 | `verify-static-headers.js` | **37/37** | تطابق ترويسات الأمان بين `_headers` (السطح الثابت) و`next.config.js` — لا سطح محمي وسطح مكشوف |
-| `verify-inline-handlers.js` | **291/325** | سقف المعالجات المضمّنة (`onclick` → `data-act`) — لا يزيد أبدًا |
-| `verify-actions-dispatch.js` | **13/13** | موزّع الأحداث في متصفح حقيقي: نقر فعلي · حجج JSON · رفض الأسماء الخطرة · `stopPropagation` |
+| `verify-inline-handlers.js` | **187/325** | سقف المعالجات المضمّنة (`onclick` → `data-act`) — لا يزيد أبدًا |
+| `verify-actions-dispatch.js` | **13/13** · `verify-pro-admin-ui.js` **12/12** | موزّع الأحداث في متصفح حقيقي: نقر فعلي · حجج JSON · رفض الأسماء الخطرة · `stopPropagation` |
 | `vitest` | **172/172** | منطق السلة · الطابور · الفواتير · الانحراف · **إسقاط المخزون (SEC-1)** · **الكتابة المحصورة (SEC-2)** · **قرار /admin وmiddleware (T7.2)** |
 | `verify-security.sh` | **58/0/1** | الثغرات وسلامة البيانات |
 | سكربتات المتصفح (10) | ✅ | المتجر · المخزن · الفواتير · الطابور · الهوية · قفل الدخول · واجهة Next · **حماية /admin** |

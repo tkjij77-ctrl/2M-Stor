@@ -179,6 +179,8 @@ jobs:
           node scripts/verify-stock-projection-ui.js
           # T7.4: الموزّع يُنفّذ السلوك فعلًا (لا مجرد غياب onclick)
           node scripts/verify-actions-dispatch.js
+          # T7.4: لوحة الإدارة (104 معالجًا حُوِّل) تُستعمل فعلًا في المتصفح
+          node scripts/verify-pro-admin-ui.js
       - name: بناء Next.js (بلا أسرار — قيم بديلة)
         run: npm run build
         env:

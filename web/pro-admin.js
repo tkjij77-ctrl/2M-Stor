@@ -1,3 +1,70 @@
+// ── T7.4: أفعال data-act للوحة الإدارة (بديل onclick/oninput/onchange) ──────
+//  كل دالة هنا كانت سطرًا داخل معالج مضمّن. الحجج تصل بأنواعها الحقيقية
+//  من سجلّ pAct، فلا نصّ ولا تخمين.
+
+/** إعدادات العلامة التجارية: لون + إعادة تطبيق + إعادة رسم */
+function proSettingBrandColor(v) {
+    proSetSetting('brandColor', v);
+    proApplyBranding();
+    proAdminRender();
+}
+
+/** إزالة الشعار ثم إعادة الرسم */
+function proSettingLogoClear() {
+    proSetSetting('logo', '');
+    proAdminRender();
+}
+
+/** صلاحيات الأدوار: تغيير ثم إعادة رسم مؤجّلة */
+function proRolePerm(role, permKey, checked) {
+    setRolePerm(role, permKey, checked);
+    setTimeout(proAdminRender, 120);
+}
+
+/** إغلاق نموذج البنر بالكامل */
+function proBannerFormClear() {
+    proAdminState.editing = null;
+    proAdminState.form = null;
+    proAdminRender();
+}
+
+/** مسح صورة البنر */
+function proBannerImageClear() {
+    proAdminState.form.image_url = '';
+    proAdminRender();
+}
+
+/** حقل من حقول نموذج البنر */
+function proBannerField(key, value) {
+    proAdminState.form[key] = value;
+}
+
+/** تصفية المنتجات بالقسم */
+function proAdminFilterCat(v) {
+    proAdminState.prodCat = v;
+    proAdminRender();
+}
+
+/** بحث المنتجات (مع تأجيل 240ms — نفس سلوك ما قبل التحويل) */
+function proAdminSearchProd(v) {
+    proAdminState.prodQ = v;
+    clearTimeout(window.__proPq);
+    window.__proPq = setTimeout(proAdminRender, 240);
+}
+
+/** بحث الطلبات (مع تأجيل 260ms) */
+function proAdminSearchOrder(v) {
+    proAdminState.orderQ = v;
+    clearTimeout(window.__proOq);
+    window.__proOq = setTimeout(proAdminRender, 260);
+}
+
+/** إغلاق اللوحة ثم وجهات مختلفة */
+function proCloseAdminInvoices() { proCloseAdmin(); showInvoiceHistory(); }
+function proCloseAdminDashboard() { proCloseAdmin(); toggleDashboard(); }
+function proCloseAdminShop() { proCloseAdmin(); setView('shop'); }
+function proCloseAdminLogout() { proCloseAdmin(); logout(); }
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  🖥️ pro-admin.js — لوحة تحكم احترافية كاملة (شريط جانبي + 8 شاشات)
 //
@@ -57,16 +124,16 @@ function proAdminEnsureShell() {
         '</aside>' +
         '<div class="pro-admin-main">' +
             '<div class="pro-admin-topbar">' +
-                '<button class="pro-admin-iconbtn pro-admin-menu-btn" onclick="proAdminOpenDrawer()" aria-label="القائمة">☰</button>' +
-                '<button class="pro-admin-iconbtn pro-admin-collapse-btn" onclick="proAdminToggleSidebar()" aria-label="طي القائمة">⟨</button>' +
+                '<button class="pro-admin-iconbtn pro-admin-menu-btn" ' + pAct("proAdminOpenDrawer", [], "click") + ' aria-label="القائمة">☰</button>' +
+                '<button class="pro-admin-iconbtn pro-admin-collapse-btn" ' + pAct("proAdminToggleSidebar", [], "click") + ' aria-label="طي القائمة">⟨</button>' +
                 '<div style="flex:1;min-width:0"><div id="proAdminTitle" style="font-weight:900;font-size:.98rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>' +
                 '<div id="proAdminSub" style="font-size:.7rem;color:var(--text-muted);font-weight:700"></div></div>' +
-                '<button class="pro-admin-iconbtn" onclick="proAdminRefresh()" title="تحديث البيانات">🔄</button>' +
-                '<button class="pro-admin-iconbtn" onclick="proCloseAdmin()" title="إغلاق">✕</button>' +
+                '<button class="pro-admin-iconbtn" ' + pAct("proAdminRefresh", [], "click") + ' title="تحديث البيانات">🔄</button>' +
+                '<button class="pro-admin-iconbtn" ' + pAct("proCloseAdmin", [], "click") + ' title="إغلاق">✕</button>' +
             '</div>' +
             '<div class="pro-admin-scroll"><div class="pro-admin-container" id="proAdminContent"></div></div>' +
         '</div>' +
-        '<div class="pro-admin-drawer-bg" id="proAdminDrawerBg" onclick="proAdminCloseDrawer()"></div>' +
+        '<div class="pro-admin-drawer-bg" id="proAdminDrawerBg" ' + pAct("proAdminCloseDrawer", [], "click") + '></div>' +
         '<aside class="pro-admin-drawer" id="proAdminDrawer">' +
             '<div class="pro-admin-brand"><span class="pro-admin-logo">2M</span>' +
             '<div><div style="font-weight:900;font-size:.9rem">لوحة التحكم</div><div style="font-size:.68rem;opacity:.6;font-weight:700">' + esc(settings.store || '') + '</div></div></div>' +
@@ -92,15 +159,15 @@ function proAdminNavHtml() {
     const items = proAdminNavItems();
     const link = (it) =>
         '<button class="pro-admin-link' + (proAdminState.view === it.v || (proAdminState.view === 'order' && it.v === 'orders') ? ' active' : '') + '"' +
-        ' data-view="' + it.v + '" onclick="proAdminGo(\'' + it.v + '\')">' +
+        ' data-view="' + it.v + '" ' + pAct("proAdminGo", [('' + it.v + '')], "click") + '>' +
         '<span class="pro-admin-ic">' + it.ic + '</span>' +
         '<span class="pro-admin-txt">' + it.l + '</span>' +
         (it.badge ? '<span class="pro-admin-badge" style="display:' + (n > 0 ? 'grid' : 'none') + '">' + n + '</span>' : '') +
         '</button>';
     const bottom =
-        '<button class="pro-admin-link" onclick="proCloseAdmin();setView(\'shop\')"><span class="pro-admin-ic">🏪</span><span class="pro-admin-txt">معاينة المتجر</span></button>' +
-        '<button class="pro-admin-link" onclick="proCloseAdmin();toggleDashboard()"><span class="pro-admin-ic">📊</span><span class="pro-admin-txt">التقارير المتقدمة</span></button>' +
-        (sessionUser ? '<button class="pro-admin-link" onclick="proCloseAdmin();logout()"><span class="pro-admin-ic">🚪</span><span class="pro-admin-txt">تسجيل الخروج</span></button>' : '');
+        '<button class="pro-admin-link" ' + pAct("proCloseAdminShop", [], "click") + '><span class="pro-admin-ic">🏪</span><span class="pro-admin-txt">معاينة المتجر</span></button>' +
+        '<button class="pro-admin-link" ' + pAct("proCloseAdminDashboard", [], "click") + '><span class="pro-admin-ic">📊</span><span class="pro-admin-txt">التقارير المتقدمة</span></button>' +
+        (sessionUser ? '<button class="pro-admin-link" ' + pAct("proCloseAdminLogout", [], "click") + '><span class="pro-admin-ic">🚪</span><span class="pro-admin-txt">تسجيل الخروج</span></button>' : '');
     return items.map(link).join('');
 }
 
@@ -196,8 +263,8 @@ function proAdminRender() {
     const navM = document.getElementById('proAdminNavMobile'); if (navM) navM.innerHTML = navHtml;
     const foot = document.getElementById('proAdminFoot');
     if (foot) foot.innerHTML =
-        '<button class="pro-admin-link" onclick="proCloseAdmin();setView(\'shop\')"><span class="pro-admin-ic">🏪</span><span class="pro-admin-txt">معاينة المتجر</span></button>' +
-        '<button class="pro-admin-link" onclick="proCloseAdmin();toggleDashboard()"><span class="pro-admin-ic">📊</span><span class="pro-admin-txt">التقارير المتقدمة</span></button>';
+        '<button class="pro-admin-link" ' + pAct("proCloseAdminShop", [], "click") + '><span class="pro-admin-ic">🏪</span><span class="pro-admin-txt">معاينة المتجر</span></button>' +
+        '<button class="pro-admin-link" ' + pAct("proCloseAdminDashboard", [], "click") + '><span class="pro-admin-ic">📊</span><span class="pro-admin-txt">التقارير المتقدمة</span></button>';
 
     const storeName = settings.store || 'متجرك';
     const sn = document.getElementById('proAdminStoreName'); if (sn) sn.textContent = storeName;
@@ -398,7 +465,7 @@ function proViewOverview() {
         '</div>').join('');
 
     const recent = orders.slice(0, 6).map(o =>
-        '<div class="pro-order-row" onclick="proOrderOpen(\'' + o.key + '\')">' +
+        '<div class="pro-order-row" ' + pAct("proOrderOpen", [('' + o.key + '')], "click") + '>' +
             proSourceLabel(o.source) +
             '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#' + String(o.no || '').padStart(4, '0') + ' · ' + esc(o.customer) + '</div>' +
             '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700">' + (o.items || []).length + ' صنف · ' + proPayLabel(o.payment) + '</div></div>' +
@@ -417,22 +484,22 @@ function proViewOverview() {
 
     return '' +
     '<div class="pro-kpi-grid">' +
-        '<button class="pro-kpi-card accent" onclick="proAdminGo(\'orders\')">' +
+        '<button class="pro-kpi-card accent" ' + pAct("proAdminGo", ["orders"], "click") + '>' +
             '<div class="pro-kpi-lbl">طلبات جديدة بانتظار التأكيد</div>' +
             '<div class="pro-kpi-val">' + newCount + '</div>' +
             '<div class="pro-kpi-note">اضغط لإدارتها فورًا ←</div>' +
         '</button>' +
-        '<button class="pro-kpi-card" onclick="proAdminGo(\'orders\')">' +
+        '<button class="pro-kpi-card" ' + pAct("proAdminGo", ["orders"], "click") + '>' +
             '<div class="pro-kpi-lbl">💵 مبيعات اليوم</div>' +
             '<div class="pro-kpi-val">' + fmt(todaySales) + '</div>' +
             '<div class="pro-kpi-note">' + todayOrders.length + ' طلب اليوم</div>' +
         '</button>' +
-        '<button class="pro-kpi-card" onclick="proAdminGo(\'products\')">' +
+        '<button class="pro-kpi-card" ' + pAct("proAdminGo", ["products"], "click") + '>' +
             '<div class="pro-kpi-lbl">📦 المنتجات</div>' +
             '<div class="pro-kpi-val">' + totalItems + '</div>' +
             '<div class="pro-kpi-note">قيمة المخزون ' + fmt(stockValue) + ' ج</div>' +
         '</button>' +
-        '<button class="pro-kpi-card" onclick="proAdminGo(\'products\')">' +
+        '<button class="pro-kpi-card" ' + pAct("proAdminGo", ["products"], "click") + '>' +
             '<div class="pro-kpi-lbl">⚠️ تنبيهات المخزون</div>' +
             '<div class="pro-kpi-val">' + (outCount + lowCount) + '</div>' +
             '<div class="pro-kpi-note">' + outCount + ' نافد · ' + lowCount + ' منخفض</div>' +
@@ -440,10 +507,10 @@ function proViewOverview() {
     '</div>' +
 
     '<div class="pro-quick-grid">' +
-        '<button class="pro-quick-btn" onclick="proProductNew()"><span class="pro-quick-ic">➕</span> إضافة منتج</button>' +
-        '<button class="pro-quick-btn" onclick="proAdminGo(\'banners\')"><span class="pro-quick-ic">🖼️</span> إضافة بنر إعلاني</button>' +
-        '<button class="pro-quick-btn" onclick="proAdminGo(\'settings\')"><span class="pro-quick-ic">⚙️</span> إعدادات المتجر</button>' +
-        '<button class="pro-quick-btn" onclick="proCloseAdmin();showInvoiceHistory()"><span class="pro-quick-ic">📊</span> سجل الفواتير</button>' +
+        '<button class="pro-quick-btn" ' + pAct("proProductNew", [], "click") + '><span class="pro-quick-ic">➕</span> إضافة منتج</button>' +
+        '<button class="pro-quick-btn" ' + pAct("proAdminGo", ["banners"], "click") + '><span class="pro-quick-ic">🖼️</span> إضافة بنر إعلاني</button>' +
+        '<button class="pro-quick-btn" ' + pAct("proAdminGo", ["settings"], "click") + '><span class="pro-quick-ic">⚙️</span> إعدادات المتجر</button>' +
+        '<button class="pro-quick-btn" ' + pAct("proCloseAdminInvoices", [], "click") + '><span class="pro-quick-ic">📊</span> سجل الفواتير</button>' +
     '</div>' +
 
     '<div class="pro-card">' +
@@ -455,12 +522,12 @@ function proViewOverview() {
     '<div class="pro-detail-grid">' +
         '<div class="pro-card" style="margin:0">' +
             '<div class="pro-card-head"><h3>🧾 أحدث الطلبات</h3>' +
-            '<button class="pro-sec-more" onclick="proAdminGo(\'orders\')">الكل ←</button></div>' +
+            '<button class="pro-sec-more" ' + pAct("proAdminGo", ["orders"], "click") + '>الكل ←</button></div>' +
             recent +
         '</div>' +
         '<div class="pro-card" style="margin:0">' +
             '<div class="pro-card-head"><h3>⚠️ تحتاج إعادة طلب</h3>' +
-            '<button class="pro-sec-more" onclick="proAdminGo(\'products\')">المخزون ←</button></div>' +
+            '<button class="pro-sec-more" ' + pAct("proAdminGo", ["products"], "click") + '>المخزون ←</button></div>' +
             lowList +
         '</div>' +
     '</div>' +
@@ -468,7 +535,7 @@ function proViewOverview() {
     (proIsOpen() ? '' : '<div class="pro-card" style="border-color:var(--gold);background:#fffbf0">' +
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:1.4rem">🌙</span>' +
         '<div style="flex:1;font-size:.85rem;font-weight:800">المتجر <b>مغلق حاليًا</b> — الزوار لا يستطيعون إتمام طلبات جديدة.</div>' +
-        '<button class="btn btn-primary" style="padding:8px 16px" onclick="proToggleStoreOpen()">🔓 فتح المتجر الآن</button></div></div>');
+        '<button class="btn btn-primary" style="padding:8px 16px" ' + pAct("proToggleStoreOpen", [], "click") + '>🔓 فتح المتجر الآن</button></div></div>');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -483,7 +550,7 @@ function proViewOrders() {
         ['shipping', '🚚 في الطريق'], ['delivered', '📦 تم التوصيل'], ['cancelled', '🚫 ملغية']
     ];
     const pills = tabs.map(t =>
-        '<button class="pro-pill' + (proAdminState.orderFilter === t[0] ? ' active' : '') + '" onclick="proOrderFilter(\'' + t[0] + '\')">' +
+        '<button class="pro-pill' + (proAdminState.orderFilter === t[0] ? ' active' : '') + '" ' + pAct("proOrderFilter", [('' + t[0] + '')], "click") + '>' +
         t[1] + '<span class="pro-pill-cnt">' + (counts[t[0]] || 0) + '</span></button>').join('');
 
     const q = (proAdminState.orderQ || '').trim().toLowerCase();
@@ -498,7 +565,7 @@ function proViewOrders() {
 
     const rows = list.map(o => {
         const st = o.status;
-        return '<div class="pro-order-row" onclick="proOrderOpen(\'' + o.key + '\')">' +
+        return '<div class="pro-order-row" ' + pAct("proOrderOpen", [('' + o.key + '')], "click") + '>' +
             proSourceLabel(o.source) +
             '<div style="flex:1;min-width:0">' +
                 '<div style="font-weight:900;font-size:.86rem">#' + String(o.no || '').padStart(4, '0') + ' · ' + esc(o.customer) + '</div>' +
@@ -512,16 +579,16 @@ function proViewOrders() {
             '<span class="status ' + statusClass(st) + '" style="white-space:nowrap;font-size:.7rem">' + proStatusLabel(st) + '</span>' +
         '</div>';
     }).join('') || '<div style="padding:34px 16px;text-align:center;color:var(--text-muted);font-weight:700;font-size:.88rem">لا توجد طلبات في هذا التصنيف' +
-        (proPreview ? '<br><button class="btn btn-outline" style="margin-top:12px;padding:9px 16px;font-size:.82rem" onclick="proCreateDemoOrder()">➕ إنشاء طلب تجريبي لتجربة الشاشة</button>' : '') +
+        (proPreview ? '<br><button class="btn btn-outline" style="margin-top:12px;padding:9px 16px;font-size:.82rem" ' + pAct("proCreateDemoOrder", [], "click") + '>➕ إنشاء طلب تجريبي لتجربة الشاشة</button>' : '') +
         '</div>';
 
     return '<div class="pro-card">' +
         '<div class="pro-card-head">' +
             '<h3>🧾 ' + list.length + ' طلب</h3>' +
-            '<button class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="proAdminRefresh()">🔄 تحديث</button>' +
+            '<button class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" ' + pAct("proAdminRefresh", [], "click") + '>🔄 تحديث</button>' +
         '</div>' +
         '<input type="search" placeholder="🔍 ابحث برقم الطلب أو الاسم أو الهاتف..." value="' + esc(proAdminState.orderQ) + '" ' +
-            'oninput="proAdminState.orderQ=this.value;clearTimeout(window.__proOq);window.__proOq=setTimeout(proAdminRender,260)" ' +
+            '' + pAct("proAdminSearchOrder", [pAct.VALUE], "input") + ' ' +
             'style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:700;margin-bottom:12px">' +
         '<div class="pro-pills">' + pills + '</div>' +
         '<div style="margin:0 -4px">' + rows + '</div>' +
@@ -545,7 +612,7 @@ function proOrderBack() {
 
 function proViewOrderDetail() {
     const o = proOrderByKey(proAdminState.openOrder);
-    if (!o) return '<div class="pro-card"><div style="padding:30px;text-align:center;font-weight:800">الطلب غير موجود — <a onclick="proOrderBack()" style="color:var(--primary);cursor:pointer">رجوع</a></div></div>';
+    if (!o) return '<div class="pro-card"><div style="padding:30px;text-align:center;font-weight:800">الطلب غير موجود — <a ' + pAct("proOrderBack", [], "click") + ' style="color:var(--primary);cursor:pointer">رجوع</a></div></div>';
     const lines = (o.items || []).map(it =>
         '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">' +
             '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.85rem">' + esc(it.name) + '</div>' +
@@ -563,7 +630,7 @@ function proViewOrderDetail() {
 
     const cancelled = o.status === 'ملغي' || o.status === 'تم رفض الطلب';
     const nextBtn = (label, status, color) =>
-        '<button class="btn" style="background:' + color + ';color:#fff;border:none;padding:10px 15px;font-size:.82rem" onclick="proOrderSetStatus(\'' + o.key + '\',\'' + status + '\')">' + label + '</button>';
+        '<button class="btn" style="background:' + color + ';color:#fff;border:none;padding:10px 15px;font-size:.82rem" ' + pAct("proOrderSetStatus", [('' + o.key + ''), ('' + status + '')], "click") + '>' + label + '</button>';
 
     let actions = '';
     if (!cancelled && o.status !== 'تم التوصيل') {
@@ -572,7 +639,7 @@ function proViewOrderDetail() {
         if (o.status === 'في الطريق') actions += nextBtn('📦 تم التسليم', 'تم التوصيل', 'var(--success)');
     }
     if (!cancelled && o.status !== 'تم التوصيل') {
-        actions += '<button class="btn btn-outline" style="padding:10px 15px;font-size:.82rem;color:#c0392b;border-color:#c0392b" onclick="proOrderSetStatus(\'' + o.key + '\',\'ملغي\')">🚫 إلغاء الطلب</button>';
+        actions += '<button class="btn btn-outline" style="padding:10px 15px;font-size:.82rem;color:#c0392b;border-color:#c0392b" ' + pAct("proOrderSetStatus", [('' + o.key + ''), "ملغي"], "click") + '>🚫 إلغاء الطلب</button>';
     } else if (cancelled) {
         actions += '<span style="font-size:.82rem;font-weight:800;color:var(--pro-sale)">هذا الطلب ' + proStatusLabel(o.status) + ' — والمخزون أُعيد تلقائيًا.</span>';
     }
@@ -581,11 +648,11 @@ function proViewOrderDetail() {
     const contactBtns =
         (o.phone ? '<a class="btn btn-primary" style="padding:10px 14px;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px" href="tel:' + esc(o.phone) + '">📞 اتصال</a>' : '') +
         (waPhone ? '<a class="btn" style="padding:10px 14px;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px;background:var(--pro-whatsapp);color:#fff" target="_blank" rel="noopener" href="https://wa.me/' + waPhone + '?text=' + encodeURIComponent('مرحبًا ' + (o.customer || '') + '، بخصوص طلبك رقم #' + String(o.no || '').padStart(4, '0') + ' من ' + (settings.store || 'المتجر')) + '">💬 واتساب</a>' : '') +
-        (o.token ? '<button class="btn btn-outline" style="padding:10px 14px;font-size:.82rem" onclick="proCopyTrackLink(\'' + esc(o.token) + '\')">🔗 رابط التتبّع</button>' : '');
+        (o.token ? '<button class="btn btn-outline" style="padding:10px 14px;font-size:.82rem" ' + pAct("proCopyTrackLink", [('' + esc(o.token) + '')], "click") + '>🔗 رابط التتبّع</button>' : '');
 
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
-        '<button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" onclick="proOrderBack()">← كل الطلبات</button>' +
-        '<button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" onclick="proPrintOrder(\'' + o.key + '\')">🖨️ طباعة</button>' +
+        '<button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" ' + pAct("proOrderBack", [], "click") + '>← كل الطلبات</button>' +
+        '<button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" ' + pAct("proPrintOrder", [('' + o.key + '')], "click") + '>🖨️ طباعة</button>' +
     '</div>' +
     '<div class="pro-detail-grid">' +
         '<div>' +
@@ -627,7 +694,7 @@ function proViewOrderDetail() {
                     ({ unpaid: 'غير مدفوع', review: 'بانتظار مراجعة التحويل', paid: 'مدفوع' }[o.paymentStatus] || o.paymentStatus) + '</div>' +
                 (o.receipt ? '<div style="margin-top:10px"><div style="font-size:.76rem;font-weight:800;margin-bottom:6px">🧾 إيصال التحويل</div>' +
                     '<a href="' + esc(o.receipt) + '" target="_blank" rel="noopener"><img src="' + esc(o.receipt) + '" alt="" style="width:100%;max-height:240px;object-fit:contain;border-radius:12px;border:1px solid var(--border);background:var(--bg-soft)"></a></div>' : '') +
-                (o.phone && o.payment !== 'cod' ? '<button class="btn btn-outline" style="margin-top:10px;width:100%;padding:8px;font-size:.8rem" onclick="proOrderSetStatus(\'' + o.key + '\',\'' + o.status + '\')">✅ تأكيد استلام المبلغ</button>' : '') +
+                (o.phone && o.payment !== 'cod' ? '<button class="btn btn-outline" style="margin-top:10px;width:100%;padding:8px;font-size:.8rem" ' + pAct("proOrderSetStatus", [('' + o.key + ''), ('' + o.status + '')], "click") + '>✅ تأكيد استلام المبلغ</button>' : '') +
             '</div>' +
         '</div>' +
     '</div>';
@@ -711,20 +778,20 @@ function proViewProducts() {
                 (proOldPrice(it) > itemPrice(it) ? '<div style="font-size:.7rem"><span class="pro-old-price">' + fmt(proOldPrice(it)) + '</span> <span style="color:var(--pro-sale);font-weight:900">-' + pct + '%</span></div>' : '') + '</td>' +
             '<td><div style="font-weight:900;font-size:.84rem;color:' + (qs === 0 ? 'var(--danger)' : qs <= getMin(it) ? 'var(--gold)' : 'var(--success)') + '">' + qs + '</div>' +
                 '<div style="font-size:.68rem;color:var(--text-muted);font-weight:700">مخزن ' + getQ(it) + '</div></td>' +
-            '<td><label class="pro-switch"><input type="checkbox" ' + (qs > 0 ? 'checked' : '') + ' onchange="proProductToggle(' + r.ci + ',' + r.ii + ',this.checked)"><span class="pro-switch-track"></span></label></td>' +
-            '<td><div class="mini-actions"><button class="mini-btn" title="تعديل" onclick="proProductEdit(' + r.ci + ',' + r.ii + ')">✏️</button>' +
-                '<button class="mini-btn" title="حذف" onclick="proProductDelete(' + r.ci + ',' + r.ii + ')" style="color:var(--danger)">🗑️</button></div></td>' +
+            '<td><label class="pro-switch"><input type="checkbox" ' + (qs > 0 ? 'checked' : '') + ' ' + pAct("proProductToggle", [" + r.ci + ", " + r.ii + ", pAct.CHECKED], "change") + '><span class="pro-switch-track"></span></label></td>' +
+            '<td><div class="mini-actions"><button class="mini-btn" title="تعديل" ' + pAct("proProductEdit", [" + r.ci + ", " + r.ii + "], "click") + '>✏️</button>' +
+                '<button class="mini-btn" title="حذف" ' + pAct("proProductDelete", [" + r.ci + ", " + r.ii + "], "click") + ' style="color:var(--danger)">🗑️</button></div></td>' +
         '</tr>';
     }).join('') || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);font-weight:700">لا توجد منتجات مطابقة</td></tr>';
 
     return '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>📦 ' + rows.length + ' منتج</h3>' +
-            '<button class="btn btn-primary" style="padding:8px 15px;font-size:.82rem" onclick="proProductNew()">➕ منتج جديد</button></div>' +
+            '<button class="btn btn-primary" style="padding:8px 15px;font-size:.82rem" ' + pAct("proProductNew", [], "click") + '>➕ منتج جديد</button></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
             '<input type="search" placeholder="🔍 ابحث بالاسم أو الباركود..." value="' + esc(proAdminState.prodQ) + '" ' +
-                'oninput="proAdminState.prodQ=this.value;clearTimeout(window.__proPq);window.__proPq=setTimeout(proAdminRender,240)" ' +
+                '' + pAct("proAdminSearchProd", [pAct.VALUE], "input") + ' ' +
                 'style="flex:1;min-width:180px;padding:10px 13px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:700">' +
-            '<select onchange="proAdminState.prodCat=this.value;proAdminRender()" style="padding:10px 13px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:800">' + catOpts + '</select>' +
+            '<select ' + pAct("proAdminFilterCat", [pAct.VALUE], "change") + ' style="padding:10px 13px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:800">' + catOpts + '</select>' +
         '</div>' +
         '<div class="table-wrap" style="margin:0"><table><thead><tr><th>المنتج</th><th>السعر</th><th>المتاح</th><th>متوفر</th><th>إجراءات</th></tr></thead><tbody>' + table + '</tbody></table></div>' +
     '</div>';
@@ -771,40 +838,40 @@ function proViewProductForm() {
     const tiles = f.imgs.map((u, k) =>
         '<div class="pro-img-tile">' +
             '<img src="' + esc(u) + '" alt="">' +
-            '<button class="pro-img-del" onclick="proProductImgRemove(' + k + ')" title="حذف">✕</button>' +
-            '<button class="pro-img-cover" onclick="proProductImgCover(' + k + ')">' + (k === 0 ? '✓ الغلاف' : 'اجعله غلافًا') + '</button>' +
+            '<button class="pro-img-del" ' + pAct("proProductImgRemove", [" + k + "], "click") + ' title="حذف">✕</button>' +
+            '<button class="pro-img-cover" ' + pAct("proProductImgCover", [" + k + "], "click") + '>' + (k === 0 ? '✓ الغلاف' : 'اجعله غلافًا') + '</button>' +
         '</div>').join('');
 
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
-        '<button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" onclick="proAdminGo(\'products\')">← رجوع للمنتجات</button></div>' +
+        '<button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" ' + pAct("proAdminGo", ["products"], "click") + '>← رجوع للمنتجات</button></div>' +
     '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>' + (isNew ? '➕ منتج جديد' : '✏️ تعديل: ' + esc(f.n)) + '</h3></div>' +
         '<div class="pro-choice-grid" style="grid-template-columns:1fr 1fr">' +
-            '<div class="form-group"><label>اسم المنتج *</label><input type="text" value="' + esc(f.n) + '" oninput="proProductFormSet(\'n\',this.value)" placeholder="مثال: كراسة 60 ورقة"></div>' +
-            '<div class="form-group"><label>القسم</label><select onchange="proProductFormSet(\'catCi\',this.value)">' + catOpts + '</select></div>' +
+            '<div class="form-group"><label>اسم المنتج *</label><input type="text" value="' + esc(f.n) + '" ' + pAct("proProductFormSet", ["n", pAct.VALUE], "input") + ' placeholder="مثال: كراسة 60 ورقة"></div>' +
+            '<div class="form-group"><label>القسم</label><select ' + pAct("proProductFormSet", ["catCi", pAct.VALUE], "change") + '>' + catOpts + '</select></div>' +
         '</div>' +
         '<div class="pro-choice-grid" style="grid-template-columns:1fr 1fr 1fr">' +
-            '<div class="form-group"><label>السعر (يظهر للعميل) *</label><input type="text" value="' + esc(f.p) + '" oninput="proProductFormSet(\'p\',this.value)" placeholder="25"></div>' +
-            '<div class="form-group"><label>السعر قبل الخصم</label><input type="number" value="' + esc(f.oldP) + '" oninput="proProductFormSet(\'oldP\',this.value)" placeholder="35" min="0" step="0.5"></div>' +
-            '<div class="form-group"><label>حد التنبيه</label><input type="number" value="' + esc(f.min) + '" oninput="proProductFormSet(\'min\',this.value)" min="0"></div>' +
+            '<div class="form-group"><label>السعر (يظهر للعميل) *</label><input type="text" value="' + esc(f.p) + '" ' + pAct("proProductFormSet", ["p", pAct.VALUE], "input") + ' placeholder="25"></div>' +
+            '<div class="form-group"><label>السعر قبل الخصم</label><input type="number" value="' + esc(f.oldP) + '" ' + pAct("proProductFormSet", ["oldP", pAct.VALUE], "input") + ' placeholder="35" min="0" step="0.5"></div>' +
+            '<div class="form-group"><label>حد التنبيه</label><input type="number" value="' + esc(f.min) + '" ' + pAct("proProductFormSet", ["min", pAct.VALUE], "input") + ' min="0"></div>' +
         '</div>' +
         '<div class="pro-choice-grid" style="grid-template-columns:1fr 1fr 1fr">' +
-            '<div class="form-group"><label>إجمالي المخزن</label><input type="number" value="' + esc(f.q) + '" oninput="proProductFormSet(\'q\',this.value)" min="0"></div>' +
-            '<div class="form-group"><label>المتاح للبيع (المعروض)</label><input type="number" value="' + esc(f.qs) + '" oninput="proProductFormSet(\'qs\',this.value)" min="0"></div>' +
-            '<div class="form-group"><label>الباركود</label><input type="text" value="' + esc(f.b) + '" oninput="proProductFormSet(\'b\',this.value)" style="direction:ltr;text-align:left"></div>' +
+            '<div class="form-group"><label>إجمالي المخزن</label><input type="number" value="' + esc(f.q) + '" ' + pAct("proProductFormSet", ["q", pAct.VALUE], "input") + ' min="0"></div>' +
+            '<div class="form-group"><label>المتاح للبيع (المعروض)</label><input type="number" value="' + esc(f.qs) + '" ' + pAct("proProductFormSet", ["qs", pAct.VALUE], "input") + ' min="0"></div>' +
+            '<div class="form-group"><label>الباركود</label><input type="text" value="' + esc(f.b) + '" ' + pAct("proProductFormSet", ["b", pAct.VALUE], "input") + ' style="direction:ltr;text-align:left"></div>' +
         '</div>' +
         '<div class="form-group"><label>📝 وصف المنتج (يظهر في صفحة المنتج)</label>' +
-            '<textarea rows="4" oninput="proProductFormSet(\'desc\',this.value)" placeholder="اكتب وصفًا يوضّح المقاس والمادة والاستخدام..." style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(f.desc) + '</textarea></div>' +
+            '<textarea rows="4" ' + pAct("proProductFormSet", ["desc", pAct.VALUE], "input") + ' placeholder="اكتب وصفًا يوضّح المقاس والمادة والاستخدام..." style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(f.desc) + '</textarea></div>' +
         '<div class="form-group"><label>🖼️ صور المنتج (حتى 8 — الأولى هي الغلاف)</label>' +
             '<div class="pro-imgs-grid">' + tiles +
-                '<label class="pro-img-add"><input type="file" accept="image/*" multiple style="display:none" onchange="proProductImgPick(event)">' +
+                '<label class="pro-img-add"><input type="file" accept="image/*" multiple style="display:none" ' + pAct("proProductImgPick", [pAct.EVENT], "change") + '>' +
                 '<span style="font-size:1.4rem">＋</span><span>إضافة صورة</span></label>' +
             '</div>' +
         '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">' +
-            '<button class="btn btn-primary" style="padding:12px 24px" onclick="proProductSave()">💾 حفظ المنتج</button>' +
-            '<button class="btn btn-outline" style="padding:12px 18px" onclick="proAdminGo(\'products\')">إلغاء</button>' +
-            (isNew ? '' : '<button class="btn btn-outline" style="padding:12px 18px;color:var(--danger);border-color:var(--danger);margin-inline-start:auto" onclick="proProductDelete(' + proAdminState.editing.ci + ',' + proAdminState.editing.ii + ')">🗑️ حذف</button>') +
+            '<button class="btn btn-primary" style="padding:12px 24px" ' + pAct("proProductSave", [], "click") + '>💾 حفظ المنتج</button>' +
+            '<button class="btn btn-outline" style="padding:12px 18px" ' + pAct("proAdminGo", ["products"], "click") + '>إلغاء</button>' +
+            (isNew ? '' : '<button class="btn btn-outline" style="padding:12px 18px;color:var(--danger);border-color:var(--danger);margin-inline-start:auto" ' + pAct("proProductDelete", [" + proAdminState.editing.ci + ", " + proAdminState.editing.ii + "], "click") + '>🗑️ حذف</button>') +
         '</div>' +
     '</div>';
 }
@@ -927,18 +994,18 @@ function proViewCategories() {
                 '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700">' + n + ' منتج · ' + avail + ' متاح</div>' +
             '</div>' +
             '<div style="display:flex;gap:5px">' +
-                '<button class="mini-btn" title="أعلى" onclick="proCatMove(' + ci + ',-1)" ' + (ci === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
-                '<button class="mini-btn" title="أسفل" onclick="proCatMove(' + ci + ',1)" ' + (ci === db.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
-                '<button class="mini-btn" title="صورة" onclick="proCatPickImage(' + ci + ')">🖼️</button>' +
-                '<button class="mini-btn" title="تعديل" onclick="proCatRename(' + ci + ')">✏️</button>' +
-                '<button class="mini-btn" title="حذف" style="color:var(--danger)" onclick="proCatDelete(' + ci + ')">🗑️</button>' +
+                '<button class="mini-btn" title="أعلى" ' + pAct("proCatMove", [" + ci + ", -1], "click") + ' ' + (ci === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
+                '<button class="mini-btn" title="أسفل" ' + pAct("proCatMove", [" + ci + ", 1], "click") + ' ' + (ci === db.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
+                '<button class="mini-btn" title="صورة" ' + pAct("proCatPickImage", [" + ci + "], "click") + '>🖼️</button>' +
+                '<button class="mini-btn" title="تعديل" ' + pAct("proCatRename", [" + ci + "], "click") + '>✏️</button>' +
+                '<button class="mini-btn" title="حذف" style="color:var(--danger)" ' + pAct("proCatDelete", [" + ci + "], "click") + '>🗑️</button>' +
             '</div>' +
         '</div>';
     }).join('') || '<div style="padding:26px;text-align:center;color:var(--text-muted);font-weight:700">لا توجد أقسام بعد</div>';
 
     return '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>📂 ' + (db || []).length + ' قسم</h3>' +
-            '<button class="btn btn-primary" style="padding:8px 15px;font-size:.82rem" onclick="proCatAdd()">➕ قسم جديد</button></div>' +
+            '<button class="btn btn-primary" style="padding:8px 15px;font-size:.82rem" ' + pAct("proCatAdd", [], "click") + '>➕ قسم جديد</button></div>' +
         '<div style="font-size:.78rem;color:var(--text-muted);font-weight:700;margin-bottom:8px">ترتيب الأقسام هنا هو نفسه ترتيب ظهورها للعميل في المتجر.</div>' +
         rows +
     '</div>';
@@ -1046,12 +1113,12 @@ function proViewBanners() {
                 (b.image_url ? '<img src="' + esc(b.image_url) + '" style="width:100%;height:100%;object-fit:cover" loading="lazy">' : (b.emoji || '🖼️')) + '</div>' +
             '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(b.title || '(بلا عنوان)') + '</div>' +
                 '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(b.subtitle || '') + '</div></div>' +
-            '<label class="pro-switch"><input type="checkbox" ' + (b.active !== false ? 'checked' : '') + ' onchange="proBannerToggle(' + i + ',this.checked)"><span class="pro-switch-track"></span></label>' +
+            '<label class="pro-switch"><input type="checkbox" ' + (b.active !== false ? 'checked' : '') + ' ' + pAct("proBannerToggle", [" + i + ", pAct.CHECKED], "change") + '><span class="pro-switch-track"></span></label>' +
             '<div style="display:flex;gap:5px">' +
-                '<button class="mini-btn" onclick="proBannerMove(' + i + ',-1)" ' + (i === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
-                '<button class="mini-btn" onclick="proBannerMove(' + i + ',1)" ' + (i === proBanners.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
-                '<button class="mini-btn" onclick="proBannerEdit(' + i + ')">✏️</button>' +
-                '<button class="mini-btn" style="color:var(--danger)" onclick="proBannerDelete(' + i + ')">🗑️</button>' +
+                '<button class="mini-btn" ' + pAct("proBannerMove", [" + i + ", -1], "click") + ' ' + (i === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
+                '<button class="mini-btn" ' + pAct("proBannerMove", [" + i + ", 1], "click") + ' ' + (i === proBanners.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
+                '<button class="mini-btn" ' + pAct("proBannerEdit", [" + i + "], "click") + '>✏️</button>' +
+                '<button class="mini-btn" style="color:var(--danger)" ' + pAct("proBannerDelete", [" + i + "], "click") + '>🗑️</button>' +
             '</div>' +
         '</div>').join('') ||
         '<div style="padding:26px;text-align:center;color:var(--text-muted);font-weight:700;font-size:.86rem">لا توجد بنرات — سيظهر بنر افتراضي أنيق في الصفحة الرئيسية</div>';
@@ -1060,7 +1127,7 @@ function proViewBanners() {
     const form = editing ? proBannerFormHtml() : '';
     return '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>🖼️ بنرات الصفحة الرئيسية</h3>' +
-            '<button class="btn btn-primary" style="padding:8px 15px;font-size:.82rem" onclick="proBannerNew()">➕ بنر جديد</button></div>' +
+            '<button class="btn btn-primary" style="padding:8px 15px;font-size:.82rem" ' + pAct("proBannerNew", [], "click") + '>➕ بنر جديد</button></div>' +
         '<div style="font-size:.78rem;color:var(--text-muted);font-weight:700;margin-bottom:8px">تظهر هذه البنرات كسلايدر متحرك أعلى الصفحة الرئيسية للعميل.</div>' +
         rows +
     '</div>' + form;
@@ -1072,25 +1139,25 @@ function proBannerFormHtml() {
     return '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>' + (f.id ? '✏️ تعديل بنر' : '➕ بنر جديد') + '</h3></div>' +
         '<div class="pro-choice-grid">' +
-            '<div class="form-group"><label>العنوان *</label><input type="text" value="' + esc(f.title || '') + '" oninput="proAdminState.form.title=this.value" placeholder="عروض العودة للمدارس"></div>' +
-            '<div class="form-group"><label>العنوان الفرعي</label><input type="text" value="' + esc(f.subtitle || '') + '" oninput="proAdminState.form.subtitle=this.value" placeholder="خصومات حتى 30%"></div>' +
+            '<div class="form-group"><label>العنوان *</label><input type="text" value="' + esc(f.title || '') + '" ' + pAct("proBannerField", ["title", pAct.VALUE], "input") + ' placeholder="عروض العودة للمدارس"></div>' +
+            '<div class="form-group"><label>العنوان الفرعي</label><input type="text" value="' + esc(f.subtitle || '') + '" ' + pAct("proBannerField", ["subtitle", pAct.VALUE], "input") + ' placeholder="خصومات حتى 30%"></div>' +
         '</div>' +
         '<div class="pro-choice-grid" style="grid-template-columns:1fr 1fr 1fr">' +
-            '<div class="form-group"><label>نص الزر</label><input type="text" value="' + esc(f.cta_text || '') + '" oninput="proAdminState.form.cta_text=this.value" placeholder="تسوّق الآن"></div>' +
-            '<div class="form-group"><label>إيموجي</label><input type="text" value="' + esc(f.emoji || '') + '" oninput="proAdminState.form.emoji=this.value" placeholder="🎒"></div>' +
-            '<div class="form-group"><label>نوع الرابط</label><select onchange="proAdminState.form.link_type=this.value">' + opts + '</select></div>' +
+            '<div class="form-group"><label>نص الزر</label><input type="text" value="' + esc(f.cta_text || '') + '" ' + pAct("proBannerField", ["cta_text", pAct.VALUE], "input") + ' placeholder="تسوّق الآن"></div>' +
+            '<div class="form-group"><label>إيموجي</label><input type="text" value="' + esc(f.emoji || '') + '" ' + pAct("proBannerField", ["emoji", pAct.VALUE], "input") + ' placeholder="🎒"></div>' +
+            '<div class="form-group"><label>نوع الرابط</label><select ' + pAct("proBannerField", ["link_type", pAct.VALUE], "change") + '>' + opts + '</select></div>' +
         '</div>' +
-        '<div class="form-group"><label>قيمة الرابط (رقم القسم أو المنتج أو رابط)</label><input type="text" value="' + esc(f.link_value || '') + '" oninput="proAdminState.form.link_value=this.value" style="direction:ltr;text-align:left"></div>' +
+        '<div class="form-group"><label>قيمة الرابط (رقم القسم أو المنتج أو رابط)</label><input type="text" value="' + esc(f.link_value || '') + '" ' + pAct("proBannerField", ["link_value", pAct.VALUE], "input") + ' style="direction:ltr;text-align:left"></div>' +
         '<div class="form-group"><label>صورة الخلفية (اختياري)</label>' +
             '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
                 (f.image_url ? '<div class="pro-img-tile" style="width:120px;height:64px"><img src="' + esc(f.image_url) + '" alt=""></div>' : '') +
-                '<label class="pro-img-add" style="width:120px;height:64px"><input type="file" accept="image/*" style="display:none" onchange="proBannerImgPick(event)"><span>＋</span><span>صورة</span></label>' +
-                (f.image_url ? '<button class="btn btn-ghost" style="font-size:.78rem" onclick="proAdminState.form.image_url=\'\';proAdminRender()">حذف الصورة</button>' : '') +
+                '<label class="pro-img-add" style="width:120px;height:64px"><input type="file" accept="image/*" style="display:none" ' + pAct("proBannerImgPick", [pAct.EVENT], "change") + '><span>＋</span><span>صورة</span></label>' +
+                (f.image_url ? '<button class="btn btn-ghost" style="font-size:.78rem" ' + pAct("proBannerImageClear", [], "click") + '>حذف الصورة</button>' : '') +
             '</div>' +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
-            '<button class="btn btn-primary" style="padding:11px 22px" onclick="proBannerSave()">💾 حفظ البنر</button>' +
-            '<button class="btn btn-outline" style="padding:11px 16px" onclick="proAdminState.editing=null;proAdminState.form=null;proAdminRender()">إلغاء</button>' +
+            '<button class="btn btn-primary" style="padding:11px 22px" ' + pAct("proBannerSave", [], "click") + '>💾 حفظ البنر</button>' +
+            '<button class="btn btn-outline" style="padding:11px 16px" ' + pAct("proBannerFormClear", [], "click") + '>إلغاء</button>' +
         '</div>' +
     '</div>';
 }
@@ -1218,7 +1285,7 @@ function proViewCustomers() {
             '<div style="width:38px;height:38px;border-radius:50%;background:var(--bg-soft);display:grid;place-items:center;font-size:1rem;flex-shrink:0">' + (u.role === 'admin' ? '🛡️' : u.role === 'worker' ? '👷' : '👤') + '</div>' +
             '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.85rem">' + esc(u.display_name || u.username) + '</div>' +
             '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700">@' + esc(u.username) + '</div></div>' +
-            '<select onchange="proChangeRole(\'' + u.id + '\',this.value)" style="padding:6px 10px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);font-family:inherit;font-weight:800;font-size:.78rem">' +
+            '<select ' + pAct("proChangeRole", [('' + u.id + ''), pAct.VALUE], "change") + ' style="padding:6px 10px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);font-family:inherit;font-weight:800;font-size:.78rem">' +
                 ['admin', 'worker', 'customer'].map(r => '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleNames[r] + '</option>').join('') +
             '</select>' +
         '</div>').join('') || '<div style="padding:24px;text-align:center;color:var(--text-muted);font-weight:700;font-size:.85rem">' +
@@ -1231,7 +1298,7 @@ function proViewCustomers() {
             '<div style="display:flex;flex-wrap:wrap;gap:7px">' +
                 permKeys.map(k =>
                     '<label class="pro-pill" style="cursor:pointer;' + (effectivePerm(role, k[0]) ? 'background:var(--primary);color:#fff;border-color:var(--primary)' : '') + '">' +
-                        '<input type="checkbox" ' + (effectivePerm(role, k[0]) ? 'checked' : '') + ' onchange="setRolePerm(\'' + role + '\',\'' + k[0] + '\',this.checked);setTimeout(proAdminRender,120)" style="width:14px;height:14px">' +
+                        '<input type="checkbox" ' + (effectivePerm(role, k[0]) ? 'checked' : '') + ' ' + pAct("proRolePerm", [role, k[0], pAct.CHECKED], "change") + ' style="width:14px;height:14px">' +
                         k[1] +
                     '</label>').join('') +
             '</div>' +
@@ -1288,7 +1355,7 @@ function proSetSetting(k, v) {
 function proViewSettings() {
     const swatch = ['', '#0d4f6c', '#0f766e', '#7c3aed', '#b91c1c', '#1f2937', '#c2410c'].map(c =>
         '<button class="pro-swatch' + (String(settings.brandColor || '') === c ? ' active' : '') + '" ' +
-        'style="background:' + (c || 'linear-gradient(135deg,#0d4f6c,#00c9a7)') + '" onclick="proSetSetting(\'brandColor\',\'' + c + '\');proApplyBranding();proAdminRender()" title="' + (c || 'افتراضي') + '"></button>').join('');
+        'style="background:' + (c || 'linear-gradient(135deg,#0d4f6c,#00c9a7)') + '" ' + pAct("proSettingBrandColor", [c], "click") + ' title="' + (c || 'افتراضي') + '"></button>').join('');
 
     return '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>🏪 حالة المتجر</h3></div>' +
@@ -1296,60 +1363,60 @@ function proViewSettings() {
             '<span style="font-size:1.6rem">' + (proIsOpen() ? '🟢' : '🌙') + '</span>' +
             '<div style="flex:1;min-width:150px"><div style="font-weight:900;font-size:.9rem">' + (proIsOpen() ? 'المتجر مفتوح ويستقبل الطلبات' : 'المتجر مغلق مؤقتًا') + '</div>' +
             '<div style="font-size:.75rem;color:var(--text-muted);font-weight:700">' + (proIsOpen() ? 'الزوار يستطيعون إتمام الطلبات الآن.' : 'الزوار يرون المنتجات لكن لا يمكنهم إتمام الطلب.') + '</div></div>' +
-            '<label class="pro-switch"><input type="checkbox" ' + (proIsOpen() ? 'checked' : '') + ' onchange="proToggleStoreOpen()"><span class="pro-switch-track"></span></label>' +
+            '<label class="pro-switch"><input type="checkbox" ' + (proIsOpen() ? 'checked' : '') + ' ' + pAct("proToggleStoreOpen", [], "change") + '><span class="pro-switch-track"></span></label>' +
         '</div>' +
     '</div>' +
 
     '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>🎨 هوية المتجر</h3></div>' +
         '<div class="pro-choice-grid">' +
-            '<div class="form-group"><label>اسم المتجر</label><input type="text" value="' + esc(settings.store || '') + '" oninput="proSetSetting(\'store\',this.value)"></div>' +
-            '<div class="form-group"><label>رقم الهاتف / واتساب</label><input type="tel" value="' + esc(settings.phone || '') + '" oninput="proSetSetting(\'phone\',this.value)" style="direction:ltr;text-align:left"></div>' +
+            '<div class="form-group"><label>اسم المتجر</label><input type="text" value="' + esc(settings.store || '') + '" ' + pAct("proSetSetting", ["store", pAct.VALUE], "input") + '></div>' +
+            '<div class="form-group"><label>رقم الهاتف / واتساب</label><input type="tel" value="' + esc(settings.phone || '') + '" ' + pAct("proSetSetting", ["phone", pAct.VALUE], "input") + ' style="direction:ltr;text-align:left"></div>' +
         '</div>' +
-        '<div class="form-group"><label>وصف المتجر (يظهر في الرئيسية والتذييل)</label><textarea rows="2" oninput="proSetSetting(\'desc\',this.value)" style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(settings.desc || '') + '</textarea></div>' +
-        '<div class="form-group"><label>📣 شريط الإعلان العلوي (اتركه فارغًا لإخفائه)</label><input type="text" value="' + esc(settings.announce || '') + '" oninput="proSetSetting(\'announce\',this.value)" placeholder="مثال: شحن مجاني لأي طلب فوق 300 ج.م"></div>' +
+        '<div class="form-group"><label>وصف المتجر (يظهر في الرئيسية والتذييل)</label><textarea rows="2" ' + pAct("proSetSetting", ["desc", pAct.VALUE], "input") + ' style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(settings.desc || '') + '</textarea></div>' +
+        '<div class="form-group"><label>📣 شريط الإعلان العلوي (اتركه فارغًا لإخفائه)</label><input type="text" value="' + esc(settings.announce || '') + '" ' + pAct("proSetSetting", ["announce", pAct.VALUE], "input") + ' placeholder="مثال: شحن مجاني لأي طلب فوق 300 ج.م"></div>' +
         '<div class="form-group"><label>الشعار</label>' +
             '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
                 (settings.logo ? '<img src="' + esc(settings.logo) + '" style="width:52px;height:52px;border-radius:12px;object-fit:contain;background:#fff;border:1px solid var(--border);padding:3px">' : '') +
-                '<label class="pro-img-add" style="width:52px;height:52px;border-radius:12px"><input type="file" accept="image/*" style="display:none" onchange="proLogoPick(event)"><span>＋</span></label>' +
-                (settings.logo ? '<button class="btn btn-ghost" style="font-size:.78rem" onclick="proSetSetting(\'logo\',\'\');proAdminRender()">حذف</button>' : '') +
+                '<label class="pro-img-add" style="width:52px;height:52px;border-radius:12px"><input type="file" accept="image/*" style="display:none" ' + pAct("proLogoPick", [pAct.EVENT], "change") + '><span>＋</span></label>' +
+                (settings.logo ? '<button class="btn btn-ghost" style="font-size:.78rem" ' + pAct("proSettingLogoClear", [], "click") + '>حذف</button>' : '') +
             '</div>' +
         '</div>' +
         '<div class="form-group"><label>لون الهوية</label><div class="pro-swatches">' + swatch +
-            '<input type="color" value="' + (/^#[0-9a-f]{6}$/i.test(settings.brandColor || '') ? settings.brandColor : '#0d4f6c') + '" onchange="proSetSetting(\'brandColor\',this.value);proApplyBranding();proAdminRender()" style="width:44px;height:38px;border-radius:10px;border:1px solid var(--border);cursor:pointer;background:none">' +
+            '<input type="color" value="' + (/^#[0-9a-f]{6}$/i.test(settings.brandColor || '') ? settings.brandColor : '#0d4f6c') + '" ' + pAct("proSettingBrandColor", [pAct.VALUE], "change") + ' style="width:44px;height:38px;border-radius:10px;border:1px solid var(--border);cursor:pointer;background:none">' +
         '</div></div>' +
-        '<div class="form-group"><label>العنوان</label><input type="text" value="' + esc(settings.address || '') + '" oninput="proSetSetting(\'address\',this.value)"></div>' +
+        '<div class="form-group"><label>العنوان</label><input type="text" value="' + esc(settings.address || '') + '" ' + pAct("proSetSetting", ["address", pAct.VALUE], "input") + '></div>' +
     '</div>' +
 
     '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>💳 طرق الدفع</h3></div>' +
         '<div class="pro-choice-grid">' +
-            '<div class="form-group"><label>📱 فودافون كاش</label><input type="text" value="' + esc(settings.payVodafone || '') + '" oninput="proSetSetting(\'payVodafone\',this.value)" placeholder="010xxxxxxxx" style="direction:ltr;text-align:left"></div>' +
-            '<div class="form-group"><label>⚡ إنستاباي</label><input type="text" value="' + esc(settings.payInstapay || '') + '" oninput="proSetSetting(\'payInstapay\',this.value)" placeholder="name@instapay" style="direction:ltr;text-align:left"></div>' +
+            '<div class="form-group"><label>📱 فودافون كاش</label><input type="text" value="' + esc(settings.payVodafone || '') + '" ' + pAct("proSetSetting", ["payVodafone", pAct.VALUE], "input") + ' placeholder="010xxxxxxxx" style="direction:ltr;text-align:left"></div>' +
+            '<div class="form-group"><label>⚡ إنستاباي</label><input type="text" value="' + esc(settings.payInstapay || '') + '" ' + pAct("proSetSetting", ["payInstapay", pAct.VALUE], "input") + ' placeholder="name@instapay" style="direction:ltr;text-align:left"></div>' +
         '</div>' +
-        '<div class="form-group"><label>🏦 تحويل بنكي</label><textarea rows="2" oninput="proSetSetting(\'payBank\',this.value)" placeholder="اسم البنك · رقم الحساب · اسم صاحب الحساب" style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(settings.payBank || '') + '</textarea></div>' +
+        '<div class="form-group"><label>🏦 تحويل بنكي</label><textarea rows="2" ' + pAct("proSetSetting", ["payBank", pAct.VALUE], "input") + ' placeholder="اسم البنك · رقم الحساب · اسم صاحب الحساب" style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(settings.payBank || '') + '</textarea></div>' +
         '<div style="font-size:.76rem;color:var(--text-muted);font-weight:700">تظهر هذه البيانات للعميل في خطوة الدفع مع إمكانية إرفاق صورة الإيصال.</div>' +
     '</div>' +
 
     '<div class="pro-card">' +
         '<div class="pro-card-head"><h3>🚚 الشحن والخصومات والضريبة</h3></div>' +
         '<div class="pro-choice-grid" style="grid-template-columns:1fr 1fr 1fr 1fr">' +
-            '<div class="form-group"><label>مصاريف الشحن</label><input type="number" value="' + proNum(settings.shipping) + '" oninput="proSetSetting(\'shipping\',this.value)" min="0"></div>' +
-            '<div class="form-group"><label>شحن مجاني فوق</label><input type="number" value="' + proNum(settings.freeShip) + '" oninput="proSetSetting(\'freeShip\',this.value)" min="0"></div>' +
-            '<div class="form-group"><label>الضريبة %</label><input type="number" value="' + proNum(settings.tax) + '" oninput="proSetSetting(\'tax\',this.value)" min="0"></div>' +
-            '<div class="form-group"><label>أيام الإرجاع</label><input type="number" value="' + proNum(settings.returnDays) + '" oninput="proSetSetting(\'returnDays\',this.value)" min="0"></div>' +
+            '<div class="form-group"><label>مصاريف الشحن</label><input type="number" value="' + proNum(settings.shipping) + '" ' + pAct("proSetSetting", ["shipping", pAct.VALUE], "input") + ' min="0"></div>' +
+            '<div class="form-group"><label>شحن مجاني فوق</label><input type="number" value="' + proNum(settings.freeShip) + '" ' + pAct("proSetSetting", ["freeShip", pAct.VALUE], "input") + ' min="0"></div>' +
+            '<div class="form-group"><label>الضريبة %</label><input type="number" value="' + proNum(settings.tax) + '" ' + pAct("proSetSetting", ["tax", pAct.VALUE], "input") + ' min="0"></div>' +
+            '<div class="form-group"><label>أيام الإرجاع</label><input type="number" value="' + proNum(settings.returnDays) + '" ' + pAct("proSetSetting", ["returnDays", pAct.VALUE], "input") + ' min="0"></div>' +
         '</div>' +
         '<div class="pro-choice-grid">' +
-            '<div class="form-group"><label>كود الكوبون</label><input type="text" value="' + esc(settings.couponCode || '') + '" oninput="proSetSetting(\'couponCode\',this.value)" style="direction:ltr;text-align:left"></div>' +
-            '<div class="form-group"><label>نسبة الكوبون %</label><input type="number" value="' + proNum(settings.couponPct) + '" oninput="proSetSetting(\'couponPct\',this.value)" min="0" max="100"></div>' +
+            '<div class="form-group"><label>كود الكوبون</label><input type="text" value="' + esc(settings.couponCode || '') + '" ' + pAct("proSetSetting", ["couponCode", pAct.VALUE], "input") + ' style="direction:ltr;text-align:left"></div>' +
+            '<div class="form-group"><label>نسبة الكوبون %</label><input type="number" value="' + proNum(settings.couponPct) + '" ' + pAct("proSetSetting", ["couponPct", pAct.VALUE], "input") + ' min="0" max="100"></div>' +
         '</div>' +
     '</div>' +
 
     '<div style="display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--bg-body);padding:12px 0;border-top:1px solid var(--border)">' +
-        '<button class="btn btn-primary" style="padding:13px 30px" onclick="proSaveSettingsForm()">💾 حفظ كل الإعدادات</button>' +
-        '<button class="btn btn-outline" style="padding:13px 18px" onclick="openSyncStatus()">☁️ حالة المزامنة</button>' +
-        '<button class="btn btn-outline" style="padding:13px 18px" onclick="openTrash()">🗑️ سلة المحذوفات</button>' +
-        '<button class="btn btn-outline" style="padding:13px 18px" onclick="manualBackup()">💾 نسخة احتياطية</button>' +
+        '<button class="btn btn-primary" style="padding:13px 30px" ' + pAct("proSaveSettingsForm", [], "click") + '>💾 حفظ كل الإعدادات</button>' +
+        '<button class="btn btn-outline" style="padding:13px 18px" ' + pAct("openSyncStatus", [], "click") + '>☁️ حالة المزامنة</button>' +
+        '<button class="btn btn-outline" style="padding:13px 18px" ' + pAct("openTrash", [], "click") + '>🗑️ سلة المحذوفات</button>' +
+        '<button class="btn btn-outline" style="padding:13px 18px" ' + pAct("manualBackup", [], "click") + '>💾 نسخة احتياطية</button>' +
     '</div>';
 }
 function proLogoPick(ev) {

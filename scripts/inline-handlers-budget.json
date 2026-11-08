@@ -1,7 +1,7 @@
 {
   "_note": "سقف المعالجات المضمّنة — لا يجوز أن يزيد. خفّضه بعد كل تحويل إلى data-act.",
   "_updated": "2026-11-08",
-  "total": 291,
+  "total": 187,
   "files": {
     "index.html": 56,
     "web/actions.js": 0,
@@ -11,7 +11,7 @@
     "web/core.js": 5,
     "web/lock.js": 0,
     "web/ops.js": 5,
-    "web/pro-admin.js": 104,
+    "web/pro-admin.js": 0,
     "web/pro-checkout.js": 16,
     "web/pro-store.js": 0,
     "web/ui.js": 10,

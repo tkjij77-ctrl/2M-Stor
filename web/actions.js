@@ -46,6 +46,47 @@
     return parsed;
   }
 
+  /* ── pAct: تسجيل الحجج وقت الرسم (تحفظ أنواعها الحقيقية) ────────────────
+     لماذا لا نكتب الحجج في data-json؟ لأن الـHTML نصّ: الرقم يصير نصًّا،
+     و"this.value" لا وجود لها وقت الرسم. هنا تُحفظ القيم نفسها في سجلّ
+     ويحمل العنصر مفتاحًا قصيرًا فقط. لا eval ولا تفكيك نصّي. */
+  var VALUE = {'$sentinel': 'value'};
+  var CHECKED = {'$sentinel': 'checked'};
+  var EVENT = {'$sentinel': 'event'};
+  var registry = Object.create(null);
+  var seq = 0, order = [];
+
+  window.__actionsSentinels = {VALUE: VALUE, CHECKED: CHECKED, EVENT: EVENT};
+
+  window.pAct = function (name, args, on) {
+    if (typeof name !== 'string' || !NAME_RE.test(name)) return '';
+    var key = 'a' + (++seq);
+    var evt = (typeof on === 'string' && on) ? on : 'click';
+    registry[key] = {name: name, args: Array.isArray(args) ? args : [], on: evt};
+    order.push(key);
+    // سقف صريح: العناصر القديمة تُزال من الـDOM، فلا داعي لنموّ لا نهائي
+    if (order.length > 4000) { delete registry[order.shift()]; }
+    return ' data-act="' + name + '" data-tok="' + key + '"' + (evt === 'click' ? '' : ' data-on="' + evt + '"');
+  };
+
+  // ⚠️ تُعلَّق على pAct نفسها لأن ملفات الوحدات تستخدم pAct.VALUE مباشرة
+  window.pAct.VALUE = VALUE;
+  window.pAct.CHECKED = CHECKED;
+  window.pAct.EVENT = EVENT;
+
+  /** يمنح الحجج وقت التشغيل قيمها الحقيقية (value/checked/event) */
+  function realArgs(list, el, ev) {
+    var out = new Array(list.length);
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      if (a === VALUE) out[i] = el.value;
+      else if (a === CHECKED) out[i] = !!el.checked;
+      else if (a === EVENT) out[i] = ev;
+      else out[i] = a;
+    }
+    return out;
+  }
+
   function resolve(name) {
     if (!name || !NAME_RE.test(name)) return null;
     var fn = window[name];
@@ -65,7 +106,9 @@
   function onEvent(ev) {
     var el = source(ev.target);
     if (!el) return;
-    var want = el.getAttribute('data-on') || 'click';
+    var tokEl = el.getAttribute('data-tok');
+    var entryEl = tokEl ? registry[tokEl] : null;
+    var want = el.getAttribute('data-on') || (entryEl && entryEl.on) || 'click';
     if (want !== ev.type) return;
 
     // شروط مسبقة بلا كود: مفتاح محدّد، أو قيمة حقل غير فارغة
@@ -82,7 +125,10 @@
     if (el.hasAttribute('data-stop')) ev.stopPropagation();
     if (el.hasAttribute('data-prevent')) ev.preventDefault();
     try {
-      fn.apply(el, argsOf(el).concat([ev, el]));
+      var tok = el.getAttribute('data-tok');
+      var entry = tok ? registry[tok] : null;
+      var args = entry ? realArgs(entry.args, el, ev) : argsOf(el);
+      fn.apply(el, args.concat([ev, el]));
     } catch (err) {
       if (window.console && console.error) console.error('[actions]', el.getAttribute('data-act'), err);
     }
@@ -94,6 +140,14 @@
 
   // للاختبارات والفحص: عرض ما سيُنفَّذ دون تنفيذ
   window.__actionsProbe = function (el) {
-    return { act: el.getAttribute('data-act'), args: argsOf(el), known: !!resolve(el.getAttribute('data-act')) };
+    var tok = el.getAttribute('data-tok');
+    var entry = tok ? registry[tok] : null;
+    return {
+      act: el.getAttribute('data-act'),
+      args: entry ? entry.args : argsOf(el),
+      on: el.getAttribute('data-on') || (entry && entry.on) || 'click',
+      fromToken: !!entry,
+      known: !!resolve(el.getAttribute('data-act')),
+    };
   };
 })();

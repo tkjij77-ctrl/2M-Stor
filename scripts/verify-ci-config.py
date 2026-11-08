@@ -302,6 +302,11 @@ check(
     (ROOT / "scripts" / "inline-handlers-budget.json").exists(),
 )
 check(
+    "T7.4: فحص لوحة الإدارة مربوط بـCI",
+    "verify-pro-admin-ui.js" in ci_text,
+    "" if "verify-pro-admin-ui.js" in ci_text else "اللوحة قد تتعطّل بلا إنذار",
+)
+check(
     "T7.4: فحص السقف مربوط بـCI",
     "verify-inline-handlers.js" in ci_text,
     "" if "verify-inline-handlers.js" in ci_text else "الدَّين قد ينمو بصمت",
