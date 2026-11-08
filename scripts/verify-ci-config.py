@@ -307,6 +307,15 @@ check(
     "" if "verify-pro-admin-ui.js" in ci_text else "اللوحة قد تتعطّل بلا إنذار",
 )
 check(
+    "T7.4: فحص سلامة الحجج/الأسماء موجود",
+    (ROOT / "scripts" / "verify-actions-args.py").exists(),
+)
+check(
+    "T7.4: فحص سلامة الحجج/الأسماء مربوط بـCI",
+    "verify-actions-args.py" in ci_text,
+    "" if "verify-actions-args.py" in ci_text else "الحجج المعطوبة قد تعود بصمت",
+)
+check(
     "T7.4: فحص السقف مربوط بـCI",
     "verify-inline-handlers.js" in ci_text,
     "" if "verify-inline-handlers.js" in ci_text else "الدَّين قد ينمو بصمت",

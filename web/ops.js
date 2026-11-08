@@ -1,3 +1,10 @@
+    /* ── T7.4/د: تفريغ سجل الأخطاء ثم إعادة عرض النافذة (كان onclick مركّبًا) */
+    function actClearErrors() {
+        errLogClear();
+        showErrorsModal();
+        toast('🧹 تم تفريغ السجل');
+    }
+
     // ===== DAILY REPORT + CSV (تقرير نهاية اليوم والتصدير) =====
     function dailyReport() {
         if (!can('dash')) return;
@@ -37,7 +44,7 @@
                 (top.length ? '<div style="font-weight:800;margin:10px 0 6px">🏆 أعلى الأصناف اليوم</div>' + top.map(([n, q]) => '<div class="ct-row"><span>' + esc(n) + '</span><span>' + q + ' قطعة</span></div>').join('') : '') +
                 (sellers.length ? '<div style="font-weight:800;margin:10px 0 6px">👷 مبيعات البائعين اليوم</div>' + sellers.map(([n, v]) => '<div class="ct-row"><span>' + esc(n) + '</span><span>' + fmt(v) + ' ج.م</span></div>').join('') : '') +
                 (settings.footer ? '<div style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:12px">' + esc(settings.footer) + '</div>' : '') +
-                '<div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="printReceipt()">🖨️ طباعة التقرير</button></div>' +
+                '<div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" ' + pAct("printReceipt", [], "click") + '>🖨️ طباعة التقرير</button></div>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
     }
@@ -263,7 +270,7 @@
         box.className = 'cam-box';
         box.innerHTML = '<video id="camVideo" autoplay playsinline muted></video>' +
             '<div class="cam-hint">وجّه الكاميرا نحو الرمز — سيُقرأ تلقائياً</div>' +
-            '<button class="btn btn-outline cam-close" onclick="stopCameraScan()">✕ إغلاق</button>';
+            '<button class="btn btn-outline cam-close" ' + pAct("stopCameraScan", [], "click") + '>✕ إغلاق</button>';
         document.body.appendChild(box);
         try {
             camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -517,9 +524,9 @@
             'أرسلها للمطوّر عند أي عطل متكرر.</p>' +
             '<div class="user-list" style="max-height:50vh;overflow:auto">' + list + '</div>' +
             '<div class="modal-actions">' +
-                (rows.length ? '<button class="btn btn-outline" onclick="copyErrors()">📋 نسخ</button>' : '') +
-                (rows.length ? '<button class="btn btn-outline" onclick="errLogClear();showErrorsModal();toast(\'🧹 تم تفريغ السجل\')">🧹 تفريغ</button>' : '') +
-                '<button class="btn btn-outline" onclick="closeModal()">إغلاق</button>' +
+                (rows.length ? '<button class="btn btn-outline" ' + pAct("copyErrors", [], "click") + '>📋 نسخ</button>' : '') +
+                (rows.length ? '<button class="btn btn-outline" ' + pAct("actClearErrors", []) + '>🧹 تفريغ</button>' : '') +
+                '<button class="btn btn-outline" ' + pAct("closeModal", [], "click") + '>إغلاق</button>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
     }

@@ -147,6 +147,55 @@ const SETTINGS = [
   });
   check('زر الإغلاق يعمل', closers.hasClose && closers.open === false, `open=${closers.open}`);
 
+  // ═══ 6) حجج الأزرار: أنواع صحيحة + نقر يُنفّذ على العنصر الصحيح ═══
+  //  التحويل الآلي أخرج حججًا حرفية مثل [" + r.ci + "] (رقم يصير نصًّا) في 20
+  //  موضعًا داخل هذه اللوحة. النقر «يعمل» لكن على فهرس خاطئ — عطب صامت.
+  console.log('\n【6】 حجج الأزرار (أنواع + نقر حقيقي)');
+  await page.evaluate(() => proOpenAdmin('products'));
+  await page.waitForTimeout(600);
+
+  const argTypes = await page.evaluate(() => {
+    const want = ['proProductEdit', 'proProductToggle', 'proProductDelete', 'proCatMove', 'proCatRename'];
+    const out = {};
+    for (const n of want) {
+      const el = document.querySelector('#proAdmin [data-act="' + n + '"]');
+      if (el) out[n] = window.__actionsProbe(el).args.map(a => (typeof a === 'object' ? 'obj' : typeof a));
+    }
+    const stray = [];
+    for (const el of document.querySelectorAll('#proAdmin [data-act]')) {
+      const pr = window.__actionsProbe(el);
+      (pr.args || []).forEach((a, i) => {
+        if (typeof a === 'string' && (/^\s*\+/.test(a) || /\+\s*$/.test(a))) stray.push(pr.act + '[' + i + ']');
+      });
+    }
+    return { out, stray: [...new Set(stray)].slice(0, 4) };
+  });
+  const numeric = Object.entries(argTypes.out).filter(([, t]) => /number/.test(t.join(',')));
+  check('لا حجج نصّية معطوبة في اللوحة', argTypes.stray.length === 0, argTypes.stray.join(' '));
+  check('أزرار الصفوف تحمل أرقامًا لا نصوصًا', numeric.length >= 2, JSON.stringify(argTypes.out));
+
+  const editClick = await page.evaluate(async () => {
+    const btn = document.querySelector('#proAdmin [data-act="proProductEdit"]');
+    if (!btn) return { skip: true };
+    const args = window.__actionsProbe(btn).args;
+    btn.click();
+    await new Promise(r => setTimeout(r, 500));
+    const st = typeof proAdminState !== 'undefined' ? proAdminState : {};
+    const root = document.getElementById('proAdmin');
+    return {
+      args,
+      view: st.view,
+      editing: st.editing,
+      formName: st.form && st.form.n,
+      inForm: !!(root && /حفظ|تعديل الصنف/.test(root.innerText)),
+      hits: st.editing ? (st.editing.ci === args[0] && st.editing.ii === args[1]) : false,
+      text: root ? root.innerText.slice(0, 60) : '',
+    };
+  });
+  check('نقر «تعديل» يفتح محرّر الصنف الصحيح (لا فهرس منزاح)',
+    !editClick.skip && editClick.view === 'productForm' && editClick.hits === true && editClick.formName === 'لمبة ليد',
+    JSON.stringify({ args: editClick.args, editing: editClick.editing, form: editClick.formName }));
+
   // ═══ 5) سلامة التشغيل ═══
   console.log('\n【5】 سلامة التشغيل');
   const realErrors = errors.filter(e => !/abort|ERR_FAILED|Failed to fetch|net::/i.test(e));

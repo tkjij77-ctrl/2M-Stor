@@ -12,6 +12,8 @@ import sys
 EVENTS = ('click', 'input', 'change', 'keydown', 'blur', 'submit')
 
 CALL_RE = re.compile(r'^([A-Za-z_$][\w$.]*)\s*\((.*)\)$', re.S)
+# كلمات مفتاحية تبدو كنداء دالة — لا تُحوَّل (مثال: if(navigator.share) navigator.share(...))
+KEYWORDS = {'if', 'for', 'while', 'switch', 'return', 'typeof', 'new', 'function', 'catch'}
 
 
 def find_handlers(src):
@@ -116,6 +118,9 @@ def main(path, dry=False):
             manual.append((ev, code, raw))
             continue
         name, args_s = m.group(1), m.group(2)
+        if name in KEYWORDS:
+            manual.append((ev, code, raw))
+            continue
         args = [to_js_arg(a) for a in split_top(args_s)] if args_s.strip() else []
         repl = "' + pAct(\"%s\", [%s], \"%s\") + '" % (name, ', '.join(args), ev)
         src = src[:start] + repl + src[end:]

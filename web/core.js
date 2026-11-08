@@ -102,6 +102,10 @@ function actCloseDetailIfBackdrop(ev, el) {
     let shopPageSize = 40, shopLimit = 40;
     let shopSort = 'default';
     let shopFavOnly = false;
+
+    /* ── T7.4/د: ترتيب المتجر وفلتر المفضّلة (كانا onchange مركّبين) ──────── */
+    function vSetSort(v) { shopSort = v; renderAll(); }
+    function vSetFavOnly(on) { shopFavOnly = !!on; renderAll(); }
     let accTab='profile';
     let favs = JSON.parse(localStorage.getItem('al_sayed_fav')||'[]');
     let searchDebounce = null;
@@ -326,7 +330,7 @@ function actCloseDetailIfBackdrop(ev, el) {
             '<h2>' + c.title + '</h2>' +
             '<div style="font-size:.92rem;line-height:1.9">' + c.html + '</div>' +
             '<div style="margin-top:14px;font-size:.78rem;opacity:.75">آخر تحديث: ' + new Date().toLocaleDateString('ar-EG') + '</div>' +
-            '<div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">فهمت</button></div>';
+            '<div class="modal-actions"><button class="btn btn-primary" ' + pAct("closeModal", [], "click") + '>فهمت</button></div>';
         // 🐞 كان classList.add('open') بلا قاعدة CSS مقابلة ⇒ النافذة لا تظهر إطلاقًا.
         // بقية التطبيق يفتحها بـstyle.display='flex' — نوحّد على نفس الطريقة.
         document.getElementById('modal').style.display = 'flex';
@@ -370,14 +374,14 @@ function actCloseDetailIfBackdrop(ev, el) {
         const row = document.getElementById('filterRow');
         if (!row) return;
         if (currentView === 'stock') {
-            row.innerHTML = '<select id="stockFilter" onchange="renderAll()">' +
+            row.innerHTML = '<select id="stockFilter" ' + pAct("renderAll", [], "change") + '>' +
                 '<option value="all">📋 الكل</option><option value="available">✅ متوفر</option>' +
                 '<option value="low">⚠️ منخفض</option><option value="out">❌ نافذ</option></select>';
         } else if (currentView === 'shop') {
             row.innerHTML = '<div class="shop-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
-                + '<select id="stockFilter" onchange="renderAll()"><option value="all">📋 الكل</option><option value="available">✅ متوفر</option><option value="out">❌ غير متوفر</option></select>'
-                + '<select id="sortSelect" onchange="shopSort=this.value;renderAll()"><option value="default">الترتيب الافتراضي</option><option value="qs-desc">المتاح: الأعلى</option><option value="price-asc">السعر: الأقل → الأعلى</option><option value="price-desc">السعر: الأعلى → الأقل</option><option value="name-asc">الاسم: أ→ي</option></select>'
-                + '<label style="display:flex;gap:6px;align-items:center;font-weight:800;font-size:.82rem;cursor:pointer;margin-right:auto"><input type="checkbox" id="favOnly" '+(shopFavOnly?'checked':'')+' onchange="shopFavOnly=this.checked;renderAll()"> ❤️ المفضلة فقط</label>'
+                + '<select id="stockFilter" ' + pAct("renderAll", [], "change") + '><option value="all">📋 الكل</option><option value="available">✅ متوفر</option><option value="out">❌ غير متوفر</option></select>'
+                + '<select id="sortSelect" ' + pAct("vSetSort", [pAct.VALUE], "change") + '><option value="default">الترتيب الافتراضي</option><option value="qs-desc">المتاح: الأعلى</option><option value="price-asc">السعر: الأقل → الأعلى</option><option value="price-desc">السعر: الأعلى → الأقل</option><option value="name-asc">الاسم: أ→ي</option></select>'
+                + '<label style="display:flex;gap:6px;align-items:center;font-weight:800;font-size:.82rem;cursor:pointer;margin-right:auto"><input type="checkbox" id="favOnly" '+(shopFavOnly?'checked':'')+' ' + pAct("vSetFavOnly", [pAct.CHECKED], "change") + '> ❤️ المفضلة فقط</label>'
                 + '</div>';
             const ss=document.getElementById('sortSelect'); if(ss) ss.value=shopSort;
         } else {

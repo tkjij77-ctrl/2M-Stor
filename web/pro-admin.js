@@ -778,9 +778,9 @@ function proViewProducts() {
                 (proOldPrice(it) > itemPrice(it) ? '<div style="font-size:.7rem"><span class="pro-old-price">' + fmt(proOldPrice(it)) + '</span> <span style="color:var(--pro-sale);font-weight:900">-' + pct + '%</span></div>' : '') + '</td>' +
             '<td><div style="font-weight:900;font-size:.84rem;color:' + (qs === 0 ? 'var(--danger)' : qs <= getMin(it) ? 'var(--gold)' : 'var(--success)') + '">' + qs + '</div>' +
                 '<div style="font-size:.68rem;color:var(--text-muted);font-weight:700">مخزن ' + getQ(it) + '</div></td>' +
-            '<td><label class="pro-switch"><input type="checkbox" ' + (qs > 0 ? 'checked' : '') + ' ' + pAct("proProductToggle", [" + r.ci + ", " + r.ii + ", pAct.CHECKED], "change") + '><span class="pro-switch-track"></span></label></td>' +
-            '<td><div class="mini-actions"><button class="mini-btn" title="تعديل" ' + pAct("proProductEdit", [" + r.ci + ", " + r.ii + "], "click") + '>✏️</button>' +
-                '<button class="mini-btn" title="حذف" ' + pAct("proProductDelete", [" + r.ci + ", " + r.ii + "], "click") + ' style="color:var(--danger)">🗑️</button></div></td>' +
+            '<td><label class="pro-switch"><input type="checkbox" ' + (qs > 0 ? 'checked' : '') + ' ' + pAct("proProductToggle", [r.ci, r.ii, pAct.CHECKED], "change") + '><span class="pro-switch-track"></span></label></td>' +
+            '<td><div class="mini-actions"><button class="mini-btn" title="تعديل" ' + pAct("proProductEdit", [r.ci, r.ii], "click") + '>✏️</button>' +
+                '<button class="mini-btn" title="حذف" ' + pAct("proProductDelete", [r.ci, r.ii], "click") + ' style="color:var(--danger)">🗑️</button></div></td>' +
         '</tr>';
     }).join('') || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);font-weight:700">لا توجد منتجات مطابقة</td></tr>';
 
@@ -838,8 +838,8 @@ function proViewProductForm() {
     const tiles = f.imgs.map((u, k) =>
         '<div class="pro-img-tile">' +
             '<img src="' + esc(u) + '" alt="">' +
-            '<button class="pro-img-del" ' + pAct("proProductImgRemove", [" + k + "], "click") + ' title="حذف">✕</button>' +
-            '<button class="pro-img-cover" ' + pAct("proProductImgCover", [" + k + "], "click") + '>' + (k === 0 ? '✓ الغلاف' : 'اجعله غلافًا') + '</button>' +
+            '<button class="pro-img-del" ' + pAct("proProductImgRemove", [k], "click") + ' title="حذف">✕</button>' +
+            '<button class="pro-img-cover" ' + pAct("proProductImgCover", [k], "click") + '>' + (k === 0 ? '✓ الغلاف' : 'اجعله غلافًا') + '</button>' +
         '</div>').join('');
 
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
@@ -871,7 +871,7 @@ function proViewProductForm() {
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">' +
             '<button class="btn btn-primary" style="padding:12px 24px" ' + pAct("proProductSave", [], "click") + '>💾 حفظ المنتج</button>' +
             '<button class="btn btn-outline" style="padding:12px 18px" ' + pAct("proAdminGo", ["products"], "click") + '>إلغاء</button>' +
-            (isNew ? '' : '<button class="btn btn-outline" style="padding:12px 18px;color:var(--danger);border-color:var(--danger);margin-inline-start:auto" ' + pAct("proProductDelete", [" + proAdminState.editing.ci + ", " + proAdminState.editing.ii + "], "click") + '>🗑️ حذف</button>') +
+            (isNew ? '' : '<button class="btn btn-outline" style="padding:12px 18px;color:var(--danger);border-color:var(--danger);margin-inline-start:auto" ' + pAct("proProductDelete", [proAdminState.editing.ci, proAdminState.editing.ii], "click") + '>🗑️ حذف</button>') +
         '</div>' +
     '</div>';
 }
@@ -994,11 +994,11 @@ function proViewCategories() {
                 '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700">' + n + ' منتج · ' + avail + ' متاح</div>' +
             '</div>' +
             '<div style="display:flex;gap:5px">' +
-                '<button class="mini-btn" title="أعلى" ' + pAct("proCatMove", [" + ci + ", -1], "click") + ' ' + (ci === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
-                '<button class="mini-btn" title="أسفل" ' + pAct("proCatMove", [" + ci + ", 1], "click") + ' ' + (ci === db.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
-                '<button class="mini-btn" title="صورة" ' + pAct("proCatPickImage", [" + ci + "], "click") + '>🖼️</button>' +
-                '<button class="mini-btn" title="تعديل" ' + pAct("proCatRename", [" + ci + "], "click") + '>✏️</button>' +
-                '<button class="mini-btn" title="حذف" style="color:var(--danger)" ' + pAct("proCatDelete", [" + ci + "], "click") + '>🗑️</button>' +
+                '<button class="mini-btn" title="أعلى" ' + pAct("proCatMove", [ci, -1], "click") + ' ' + (ci === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
+                '<button class="mini-btn" title="أسفل" ' + pAct("proCatMove", [ci, 1], "click") + ' ' + (ci === db.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
+                '<button class="mini-btn" title="صورة" ' + pAct("proCatPickImage", [ci], "click") + '>🖼️</button>' +
+                '<button class="mini-btn" title="تعديل" ' + pAct("proCatRename", [ci], "click") + '>✏️</button>' +
+                '<button class="mini-btn" title="حذف" style="color:var(--danger)" ' + pAct("proCatDelete", [ci], "click") + '>🗑️</button>' +
             '</div>' +
         '</div>';
     }).join('') || '<div style="padding:26px;text-align:center;color:var(--text-muted);font-weight:700">لا توجد أقسام بعد</div>';
@@ -1113,12 +1113,12 @@ function proViewBanners() {
                 (b.image_url ? '<img src="' + esc(b.image_url) + '" style="width:100%;height:100%;object-fit:cover" loading="lazy">' : (b.emoji || '🖼️')) + '</div>' +
             '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(b.title || '(بلا عنوان)') + '</div>' +
                 '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(b.subtitle || '') + '</div></div>' +
-            '<label class="pro-switch"><input type="checkbox" ' + (b.active !== false ? 'checked' : '') + ' ' + pAct("proBannerToggle", [" + i + ", pAct.CHECKED], "change") + '><span class="pro-switch-track"></span></label>' +
+            '<label class="pro-switch"><input type="checkbox" ' + (b.active !== false ? 'checked' : '') + ' ' + pAct("proBannerToggle", [i, pAct.CHECKED], "change") + '><span class="pro-switch-track"></span></label>' +
             '<div style="display:flex;gap:5px">' +
-                '<button class="mini-btn" ' + pAct("proBannerMove", [" + i + ", -1], "click") + ' ' + (i === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
-                '<button class="mini-btn" ' + pAct("proBannerMove", [" + i + ", 1], "click") + ' ' + (i === proBanners.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
-                '<button class="mini-btn" ' + pAct("proBannerEdit", [" + i + "], "click") + '>✏️</button>' +
-                '<button class="mini-btn" style="color:var(--danger)" ' + pAct("proBannerDelete", [" + i + "], "click") + '>🗑️</button>' +
+                '<button class="mini-btn" ' + pAct("proBannerMove", [i, -1], "click") + ' ' + (i === 0 ? 'disabled style="opacity:.35"' : '') + '>↑</button>' +
+                '<button class="mini-btn" ' + pAct("proBannerMove", [i, 1], "click") + ' ' + (i === proBanners.length - 1 ? 'disabled style="opacity:.35"' : '') + '>↓</button>' +
+                '<button class="mini-btn" ' + pAct("proBannerEdit", [i], "click") + '>✏️</button>' +
+                '<button class="mini-btn" style="color:var(--danger)" ' + pAct("proBannerDelete", [i], "click") + '>🗑️</button>' +
             '</div>' +
         '</div>').join('') ||
         '<div style="padding:26px;text-align:center;color:var(--text-muted);font-weight:700;font-size:.86rem">لا توجد بنرات — سيظهر بنر افتراضي أنيق في الصفحة الرئيسية</div>';

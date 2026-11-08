@@ -225,6 +225,76 @@ const check = (name, ok, detail) => {
   });
   console.log(`  ℹ️ معالجات مضمّنة في بقية الصفحة الآن: ${noInlineInDoc} (تتناقص مع كل مرحلة)`);
 
+  // ═══ 8) حجج pAct أنواعها صحيحة (views.js) — عطب صامت لا يراه أي فحص آخر ═══
+  //  التحويل الآلي أخرج 34 موضعًا بحجج نصّية مثل [" + r.ci + "]. النقر يعمل،
+  //  لكن الرقم يصل نصًّا → عمليات على فهرس خاطئ. هنا نتحقق من الأنواع + السلوك.
+  console.log('\n【8】 حجج pAct في المتجر (أنواع + سلوك فعلي)');
+  await page.evaluate(() => setView('shop'));
+  await page.waitForTimeout(700);
+
+  const types = await page.evaluate(() => {
+    const bad = [];
+    let checked = 0;
+    for (const el of document.querySelectorAll('[data-act]')) {
+      const p = window.__actionsProbe(el);
+      (p.args || []).forEach((a, i) => {
+        checked++;
+        if (typeof a === 'string' && (/^\s*\+/.test(a) || /\+\s*$/.test(a))) bad.push(p.act + '[' + i + ']=' + JSON.stringify(a));
+      });
+    }
+    const pick = (n) => [...document.querySelectorAll('[data-act="' + n + '"]')].map(e => window.__actionsProbe(e).args);
+    const edit = pick('openModal').length ? pick('openModal') : pick('addToCart');
+    return {
+      bad: [...new Set(bad)].slice(0, 4), checked,
+      editArgs: edit.slice(0, 2),
+      editTypes: edit.length ? edit[0].slice(1).map(x => typeof x) : [],
+    };
+  });
+  check('لا حجة نصّية معطوبة في الشجرة المرسومة', types.bad.length === 0, `${types.checked} حجة · ${types.bad.join(' ')}`);
+  check('حجج بطاقة المنتج أرقام لا نصوص', types.editTypes.length > 0 && types.editTypes.every(t => t === 'number'), JSON.stringify(types.editArgs[0] || types.productArgs || []));
+
+  const cat = await page.evaluate(async () => {
+    const chip = [...document.querySelectorAll('#catBar [data-act="selectCat"]')].find(el => window.__actionsProbe(el).args[0] === 0);
+    if (!chip) return { skip: true };
+    chip.click();
+    await new Promise(r => setTimeout(r, 400));
+    return { currentCat, title: (document.getElementById('shopTitle') || {}).textContent || '' };
+  });
+  check('نقر شريحة صنف يضبط currentCat برقم', !cat.skip && cat.currentCat === 0, JSON.stringify(cat));
+
+  const sortRes = await page.evaluate(async () => {
+    const sel = document.getElementById('sortSelect');
+    if (!sel) return { skip: true };
+    sel.value = 'price-desc';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    return { shopSort: typeof shopSort !== 'undefined' ? shopSort : null, value: sel.value };
+  });
+  check('ترتيب المتجر يمرّر this.value (vSetSort)', !sortRes.skip && sortRes.shopSort === 'price-desc', JSON.stringify(sortRes));
+
+  const cart = await page.evaluate(async () => {
+    const add = document.querySelector('[data-act="addToCart"]');
+    if (!add) return { skip: true };
+    const before = cartCount();
+    add.click();
+    await new Promise(r => setTimeout(r, 300));
+    const afterAdd = cartCount();
+    document.getElementById('cartOverlay').classList.add('open');
+    renderCart();
+    await new Promise(r => setTimeout(r, 200));
+    const plus = document.querySelector('#cartItems [data-act="incCart"], #cartList [data-act="incCart"], [data-act="incCart"]');
+    if (plus) plus.click();
+    await new Promise(r => setTimeout(r, 300));
+    const afterPlus = cartCount();
+    const minus = document.querySelector('[data-act="decCart"]');
+    if (minus) minus.click();
+    await new Promise(r => setTimeout(r, 300));
+    return { before, afterAdd, afterPlus, afterMinus: cartCount(), usedPlus: !!plus, usedMinus: !!minus };
+  });
+  check('«أضف للسلة» يزيد العدّاد واحدًا', !cart.skip && cart.afterAdd === cart.before + 1, JSON.stringify(cart));
+  check('زر + في السلة يزيد الكمية (حجج رقمية)', cart.usedPlus && cart.afterPlus === cart.afterAdd + 1, `afterAdd=${cart.afterAdd} afterPlus=${cart.afterPlus}`);
+  check('زر − في السلة ينقص الكمية', cart.usedMinus && cart.afterMinus === cart.afterPlus - 1, `afterPlus=${cart.afterPlus} afterMinus=${cart.afterMinus}`);
+
   // ═══ 6) سلامة التشغيل ═══
   console.log('\n【6】 سلامة التشغيل');
   const realErrors = errors.filter(e => !/abort|ERR_FAILED|Failed to fetch|net::/i.test(e));

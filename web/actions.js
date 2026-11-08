@@ -58,15 +58,21 @@
 
   window.__actionsSentinels = {VALUE: VALUE, CHECKED: CHECKED, EVENT: EVENT};
 
-  window.pAct = function (name, args, on) {
+  window.pAct = function (name, args, on, flags) {
     if (typeof name !== 'string' || !NAME_RE.test(name)) return '';
     var key = 'a' + (++seq);
     var evt = (typeof on === 'string' && on) ? on : 'click';
-    registry[key] = {name: name, args: Array.isArray(args) ? args : [], on: evt};
+    var fl = (typeof flags === 'string') ? flags : '';
+    registry[key] = {name: name, args: Array.isArray(args) ? args : [], on: evt, flags: fl};
     order.push(key);
     // سقف صريح: العناصر القديمة تُزال من الـDOM، فلا داعي لنموّ لا نهائي
     if (order.length > 4000) { delete registry[order.shift()]; }
-    return ' data-act="' + name + '" data-tok="' + key + '"' + (evt === 'click' ? '' : ' data-on="' + evt + '"');
+    var attrs = ' data-act="' + name + '" data-tok="' + key + '"' + (evt === 'click' ? '' : ' data-on="' + evt + '"');
+    if (fl.indexOf('stop') >= 0) attrs += ' data-stop=""';
+    if (fl.indexOf('prevent') >= 0) attrs += ' data-prevent=""';
+    var km = /(?:^|\s)key=([^\s]+)/.exec(fl);
+    if (km) attrs += ' data-key="' + km[1] + '"';
+    return attrs;
   };
 
   // ⚠️ تُعلَّق على pAct نفسها لأن ملفات الوحدات تستخدم pAct.VALUE مباشرة

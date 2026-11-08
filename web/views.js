@@ -1,3 +1,85 @@
+// ── T7.4/د: أفعال data-act لملف views.js ────────────────────────────────────
+//  كل واحدة كانت تعبيرًا مركّبًا داخل onclick. نُقلت إلى دوال مسمّاة
+//  لأن data-act يحمل **اسم دالة** فقط — لا نصًّا يُنفَّذ. (لا eval.)
+
+/** إضافة كمية المحدّد (amzQty) إلى السلة ثم إغلاق التفاصيل وفتح السلة */
+function vAddQtyToCart(ci, ii) {
+    var sel = document.getElementById('amzQty');
+    var q = parseInt(sel && sel.value, 10) || 1;
+    for (var i = 0; i < q; i++) addToCart(ci, ii);
+    closeProductDetail();
+    openCart();
+}
+
+/** إضافة مع تنبيه (بطاقة الصفحة الرئيسية) */
+function vAddToCartToast(ci, ii) {
+    addToCart(ci, ii);
+    toast('✅ أُضيف للسلة');
+}
+
+/** تعديل الكمية داخل السلة */
+function vAdjustQty(ci, ii, dir) {
+    adjustQty(ci, ii, 'q', dir);
+}
+
+/** معاينة/طباعة فاتورة */
+function vPreviewInvoice(idx) { previewInvoice(idx); }
+
+/** حذف فاتورة */
+function vDeleteInvoice(idx) { deleteInvoice(idx); }
+
+/** تبويبات صفحة الحساب */
+function vAccTab(name) {
+    accTab = name;
+    renderAccount();
+}
+
+/** «طلباتي» من نافذة الطلب */
+function vGoMyOrders() {
+    closeModal();
+    accTab = 'orders';
+    setView('account');
+    renderAccount();
+}
+
+/** إغلاق نافذة ثم مسارات مختلفة */
+function vCloseModalShopCart() { closeModal(); setView('shop'); openCart(); }
+function vCloseModalShop() { closeModal(); setView('shop'); }
+function vCloseModalCart() { closeModal(); openCart(); }
+function vCloseCartShop() { closeCart(); setView('shop'); }
+function vDetailToReturns() { closeProductDetail(); showLegal('returns'); }
+function vShopCloseDetail() { setView('shop'); closeProductDetail(); }
+function vHomeCloseDetail() { setView('home'); closeProductDetail(); }
+
+/** إلغاء مرشّح «المفضلة فقط» من حالة الفراغ */
+function vClearFavFilter() {
+    shopFavOnly = false;
+    var cb = document.getElementById('favOnly');
+    if (cb) cb.checked = false;
+    renderAll();
+}
+
+/** تعديل صنف من صفحة المنتج */
+function vEditProduct(ci, ii) {
+    closeProductDetail();
+    openModal('edit', ci, ii);
+}
+
+/** مشاركة منتج عبر Web Share (أو لا شيء إن لم يدعمها المتصفح) */
+function vShareProduct(ci, ii) {
+    if (!navigator.share) return;
+    var cat = db[ci];
+    var it = cat && cat.items[ii];
+    if (!it) return;
+    navigator.share({ title: String(it.n || ''), text: String(it.p || '') }).catch(function () {});
+}
+
+/** مشاركة فاتورة */
+function vShareInvoice(invNo, qrData) {
+    if (!navigator.share) return;
+    navigator.share({ title: 'فاتورة ' + invNo, text: qrData }).catch(function () {});
+}
+
 // ── T7.4: أفعال data-act المستخدمة في هذا الملف ─────────────────────────────
 /** من الصفحة الرئيسية: انتقل إلى المتجر ثم افتح المنتج بعد الرسم */
 function vOpenFromHome(ci, ii) {
@@ -58,7 +140,7 @@ function vArgs() {
             return '<div class="shop-card" style="cursor:pointer" data-act="vOpenFromHome"' + vArgs(ci, ii) + '>'
                 +'<div class="shop-img" style="height:150px">'+img+'</div>'
                 +'<div class="shop-body"><div class="shop-name">'+esc(it.n)+'</div><div style="font-size:.82rem;color:var(--text-muted)">'+esc(cat.name)+'</div><div class="shop-price">'+esc(it.p)+' <span>ج.م</span></div>'+(qs>0?'<div class="shop-avail ok">'+availText(it)+'</div>':'<div class="shop-avail no">غير متوفر</div>')+'</div>'
-                +'<button class="cart-add" onclick="event.stopPropagation();addToCart('+ci+','+ii+');toast(\'✅ أُضيف للسلة\')">🛒 أضف</button></div>';
+                +'<button class="cart-add" ' + pAct("vAddToCartToast", [ci, ii], "click", "stop") + '>🛒 أضف</button></div>';
         }).join(''):'<div class="empty-state"><div class="icon">📭</div>لا توجد منتجات بعد</div>';
         hv.innerHTML=`
         <section class="hero">
@@ -69,10 +151,10 @@ function vArgs() {
               <!-- 🏪 T4.2: الوصف من الإعدادات — لا ادعاء نشاط غير موجود -->
               <p>${esc(settings.desc || '')} مع مزامنة فورية على كل أجهزتك.</p>
               <div class="hero-actions">
-                <button class="btn" onclick="setView('shop')">تصفّح المتجر ←</button>
-                ${(sessionUser || cloudProfile) ? '' : '<button class="btn btn-outline" onclick="showRegister()">➕ إنشاء حساب جديد</button>'}
-                ${(sessionUser || cloudProfile) ? '' : '<button class="btn btn-ghost" onclick="showLogin()">🔓 تسجيل الدخول</button>'}
-                <button class="btn btn-ghost" onclick="document.getElementById('landing-features').scrollIntoView({behavior:'smooth'})">من نحن</button>
+                <button class="btn" ' + pAct("setView", ["shop"], "click") + '>تصفّح المتجر ←</button>
+                ${(sessionUser || cloudProfile) ? '' : '<button class="btn btn-outline" ' + pAct("showRegister", [], "click") + '>➕ إنشاء حساب جديد</button>'}
+                ${(sessionUser || cloudProfile) ? '' : '<button class="btn btn-ghost" ' + pAct("showLogin", [], "click") + '>🔓 تسجيل الدخول</button>'}
+                <button class="btn btn-ghost" ' + pAct("document.getElementById", [('landing-features').scrollIntoView({behavior:'smooth'})], "click") + '>من نحن</button>
               </div>
               <div class="hero-stats">
                 <div class="stat"><h3 data-count="${totalProducts}">0</h3><span>منتج</span></div>
@@ -100,7 +182,7 @@ function vArgs() {
         <section class="landing-section" style="padding-top:0">
           <div class="landing-head"><span class="tag">تشكيلتنا</span><h2>منتجات مميزة</h2><p>لمحة من أفضل منتجاتنا المتاحة الآن</p></div>
           <div class="shop-grid" style="max-width:1200px;margin:0 auto;padding:0 20px">${featHtml}</div>
-          <div style="text-align:center;margin-top:28px"><button class="btn" onclick="setView('shop')">عرض كل المنتجات ←</button></div>
+          <div style="text-align:center;margin-top:28px"><button class="btn" ' + pAct("setView", ["shop"], "click") + '>عرض كل المنتجات ←</button></div>
         </section>
         <!-- 🔒 T4.1 (2026-09-21): حُذف قسم «آراء العملاء» بالكامل — كان يحتوي آراء مفبركة
              بأسماء أشخاص لا وجود لهم، وهو مخالف لقوانين حماية المستهلك ويُفقد الثقة عند
@@ -117,7 +199,7 @@ function vArgs() {
             // كان يرى «سجّل دخولك» فقط فيظن أن طلبه ضاع — الآن يراها صريحة بحالتها.
             const guestOrders = invoices.slice().reverse();
             if (!guestOrders.length) {
-            av.innerHTML='<div class="empty-state"><div class="icon">🔒</div>سجّل دخولك لعرض حسابك<br><button class="btn btn-primary" style="margin-top:14px" onclick="showLogin()">🔓 تسجيل الدخول</button></div>';
+            av.innerHTML='<div class="empty-state"><div class="icon">🔒</div>سجّل دخولك لعرض حسابك<br><button class="btn btn-primary" style="margin-top:14px" ' + pAct("showLogin", [], "click") + '>🔓 تسجيل الدخول</button></div>';
             return;
             }
             const rows = guestOrders.map(o => {
@@ -127,16 +209,16 @@ function vArgs() {
                     '<span style="background:rgba(245,182,44,.15);color:#8a6100;font-weight:900;font-size:.7rem;padding:3px 8px;border-radius:8px;margin-right:auto">⏳ لم يصل للمحل بعد</span></div>' +
                     '<div class="oc-items">' + o.items.map(i => esc(i.name) + ' ×' + i.qty).join(' • ') + '</div>' +
                     '<div class="ct-row" style="margin-top:8px;font-weight:900"><span>' + new Date(o.date).toLocaleDateString('ar-EG') + '</span><span>' + fmt(o.total) + ' ج.م</span></div>' +
-                    (waNumber(settings.phone) ? '<div style="margin-top:8px"><button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices[' + invoices.indexOf(o) + '])">📲 أرسل هذا الطلب للمحل</button></div>' : '') +
+                    (waNumber(settings.phone) ? '<div style="margin-top:8px"><button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" ' + pAct("sendOrderWhatsApp", [(invoices[' + invoices.indexOf(o) + '])], "click") + '>📲 أرسل هذا الطلب للمحل</button></div>' : '') +
                     '</div>';
             }).join('');
             av.innerHTML =
                 '<div class="landing-head" style="margin-bottom:16px"><span class="tag">حسابي</span><h2>أنت تتسوق <span class="accent">كزائر</span></h2>' +
                 '<p style="font-size:.85rem;color:var(--text-muted);font-weight:700">طلباتك محفوظة على هذا الجهاز فقط — لتصل للمحل تلقائيًا ولتتابعها من أي جهاز، أنشئ حسابًا (دقيقة واحدة).</p></div>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
-                    '<button class="btn btn-primary" onclick="showRegister()">➕ إنشاء حساب</button>' +
-                    '<button class="btn btn-outline" onclick="showLogin()">🔓 تسجيل الدخول</button>' +
-                    (waNumber(settings.phone) ? '<button class="btn btn-outline" style="color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices[invoices.length-1])">📲 أرسل آخر طلب على واتساب</button>' : '') +
+                    '<button class="btn btn-primary" ' + pAct("showRegister", [], "click") + '>➕ إنشاء حساب</button>' +
+                    '<button class="btn btn-outline" ' + pAct("showLogin", [], "click") + '>🔓 تسجيل الدخول</button>' +
+                    (waNumber(settings.phone) ? '<button class="btn btn-outline" style="color:#25d366;border-color:#25d366" ' + pAct("sendOrderWhatsApp", [(invoices[invoices.length-1])], "click") + '>📲 أرسل آخر طلب على واتساب</button>' : '') +
                 '</div>' +
                 '<h3 style="margin:6px 0 10px;font-size:.95rem">📦 طلباتك على هذا الجهاز (' + guestOrders.length + ')</h3>' + rows;
             return;
@@ -157,7 +239,7 @@ function vArgs() {
         } else if(accTab==='orders'){
             const isMgr=canManageOrders();
             const list=isMgr ? invoices : myOrders;
-            if(!list.length) content='<div class="empty-state"><div class="icon">📦</div>'+w('ordersEmpty')+'<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">🏪 تسوق الآن</button></div>';
+            if(!list.length) content='<div class="empty-state"><div class="icon">📦</div>'+w('ordersEmpty')+'<br><button class="btn btn-outline" style="margin-top:12px" ' + pAct("setView", ["shop"], "click") + '>🏪 تسوق الآن</button></div>';
             else content=list.slice().reverse().map(o=>{
                 const idx=invoices.indexOf(o);
                 const d=new Date(o.date);
@@ -169,16 +251,16 @@ function vArgs() {
                 let actions='';
                 if(isMgr){
                     actions='<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'
-                        +'<select onchange="updateOrderStatus('+idx+', this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);font-weight:700">'
+                        +'<select ' + pAct("updateOrderStatus", [idx, pAct.VALUE], "change") + ' style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);font-weight:700">'
                         +ORDER_STATUSES.filter(s=>s!=='ملغي').map(s=>'<option value="'+s+'" '+(s===st?'selected':'')+'>'+s+'</option>').join('')
                         +'</select>'
-                        +(st!=='ملغي'&&st!=='تم التوصيل'?'<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">إلغاء</button>':'')
+                        +(st!=='ملغي'&&st!=='تم التوصيل'?'<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" ' + pAct("cancelOrder", [idx], "click") + '>إلغاء</button>':'')
                         +'</div>';
                 } else {
                     let btns='';
-                    if(canCancel) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" onclick="cancelOrder('+idx+')">❌ إلغاء الطلب</button>';
+                    if(canCancel) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:var(--danger);border-color:var(--danger)" ' + pAct("cancelOrder", [idx], "click") + '>❌ إلغاء الطلب</button>';
                     // 📲 T4.4: متابعة الطلب مع المحل على واتساب بنفس التفاصيل
-                    if(waNumber(settings.phone)) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" onclick="sendOrderWhatsApp(invoices['+idx+'])">📲 متابعة على واتساب</button>';
+                    if(waNumber(settings.phone)) btns+='<button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem;color:#25d366;border-color:#25d366" ' + pAct("sendOrderWhatsApp", [(invoices['+idx+'])], "click") + '>📲 متابعة على واتساب</button>';
                     if(btns) actions='<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+btns+'</div>';
                 }
                 return '<div class="order-card"><div class="oc-head"><b>طلب #'+(o.no?String(o.no).padStart(4,'0'):o.id)+'</b><span class="status '+sc+'">'+esc(st)+'</span>'
@@ -187,7 +269,7 @@ function vArgs() {
                     +'<div class="ct-row" style="margin-top:10px;font-weight:900"><span>'+d.toLocaleDateString('ar-EG')+' · '+(isMgr?esc(o.user||o.customer):'')+'</span><span style="color:var(--primary)">'+fmt(o.total)+' ج.م</span></div>'+actions+'</div>';
             }).join('');
         } else if(accTab==='fav'){
-            if(!favProducts.length) content='<div class="empty-state"><div class="icon">❤️</div>قائمة المفضلة فارغة<br><button class="btn btn-outline" style="margin-top:12px" onclick="setView(\'shop\')">تصفح المنتجات</button></div>';
+            if(!favProducts.length) content='<div class="empty-state"><div class="icon">❤️</div>قائمة المفضلة فارغة<br><button class="btn btn-outline" style="margin-top:12px" ' + pAct("setView", ["shop"], "click") + '>تصفح المنتجات</button></div>';
             else {
                 content='<div class="shop-grid">'+favProducts.map(({cat,ci,it,ii})=>{
                     let img=it.img?'<img src="'+esc(it.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'📦';
@@ -197,19 +279,19 @@ function vArgs() {
         }
         av.innerHTML='<div class="landing-head" style="margin-bottom:24px"><span class="tag">'+w('account')+'</span><h2>مرحباً '+esc(me.display_name||me.name||me.u||sessionUser)+'</h2></div>'
             +'<div class="account-grid"><div class="account-nav">'
-            +'<button class="'+(accTab==='profile'?'active':'')+'" onclick="accTab=\'profile\';renderAccount()">👤 '+w('profile')+'</button>'
-            +'<button class="'+(accTab==='orders'?'active':'')+'" onclick="accTab=\'orders\';renderAccount()">'+w('orders')+' ('+(canManageOrders()?invoices.length:myOrders.length)+')</button>'
-            +'<button class="'+(accTab==='fav'?'active':'')+'" onclick="accTab=\'fav\';renderAccount()">'+w('fav')+' ('+favProducts.length+')</button>'
-            +'<button onclick="logout()">🚪 خروج</button>'
+            +'<button class="'+(accTab==='profile'?'active':'')+'" ' + pAct("vAccTab", ["profile"]) + '>👤 '+w('profile')+'</button>'
+            +'<button class="'+(accTab==='orders'?'active':'')+'" ' + pAct("vAccTab", ["orders"]) + '>'+w('orders')+' ('+(canManageOrders()?invoices.length:myOrders.length)+')</button>'
+            +'<button class="'+(accTab==='fav'?'active':'')+'" ' + pAct("vAccTab", ["fav"]) + '>'+w('fav')+' ('+favProducts.length+')</button>'
+            +'<button ' + pAct("logout", [], "click") + '>🚪 خروج</button>'
             +'</div><div>'+content+'</div></div>';
     }
 
     function renderCats() {
         const bar = document.getElementById('catBar');
         if (!bar) return;
-        let html = '<button class="cat-chip' + (currentCat === 'all' ? ' active' : '') + '" onclick="selectCat(\'all\')"><span class="cat-chip-name">📋 الكل</span><span class="cat-count">' + db.reduce((a, c) => a + c.items.length, 0) + '</span></button>';
+        let html = '<button class="cat-chip' + (currentCat === 'all' ? ' active' : '') + '" ' + pAct("selectCat", ["all"], "click") + '><span class="cat-chip-name">📋 الكل</span><span class="cat-count">' + db.reduce((a, c) => a + c.items.length, 0) + '</span></button>';
         db.forEach((cat, i) => {
-            html += '<button class="cat-chip' + (currentCat === i ? ' active' : '') + '" onclick="selectCat(' + i + ')"><span class="cat-chip-name">' + esc(cat.name) + '</span><span class="cat-count">' + cat.items.length + '</span></button>';
+            html += '<button class="cat-chip' + (currentCat === i ? ' active' : '') + '" ' + pAct("selectCat", [i], "click") + '><span class="cat-chip-name">' + esc(cat.name) + '</span><span class="cat-count">' + cat.items.length + '</span></button>';
         });
         bar.innerHTML = html;
         const active = bar.querySelector('.cat-chip.active');
@@ -256,7 +338,7 @@ function vArgs() {
                 '<div class="inv-hist-item" style="cursor:default"><div class="inv-hi-top"><span>' + esc(x.item.n) + ' <span style="font-size:0.7rem;color:var(--text-muted)">· ' + esc(x.cat) + '</span></span>' +
                 '<span style="color:' + (getQ(x.item) === 0 ? 'var(--danger)' : '#e17055') + ';font-weight:800;font-size:0.85rem">' + (getQ(x.item) === 0 ? 'نافذ ❌' : 'متبقي ' + getQ(x.item) + ' (الحد ' + getMin(x.item) + ')') + '</span></div></div>'
             ).join('') + '</div>' : '<div class="empty-state"><div class="icon">✅</div>كل الأصناف فوق الحد الأدنى</div>') +
-            '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>';
+            '<div class="modal-actions"><button class="btn btn-outline" ' + pAct("closeModal", [], "click") + '>إغلاق</button></div>';
         document.getElementById('modal').style.display = 'flex';
     }
 
@@ -287,7 +369,7 @@ function vArgs() {
                 ? (connecting ? 'جاري تحميل المنتجات من السحابة…' : 'تعذّر تحميل المنتجات — راجع اتصال الإنترنت وأعد المحاولة')
                 : 'لا توجد نتائج';
             const btn = noData
-                ? '<button class="btn btn-outline" style="margin-top:12px" onclick="location.reload()">🔄 إعادة المحاولة</button>'
+                ? '<button class="btn btn-outline" style="margin-top:12px" ' + pAct("location.reload", [], "click") + '>🔄 إعادة المحاولة</button>'
                 : '';
             container.innerHTML = '<div class="empty-state"><div class="icon">' + icon + '</div>' + msg + '<br>' + btn + '</div>';
             return;
@@ -303,7 +385,7 @@ function vArgs() {
                 : '<div class="card-thumb card-thumb-fb">📦</div>';
             let bHtml = item.b ? '<span class="qr-badge">🔳 ' + esc(item.b) + '</span>' : '';
             html +=
-                '<div class="product-card"' + delay + ' onclick="openModal(\'edit\',' + ci + ',' + ii + ')">' +
+                '<div class="product-card"' + delay + ' ' + pAct("openModal", ["edit", ci, ii], "click") + '>' +
                     '<div class="stock-card-top">' +
                         thumb +
                         '<div class="stock-card-info">' +
@@ -315,9 +397,9 @@ function vArgs() {
                     '<div class="qty-row">' +
                         '<div class="qty-box">' +
                             '<span>📦 في المخزن</span>' +
-                            '<button class="qty-btn minus" onclick="event.stopPropagation();adjustQty(' + ci + ',' + ii + ',\'q\',-1)">−</button>' +
+                            '<button class="qty-btn minus" ' + pAct("vAdjustQty", [ci, ii, -1], "click", "stop") + '>−</button>' +
                             '<span class="val ' + cls + '">' + q + '</span>' +
-                            '<button class="qty-btn plus" onclick="event.stopPropagation();adjustQty(' + ci + ',' + ii + ',\'q\',1)">+</button>' +
+                            '<button class="qty-btn plus" ' + pAct("vAdjustQty", [ci, ii, 1], "click", "stop") + '>+</button>' +
                         '</div>' +
                     '</div>' +
                     '<div class="total-row"><span>قيمة المخزن</span><span class="num">' + fmt(q * price) + ' ج.م</span></div>' +
@@ -362,7 +444,7 @@ function vArgs() {
                 if(container2) container2.classList.toggle('no-anim', !anim);
                 document.getElementById('sectionTitle').innerHTML='<span>❤️ المفضلة <span class="cat-count">0</span></span><span class="total-val">—</span>';
                 const cont=document.getElementById('view-root');
-                cont.innerHTML='<div class="empty-state"><div class="icon">❤️</div>لا توجد منتجات في المفضلة<br><button class="btn btn-outline" style="margin-top:12px" onclick="shopFavOnly=false;const cb=document.getElementById(\'favOnly\'); if(cb) cb.checked=false; renderAll()">عرض الكل</button></div>';
+                cont.innerHTML='<div class="empty-state"><div class="icon">❤️</div>لا توجد منتجات في المفضلة<br><button class="btn btn-outline" style="margin-top:12px" ' + pAct("vClearFavFilter", []) + '>عرض الكل</button></div>';
                 return;
             }
         }
@@ -387,7 +469,7 @@ function vArgs() {
                 ? (connecting ? 'جاري تحميل المنتجات من السحابة…' : 'تعذّر تحميل المنتجات — راجع اتصال الإنترنت وأعد المحاولة')
                 : 'لا توجد نتائج';
             const btn = noData
-                ? '<button class="btn btn-outline" style="margin-top:12px" onclick="location.reload()">🔄 إعادة المحاولة</button>'
+                ? '<button class="btn btn-outline" style="margin-top:12px" ' + pAct("location.reload", [], "click") + '>🔄 إعادة المحاولة</button>'
                 : '';
             container.innerHTML = '<div class="empty-state"><div class="icon">' + icon + '</div>' + msg + '<br>' + btn + '</div>';
             return;
@@ -428,7 +510,7 @@ function vArgs() {
                 '</div>';
         });
         html += '</div>';
-        if (total > shopLimit) html += '<div style="text-align:center;margin-top:16px"><button class="btn btn-outline" onclick="loadMoreShop()">عرض المزيد (' + shopLimit + '/' + total + ')</button></div>';
+        if (total > shopLimit) html += '<div style="text-align:center;margin-top:16px"><button class="btn btn-outline" ' + pAct("loadMoreShop", [], "click") + '>عرض المزيد (' + shopLimit + '/' + total + ')</button></div>';
         container.innerHTML = html;
     }
 
@@ -470,7 +552,7 @@ function vArgs() {
        // في السمة onclick، أي أن صورة ضارة = تنفيذ كود تعسّفي. الآن: نداء دالة بالفهرس فقط،
        // والصورة تُقرأ من البيانات مباشرة (لا نص يُبنى داخل سياق تنفيذي)، ومهربة في src.
        amzThumbs = thumbs;
-       let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" onclick="amzSetMain('+idx+')">'+(t.img?'<img src="'+esc(t.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
+       let thumbsHtml = thumbs.map((t,idx)=>'<div class="amz-thumb'+(idx===0?' active':'')+'" ' + pAct("amzSetMain", [idx], "click") + '>'+(t.img?'<img src="'+esc(t.img)+'" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">':'\uD83D\uDCE6')+'</div>').join('');
       // 🔒 T-A5: بنود المخزون/القيمة للعامل والمدير فقط — العميل يرى السعر والتوفر
       let bullets = isStaff()
         ? '<ul class="amz-bullets"><li>الصنف: <b>'+esc(cat.name)+'</b> — كود #'+(item.cid||'—')+'</li><li>السعر الرقمي: <b>'+price+' ج.م</b> — النص: '+esc(item.p)+'</li><li>المخزن: <b>'+q+'</b> · المعروض: <b>'+qs+'</b> · تنبيه عند <b>'+getMin(item)+'</b></li>'+(item.b?'<li>باركود: <b>'+esc(item.b)+'</b></li>':'')+'<li>قيمة المخزن: <b>'+fmt(q*price)+' ج.م</b> · المعروض: <b>'+fmt(qs*price)+' ج.م</b></li></ul>'
@@ -480,15 +562,15 @@ function vArgs() {
       const metaExtra = isStaff() ? (' · 🔢 #'+(item.cid||'—')+(item.b?' · 🔳 '+esc(item.b):'')) : '';
       const availDetail = isStaff() ? ('📦 المتوفر الآن: '+qs+' قطعة · إجمالي المخزن: '+q) : ('📦 الحالة: '+(qs>0?'متوفر ✅':'غير متوفر ❌'));
       let qtyOpts = Array.from({length: Math.min(isStaff()?10:5, Math.max(1,qs))}, (_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
-      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?availLine:'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🧾 يُحسب الإجمالي والشحن في السلة قبل التأكيد — بلا دفع إلكتروني في النظام</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">'+qtyHint+'</span></div><button class="amz-btn-cart" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" onclick="let q=parseInt(document.getElementById(\'amzQty\').value)||1; for(let i=0;i<q;i++) addToCart('+ci+','+ii+'); closeProductDetail(); openCart()" '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1;'+(isStaff()?'':'display:none')+'" onclick="closeProductDetail();openModal(\'edit\','+ci+','+ii+')">✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" onclick="if(navigator.share) navigator.share({title:\''+esc(item.n).replace(/'/g,"\\'")+'\', text:\''+esc(item.p).replace(/'/g,"\\'")+'\'}).catch(()=>{})">🔗 مشاركة</button></div></div>';
+      let buyBox = '<div class="amz-buybox"><div class="amz-buy-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.78rem;color:var(--text-muted)">+ مصاريف الشحن</div><div class="amz-buy-avail '+(isAvail?'ok':'no')+'">'+(isAvail?availLine:'❌ غير متوفر حالياً')+'</div><div class="amz-secure">🧾 يُحسب الإجمالي والشحن في السلة قبل التأكيد — بلا دفع إلكتروني في النظام</div><div class="amz-qty">الكمية: <select id="amzQty">'+qtyOpts+'</select> <span style="font-size:0.75rem;color:var(--text-muted)">'+qtyHint+'</span></div><button class="amz-btn-cart" ' + pAct("vAddQtyToCart", [ci, ii]) + ' '+(isAvail?'':'disabled style="opacity:0.5"')+'>🛒 إضافة إلى السلة</button><button class="amz-btn-buy" ' + pAct("vAddQtyToCart", [ci, ii]) + ' '+(isAvail?'':'disabled')+'>⚡ شراء الآن</button><div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-outline" style="flex:1;'+(isStaff()?'':'display:none')+'" ' + pAct("vEditProduct", [ci, ii]) + '>✏️ تعديل</button><button class="btn btn-ghost" style="flex:1" ' + pAct("vShareProduct", [ci, ii]) + '>🔗 مشاركة</button></div></div>';
       let related = cat.items.filter((_,idx)=> idx!==ii).slice(0,6);
-       let relatedHtml = related.length ? '<div class="product-related-title">📦 منتجات من نفس الصنف — '+esc(cat.name)+'</div><div class="product-related">'+related.map(r=>{ let rIdx=cat.items.indexOf(r); let rImg=r.img?'<img src="'+r.img+'" loading="lazy" decoding="async">':'📦'; let rQs=getQs(r); return '<div class="related-card" onclick="openProductDetail('+ci+','+rIdx+')"><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+availText(r)+'</div></div></div>'; }).join('')+'</div>' : '';
+       let relatedHtml = related.length ? '<div class="product-related-title">📦 منتجات من نفس الصنف — '+esc(cat.name)+'</div><div class="product-related">'+related.map(r=>{ let rIdx=cat.items.indexOf(r); let rImg=r.img?'<img src="'+r.img+'" loading="lazy" decoding="async">':'📦'; let rQs=getQs(r); return '<div class="related-card" ' + pAct("openProductDetail", [ci, rIdx], "click") + '><div class="related-card-img">'+rImg+'</div><div class="related-card-body"><div class="related-card-name">'+esc(r.n)+'</div><div class="related-card-price">'+esc(r.p)+' ج.م</div><div style="font-size:0.72rem;font-weight:700;color:'+(rQs>0?'#00c9a7':'#e5484d')+'">'+availText(r)+'</div></div></div>'; }).join('')+'</div>' : '';
       document.getElementById('productDetailCard').innerHTML =
-        '<div style="padding:12px 18px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-card); z-index:2"><button onclick="closeProductDetail()" style="background:var(--bg-soft); border:1px solid var(--border); width:40px; height:40px; border-radius:50%; cursor:pointer">←</button><span style="font-weight:800">تفاصيل المنتج</span><span style="margin-right:auto; font-size:0.75rem; color:var(--text-muted)">'+esc(cat.name)+'</span></div>' +
-        '<div class="breadcrumb" style="padding:10px 18px;color:var(--text-muted);font-size:.88rem;background:var(--bg-soft);border-bottom:1px solid var(--border)"><a onclick="setView(\'home\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">الرئيسية</a> / <a onclick="setView(\'shop\');closeProductDetail()" style="cursor:pointer;color:var(--primary)">المتجر</a> / '+esc(item.n)+'</div>' +
+        '<div style="padding:12px 18px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-card); z-index:2"><button ' + pAct("closeProductDetail", [], "click") + ' style="background:var(--bg-soft); border:1px solid var(--border); width:40px; height:40px; border-radius:50%; cursor:pointer">←</button><span style="font-weight:800">تفاصيل المنتج</span><span style="margin-right:auto; font-size:0.75rem; color:var(--text-muted)">'+esc(cat.name)+'</span></div>' +
+        '<div class="breadcrumb" style="padding:10px 18px;color:var(--text-muted);font-size:.88rem;background:var(--bg-soft);border-bottom:1px solid var(--border)"><a ' + pAct("vHomeCloseDetail", []) + ' style="cursor:pointer;color:var(--primary)">الرئيسية</a> / <a ' + pAct("vShopCloseDetail", []) + ' style="cursor:pointer;color:var(--primary)">المتجر</a> / '+esc(item.n)+'</div>' +
         '<div class="amz-layout">' +
           '<div class="amz-gallery"><div class="amz-main-img" id="amzMainWrap">'+mainImg+'</div><div class="amz-thumbs">'+thumbsHtml+'</div></div>' +
-          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+metaExtra+'</div><div class="amz-rating">'+ratingNote+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">'+shipLine+' · '+taxLine+'</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700">'+shipLine+'<div>'+availDetail+'</div><div>↩️ '+esc(returnLine)+' <a onclick="closeProductDetail();showLegal(\'returns\')" style="color:var(--primary);cursor:pointer;text-decoration:underline">التفاصيل</a></div></div><div class="amz-secure">ℹ️ الطلب يُسجَّل داخل نظام المتجر — وبعد إلغاء أي فاتورة يُرجَع المخزون تلقائيًا</div></div>' +
+          '<div><div class="amz-title">'+esc(item.n)+'</div><div class="amz-meta">📂 '+esc(cat.name)+metaExtra+'</div><div class="amz-rating">'+ratingNote+'</div><div class="amz-price">'+esc(item.p)+' <small>ج.م</small></div><div style="font-size:0.8rem; color:var(--text-muted)">'+shipLine+' · '+taxLine+'</div>'+bullets+'<div class="pd-meta" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;padding:12px;background:var(--bg-soft);border-radius:12px;border:1px solid var(--border);font-size:.88rem;font-weight:700">'+shipLine+'<div>'+availDetail+'</div><div>↩️ '+esc(returnLine)+' <a ' + pAct("vDetailToReturns", []) + ' style="color:var(--primary);cursor:pointer;text-decoration:underline">التفاصيل</a></div></div><div class="amz-secure">ℹ️ الطلب يُسجَّل داخل نظام المتجر — وبعد إلغاء أي فاتورة يُرجَع المخزون تلقائيًا</div></div>' +
           buyBox +
           '<div class="amz-details"><div style="background:var(--bg-soft); padding:14px; border-radius:12px; font-size:0.85rem; line-height:1.8"><b>تفاصيل إضافية:</b><br>🏷️ الفئة: '+esc(cat.name)+'<br>💰 السعر: '+esc(item.p)+' ج.م<br>📦 الحالة: '+availText(item)+'</div>'+relatedHtml+'</div>' +
         '</div>';
@@ -621,7 +703,7 @@ function vArgs() {
                     'السلة فارغة<br>اذهب لصفحة العرض واضغط 🛒 على أي منتج' +
                 '</div>' +
                 '<div class="modal-actions" style="justify-content:center">' +
-                    '<button class="btn btn-primary" onclick="closeCart();setView(\'shop\')">🏪 الذهاب لصفحة العرض</button>' +
+                    '<button class="btn btn-primary" ' + pAct("vCloseCartShop", []) + '>🏪 الذهاب لصفحة العرض</button>' +
                 '</div>';
             return;
         }
@@ -643,12 +725,12 @@ function vArgs() {
                         '<div class="cart-meta">' + esc(cat.name) + ' · ' + fmt(price) + ' ج.م / للقطعة</div>' +
                     '</div>' +
                     '<div class="qty-ctrl">' +
-                        '<button class="q-minus" onclick="decCart(' + c.ci + ',' + c.ii + ')">−</button>' +
+                        '<button class="q-minus" ' + pAct("decCart", [c.ci, c.ii], "click") + '>−</button>' +
                         '<span>' + c.qty + '</span>' +
-                        '<button class="q-plus" onclick="incCart(' + c.ci + ',' + c.ii + ')">+</button>' +
+                        '<button class="q-plus" ' + pAct("incCart", [c.ci, c.ii], "click") + '>+</button>' +
                     '</div>' +
                     '<div class="cart-sub">' + fmt(sub) + '</div>' +
-                    '<button class="cart-remove" onclick="removeFromCart(' + i + ')">✕</button>' +
+                    '<button class="cart-remove" ' + pAct("removeFromCart", [i], "click") + '>✕</button>' +
                 '</div>';
         });
         // 🔧 T3.5: من الإعدادات
@@ -666,18 +748,18 @@ function vArgs() {
                     '<div class="form-group" style="margin-top:6px"><label>👤 اسم العميل</label>' +
                         '<input type="text" id="cart-customer" placeholder="نقدي" value="' + esc(prevCustomer || '') + '">' +
                     '</div>' +
-                    '<div class="coupon"><input id="couponCode" placeholder="'+(settings.couponCode?('كود الخصم (جرب '+esc(String(settings.couponCode))+')'):'لا يوجد كوبون مُفعّل')+'" value="'+(_couponApplied?esc(String(settings.couponCode)):'')+'"><button class="btn btn-outline" style="padding:11px 16px;white-space:nowrap" onclick="applyCoupon()">تطبيق</button></div>' +
+                    '<div class="coupon"><input id="couponCode" placeholder="'+(settings.couponCode?('كود الخصم (جرب '+esc(String(settings.couponCode))+')'):'لا يوجد كوبون مُفعّل')+'" value="'+(_couponApplied?esc(String(settings.couponCode)):'')+'"><button class="btn btn-outline" style="padding:11px 16px;white-space:nowrap" ' + pAct("applyCoupon", [], "click") + '>تطبيق</button></div>' +
                     '<div class="cart-totals">' +
                         '<div class="ct-row"><span>المجموع الفرعي</span><span id="cart-subtotal">—</span></div>' +
                         '<div class="ct-row"><span>الخصم</span><span id="cart-discount-val">—</span></div>' +
                         '<div class="ct-row"><span>الشحن</span><span id="cart-shipping">'+(shipping ? fmt(shipping)+' ج.م' : 'مجاني')+'</span></div>' +
                         '<div class="ct-row' + (settings.tax > 0 ? '' : ' style="display:none"') + '"><span>الضريبة' + (settings.tax > 0 ? ' (' + settings.tax + '%)' : '') + '</span><span id="cart-tax-val">—</span></div>' +
                     '</div>' +
-                    '<div class="form-group" style="margin-top:10px"><label>🏷️ خصم إضافي (ج.م أو %)</label><input type="text" id="cart-discount" placeholder="0" oninput="recalcCart()"></div>' +
+                    '<div class="form-group" style="margin-top:10px"><label>🏷️ خصم إضافي (ج.م أو %)</label><input type="text" id="cart-discount" placeholder="0" ' + pAct("recalcCart", [], "input") + '></div>' +
                     '<div class="cart-total-row" style="margin-top:0;border:none;padding-top:6px"><span>الإجمالي النهائي</span><span id="cart-total-val">—</span></div>' +
                     '<div class="modal-actions" style="justify-content:space-between;margin-top:10px">' +
-                        '<button class="btn btn-outline" onclick="clearCart()">🗑️ إفراغ</button>' +
-                        '<button class="btn btn-primary" onclick="createInvoiceFromCart()">🧾 إنشاء الفاتورة</button>' +
+                        '<button class="btn btn-outline" ' + pAct("clearCart", [], "click") + '>🗑️ إفراغ</button>' +
+                        '<button class="btn btn-primary" ' + pAct("createInvoiceFromCart", [], "click") + '>🧾 إنشاء الفاتورة</button>' +
                     '</div>' +
                 '</div>';
         } else {
@@ -687,7 +769,7 @@ function vArgs() {
                 '<div class="ct-row"><span>الشحن</span><span>'+(shipping ? fmt(shipping)+' ج.م' : 'مجاني')+'</span></div>' +
                 '<div class="ct-row" style="font-weight:900;color:var(--primary)"><span>الإجمالي</span><span>'+fmt(total+shipping)+' ج.م</span></div>' +
                 '<div style="text-align:center;margin-top:14px;font-size:0.85rem;font-weight:800;color:var(--text-muted)">👷 أكمل عملية الشراء عند العامل لطباعة الفاتورة</div>' +
-                '<div class="modal-actions" style="justify-content:center;margin-top:12px"><button class="btn btn-outline" onclick="clearCart()">🗑️ تفريغ السلة</button></div>' +
+                '<div class="modal-actions" style="justify-content:center;margin-top:12px"><button class="btn btn-outline" ' + pAct("clearCart", [], "click") + '>🗑️ تفريغ السلة</button></div>' +
                 '</div>';
         }
         html = '<div class="cart-layout"><div class="cart-lines">'+linesHtml+'</div>'+summaryHtml+'</div>';
@@ -839,9 +921,9 @@ function vArgs() {
             '<tr><td>' + esc(it.name) + '</td><td style="text-align:center">' + it.qty + '</td><td>' + fmt(it.price) + '</td><td style="font-weight:800;color:var(--primary);text-align:left">' + fmt(it.qty * it.price) + '</td></tr>'
         ).join('');
         const backBtn = backToCart
-            ? '<button class="btn btn-outline" onclick="closeModal();openCart()">🔙 تعديل السلة</button>'
-            : '<button class="btn btn-outline" onclick="showInvoiceHistory()">🔙 السجل</button>';
-        const saveBtn = backToCart ? '<button class="btn btn-primary" onclick="confirmSaveInvoice()">💾 حفظ</button>' : '';
+            ? '<button class="btn btn-outline" ' + pAct("vCloseModalCart", []) + '>🔙 تعديل السلة</button>'
+            : '<button class="btn btn-outline" ' + pAct("showInvoiceHistory", [], "click") + '>🔙 السجل</button>';
+        const saveBtn = backToCart ? '<button class="btn btn-primary" ' + pAct("confirmSaveInvoice", [], "click") + '>💾 حفظ</button>' : '';
         const invNo = inv.no ? '#' + String(inv.no).padStart(4, '0') : '';
         const subTotal = inv.subtotal !== undefined ? inv.subtotal : inv.total;
         const qrData = JSON.stringify({no:inv.no||inv.id, total:inv.total, date:inv.date, customer:inv.customer, seller:inv.user, count:inv.items.length});
@@ -864,7 +946,7 @@ function vArgs() {
                 receiptCore('نسخة العميل') +
                 '<div style="border-top:2px dashed var(--border);margin:18px 0;position:relative"><span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--bg-card);padding:0 10px;font-size:.7rem;color:var(--text-muted)">✂️ قص</span></div>' +
                 receiptCore('نسخة المحل — '+esc(settings.store)) +
-                '<div class="modal-actions no-print" style="margin-top:22px">' + backBtn + '<div style="display:flex;gap:8px"><button class="btn btn-outline" onclick="printReceipt()">🖨️ طباعة نسختين</button><button class="btn btn-outline" onclick="if(navigator.share) navigator.share({title:\'فاتورة '+invNo+'\', text:qrData}).catch(()=>{})">📤 مشاركة</button>' + saveBtn + '</div></div>' +
+                '<div class="modal-actions no-print" style="margin-top:22px">' + backBtn + '<div style="display:flex;gap:8px"><button class="btn btn-outline" ' + pAct("printReceipt", [], "click") + '>🖨️ طباعة نسختين</button><button class="btn btn-outline" ' + pAct("vShareInvoice", [invNo, qrData]) + '>📤 مشاركة</button>' + saveBtn + '</div></div>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
         setTimeout(()=>{
@@ -1007,11 +1089,11 @@ function vArgs() {
             '<p style="font-size:.82rem;font-weight:700;color:var(--text-muted);margin:12px 0 0">سنتواصل معك لتأكيد الطلب ووقت التوصيل. يمكنك متابعته في «طلباتي».</p>' +
             reachNote +
             (hasWa
-                ? '<button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="sendOrderWhatsApp(pendingOrderForWa())">📲 أرسل تفاصيل الطلب على واتساب</button>'
+                ? '<button class="btn btn-primary" style="width:100%;margin-top:12px" ' + pAct("sendOrderWhatsApp", [(pendingOrderForWa())], "click") + '>📲 أرسل تفاصيل الطلب على واتساب</button>'
                 : '<p style="font-size:.78rem;font-weight:700;color:var(--warn,#f5b62c);margin-top:10px">ℹ️ لتفعيل الإرسال على واتساب: أضف «رقم المحل» في الإعدادات.</p>') +
             '<div class="modal-actions">' +
-                '<button class="btn btn-outline" onclick="closeModal();setView(\'shop\')">🛍️ متابعة التسوق</button>' +
-                '<button class="btn btn-outline" onclick="closeModal();accTab=\'orders\';setView(\'account\');renderAccount()">📦 طلباتي (' + myOrdersCount() + ')</button>' +
+                '<button class="btn btn-outline" ' + pAct("vCloseModalShop", []) + '>🛍️ متابعة التسوق</button>' +
+                '<button class="btn btn-outline" ' + pAct("vGoMyOrders", []) + '>📦 طلباتي (' + myOrdersCount() + ')</button>' +
             '</div>';
         lastPlacedOrder = inv;
         document.getElementById('modal').style.display = 'flex';
@@ -1082,8 +1164,8 @@ function vArgs() {
                 '<h2>📋 سجل <span class="accent">الفواتير</span></h2>' +
                 '<div class="empty-state"><div class="icon">📭</div>لا توجد فواتير بعد</div>' +
                 '<div class="modal-actions">' +
-                    '<button class="btn btn-outline" onclick="closeModal();setView(\'shop\');openCart()">🧧 فاتورة جديدة</button>' +
-                    '<button class="btn btn-outline" onclick="closeModal()">إغلاق</button>' +
+                    '<button class="btn btn-outline" ' + pAct("vCloseModalShopCart", []) + '>🧧 فاتورة جديدة</button>' +
+                    '<button class="btn btn-outline" ' + pAct("closeModal", [], "click") + '>إغلاق</button>' +
                 '</div>';
         } else {
             let html = '<h2>📋 سجل <span class="accent">الفواتير</span> (' + invoices.length + ')</h2><div class="inv-history">';
@@ -1093,7 +1175,7 @@ function vArgs() {
                 const invNo = inv.no ? '#' + String(inv.no).padStart(4, '0') : '#' + String(invoices.length - i).padStart(4, '0');
                 const st=inv.status||'قيد المعالجة';
                 html +=
-                    '<div class="inv-hist-item" onclick="toggleInvoiceDetail(this)">' +
+                    '<div class="inv-hist-item" ' + pAct("toggleInvoiceDetail", [(this)], "click") + '>' +
                         '<div class="inv-hi-top">' +
                             '<span><strong>' + invNo + '</strong> · <span title="'+esc(inv.date)+'">'+esc(dateStr)+'</span> · ' + esc(inv.customer) + (inv.user ? ' · 👷 ' + esc(inv.user) : '') + ' <span class="status '+statusClass(st)+'" style="font-size:.68rem;padding:2px 8px">'+esc(st)+'</span></span>' +
                             '<span style="font-weight:800;color:var(--primary)">' + fmt(inv.total) + ' ج.م</span>' +
@@ -1101,8 +1183,8 @@ function vArgs() {
                         '<div class="inv-hi-items" style="display:none">' +
                             inv.items.map(item => '<div><span>' + esc(item.name) + ' × ' + item.qty + '</span><span>' + fmt(item.qty * item.price) + ' ج.م</span></div>').join('') +
                             '<div class="inv-actions">' +
-                                '<button class="btn btn-outline" style="padding:6px 12px;font-size:0.75rem" onclick="event.stopPropagation();previewInvoice(' + (invoices.length - 1 - i) + ')">🖨️ طباعة</button>' +
-                                '<button class="btn btn-danger" style="padding:6px 12px;font-size:0.75rem" onclick="event.stopPropagation();deleteInvoice(' + (invoices.length - 1 - i) + ')">🗑️ حذف</button>' +
+                                '<button class="btn btn-outline" style="padding:6px 12px;font-size:0.75rem" ' + pAct("vPreviewInvoice", [(invoices.length - 1 - i)], "click", "stop") + '>🖨️ طباعة</button>' +
+                                '<button class="btn btn-danger" style="padding:6px 12px;font-size:0.75rem" ' + pAct("vDeleteInvoice", [(invoices.length - 1 - i)], "click", "stop") + '>🗑️ حذف</button>' +
                             '</div>' +
                         '</div>' +
                     '</div>';
@@ -1110,8 +1192,8 @@ function vArgs() {
             html += '</div>';
             body.innerHTML = html +
                 '<div class="modal-actions">' +
-                    '<button class="btn btn-outline" onclick="closeModal();setView(\'shop\');openCart()">🧧 فاتورة جديدة</button>' +
-                    '<button class="btn btn-outline" onclick="closeModal()">إغلاق</button>' +
+                    '<button class="btn btn-outline" ' + pAct("vCloseModalShopCart", []) + '>🧧 فاتورة جديدة</button>' +
+                    '<button class="btn btn-outline" ' + pAct("closeModal", [], "click") + '>إغلاق</button>' +
                 '</div>';
         }
         modal.style.display = 'flex';

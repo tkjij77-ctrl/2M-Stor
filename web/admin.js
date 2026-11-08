@@ -1,3 +1,9 @@
+    /* ── T7.4/د: إغلاق اللوحة ثم فتح نموذج الصنف (كان onclick مركّبًا) ───── */
+    function actDashboardEdit(ci, ii) {
+        toggleDashboard();
+        setTimeout(() => openModal('edit', ci, ii), 200);
+    }
+
     // ===== DASHBOARD =====
     function toggleDashboard() {
         if (!can('dash')) return toast('⛔ لوحة التحكم للمدير فقط');
@@ -62,14 +68,14 @@
                 '<div class="dash-stat"><div class="num">' + fmt(totalRevenue) + '</div><div class="lbl">🏦 إجمالي الدخل (ج.م)</div></div>' +
             '</div>' +
             '<div class="table-wrap"><table><thead><tr><th>المنتج</th><th>القسم</th><th>السعر</th><th>المخزون</th><th>إجراءات</th></tr></thead><tbody>'
-            + db.flatMap((cat,ci)=>cat.items.slice(0,12).map((it,ii)=>'<tr><td>'+esc(it.n)+'</td><td>'+esc(cat.name)+'</td><td>'+fmt(itemPrice(it))+' ج.م</td><td>'+getQ(it)+(getQ(it)<=getMin(it)?' ⚠️':'')+'</td><td><div class="mini-actions"><button class="mini-btn" onclick="toggleDashboard();setTimeout(()=>openModal(\'edit\','+ci+','+ii+'),200)">✏️</button></div></td></tr>')).join('') + '</tbody></table></div>' +
+            + db.flatMap((cat,ci)=>cat.items.slice(0,12).map((it,ii)=>'<tr><td>'+esc(it.n)+'</td><td>'+esc(cat.name)+'</td><td>'+fmt(itemPrice(it))+' ج.م</td><td>'+getQ(it)+(getQ(it)<=getMin(it)?' ⚠️':'')+'</td><td><div class="mini-actions"><button class="mini-btn" ' + pAct("actDashboardEdit", [ci, ii]) + '>✏️</button></div></td></tr>')).join('') + '</tbody></table></div>' +
             '<div class="dash-card"><h3>📑 التقارير والتصدير</h3>' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-                    '<button class="btn btn-primary" style="padding:10px 16px;font-size:0.85rem" onclick="dailyReport()">🖨️ تقرير نهاية اليوم</button>' +
-                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem" onclick="downloadCsv(makeCsvInvoices(),\'invoices.csv\')">📊 فواتير CSV</button>' +
-                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem" onclick="downloadCsv(makeCsvStock(),\'stock.csv\')">📦 مخزون CSV</button>' +
+                    '<button class="btn btn-primary" style="padding:10px 16px;font-size:0.85rem" ' + pAct("dailyReport", [], "click") + '>🖨️ تقرير نهاية اليوم</button>' +
+                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem" ' + pAct("downloadCsv", [(makeCsvInvoices()), "invoices.csv"], "click") + '>📊 فواتير CSV</button>' +
+                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem" ' + pAct("downloadCsv", [(makeCsvStock()), "stock.csv"], "click") + '>📦 مخزون CSV</button>' +
                     // 🐞 T5.3: أخطاء متصفحات المستخدمين — لا تُرى من أي مكان آخر
-                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem' + (errLogCount() ? ';color:var(--danger);border-color:var(--danger)' : '') + '" onclick="showErrorsModal()">🐞 أخطاء المستخدمين' + (errLogCount() ? ' (' + errLogCount() + ')' : '') + '</button>' +
+                    '<button class="btn btn-outline" style="padding:10px 16px;font-size:0.85rem' + (errLogCount() ? ';color:var(--danger);border-color:var(--danger)' : '') + '" ' + pAct("showErrorsModal", [], "click") + '>🐞 أخطاء المستخدمين' + (errLogCount() ? ' (' + errLogCount() + ')' : '') + '</button>' +
                 '</div></div>' +
             '<div class="dash-card"><h3>📊 توزيع المخزون حسب الأقسام</h3><canvas id="chartStock"></canvas></div>' +
             '<div class="dash-card"><h3>📈 مبيعات آخر 7 أيام</h3><canvas id="chartSales"></canvas></div>' +
@@ -449,7 +455,7 @@
         const roleNames = { admin: '🛡️ مدير', worker: '👷 عامل', customer: '👤 عميل' };
         let rows = (data || []).map(p =>
             '<div class="user-row"><div><div class="user-name">' + esc(p.display_name || p.username) + '</div><div class="user-meta">@' + esc(p.username) + '</div></div>' +
-            '<select onchange="changeUserRole(\'' + p.id + '\', this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-weight:700;font-size:0.8rem">' +
+            '<select ' + pAct("changeUserRole", [('' + p.id + ''), pAct.VALUE], "change") + ' style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-weight:700;font-size:0.8rem">' +
             ['admin', 'worker', 'customer'].map(r => '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + roleNames[r] + '</option>').join('') +
             '</select></div>'
         ).join('');
@@ -457,7 +463,7 @@
             '<h2>👥 إدارة <span class="accent">الحسابات</span> (' + (data || []).length + ')</h2>' +
             '<div class="user-list">' + (rows || '<div style="font-size:0.8rem;color:var(--text-muted);font-weight:700;padding:10px">مفيش حسابات</div>') + '</div>' +
             '<p style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-top:10px">☁️ الحسابات على Supabase — المدير حساب ثابت محمي. الحذف يتم من لوحة Supabase.</p>' +
-            '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>';
+            '<div class="modal-actions"><button class="btn btn-outline" ' + pAct("closeModal", [], "click") + '>إغلاق</button></div>';
     }
     function openUsersModal() {
         if (!can('users')) return;
@@ -477,11 +483,11 @@
                      '<p style="font-size:.8rem;color:var(--text-muted);font-weight:700;margin-bottom:10px">ملاحظة: رمز PIN الخاص بالكاونتر يُدار من الإعدادات ← الأمان.</p>' : '') +
             '<div class="form-group"><label>كلمة المرور الحالية</label><input type="password" id="pass-cur" placeholder="••••••" autocomplete="current-password"></div>' +
             '<div class="form-group"><label>الجديدة (6 أحرف على الأقل)</label><input type="password" id="pass-new" placeholder="••••••" autocomplete="new-password"></div>' +
-            '<div class="form-group"><label>تأكيد الجديدة</label><input type="password" id="pass-conf" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')savePass()"></div>' +
+            '<div class="form-group"><label>تأكيد الجديدة</label><input type="password" id="pass-conf" placeholder="••••••" autocomplete="new-password" ' + pAct("savePass", [], "keydown", "key=Enter") + '></div>' +
             counterPinSectionHtml() +
             '<div class="modal-actions">' +
-                '<button class="btn btn-outline" onclick="closeModal()">إلغاء</button>' +
-                '<button class="btn btn-primary" id="btnSavePass" onclick="savePass()">💾 حفظ</button>' +
+                '<button class="btn btn-outline" ' + pAct("closeModal", [], "click") + '>إلغاء</button>' +
+                '<button class="btn btn-primary" id="btnSavePass" ' + pAct("savePass", [], "click") + '>💾 حفظ</button>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
     }

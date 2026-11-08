@@ -36,6 +36,9 @@ jobs:
       # T7.4: سقف المعالجات المضمّنة لا يزيد (onclick → data-act)
       - name: سقف المعالجات المضمّنة (لا نموّ للدَّين التقني)
         run: node scripts/verify-inline-handlers.js
+      # T7.4: الحجج/الأسماء في data-act — يلتقط الحجج النصّية المعطوبة (34 حالة سابقة)
+      - name: سلامة حجج الموزّع وأسماء الأفعال
+        run: python3 scripts/verify-actions-args.py
 
   test:
     runs-on: ubuntu-latest

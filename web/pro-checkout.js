@@ -1,3 +1,9 @@
+/** T7.4/د: كان onclick="proCloseCheckout();setView('shop')" */
+function proCloseCheckoutShop() {
+  proCloseCheckout();
+  setView('shop');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  💳 pro-checkout.js — الشراء الأونلاين للزائر + تتبّع الطلب + الشحن المجاني
 //
@@ -69,7 +75,7 @@ function proEnhanceCart() {
         const cta = document.createElement('div');
         cta.className = 'pro-checkout-cta';
         cta.style.cssText = 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap';
-        cta.innerHTML = '<button class="btn btn-primary" style="flex:1;padding:13px;font-size:.92rem" onclick="proOpenCheckout()">' +
+        cta.innerHTML = '<button class="btn btn-primary" style="flex:1;padding:13px;font-size:.92rem" ' + pAct("proOpenCheckout", [], "click") + '>' +
             '💳 إتمام الطلب أونلاين ←</button>';
         body.querySelector('.summary').appendChild(cta);
     }
@@ -149,7 +155,7 @@ function proPayInfoHtml() {
     }
     return '<div style="font-size:.82rem;font-weight:700;background:var(--bg-soft);padding:11px 13px;border-radius:11px;line-height:2">' + rows.join('<br>') + '</div>' +
         '<label class="pro-receipt-drop">' +
-            '<input type="file" accept="image/*" style="display:none" onchange="proReceiptPick(event)">' +
+            '<input type="file" accept="image/*" style="display:none" ' + pAct("proReceiptPick", [pAct.EVENT], "change") + '>' +
             (f.receipt
                 ? '<img src="' + esc(f.receipt) + '" style="width:46px;height:46px;object-fit:cover;border-radius:9px">'
                 : '<span style="font-size:1.4rem">🧾</span>') +
@@ -186,14 +192,14 @@ function proRenderCheckout() {
     const t = proCheckoutTotals();
     const catOpts = PRO_CITIES.map(c => '<option value="' + c + '"' + (f.city === c ? ' selected' : '') + '>' + c + '</option>').join('');
     const choice = (key, val, icon, label, sub) =>
-        '<button class="pro-choice-btn' + (f[key] === val ? ' active' : '') + '" onclick="proCheckoutPick(\'' + key + '\',\'' + val + '\')">' +
+        '<button class="pro-choice-btn' + (f[key] === val ? ' active' : '') + '" ' + pAct("proCheckoutPick", [('' + key + ''), ('' + val + '')], "click") + '>' +
         '<span style="font-size:1.05rem">' + icon + '</span><span style="flex:1;min-width:0"><b style="display:block;font-size:.82rem">' + label + '</b>' +
         (sub ? '<small style="font-size:.68rem;opacity:.75;font-weight:700">' + sub + '</small>' : '') + '</span>' +
         (f[key] === val ? '<span style="color:var(--primary);font-weight:900">✓</span>' : '') + '</button>';
 
     el.innerHTML =
     '<div style="position:sticky;top:0;z-index:5;background:var(--bg-card);border-bottom:1px solid var(--border);padding:13px 16px;display:flex;align-items:center;gap:10px">' +
-        '<button onclick="proCloseCheckout()" style="background:var(--bg-soft);border:1px solid var(--border);width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:1rem">' + (document.documentElement.dir === 'rtl' ? '→' : '←') + '</button>' +
+        '<button ' + pAct("proCloseCheckout", [], "click") + ' style="background:var(--bg-soft);border:1px solid var(--border);width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:1rem">' + (document.documentElement.dir === 'rtl' ? '→' : '←') + '</button>' +
         '<div style="flex:1"><div style="font-weight:900;font-size:.98rem">إتمام الطلب</div>' +
         '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700">' + cartCount() + ' قطعة · ' + esc(settings.store || '') + '</div></div>' +
         '<div style="font-weight:900;color:var(--primary);font-size:.95rem" id="proCheckoutStickyTotal">' + fmt(t.total) + ' ج.م</div>' +
@@ -205,10 +211,10 @@ function proRenderCheckout() {
         '<div class="pro-step-box">' +
             '<div class="pro-step-head"><span class="pro-step-num">1</span> بياناتك</div>' +
             '<div class="form-group" style="margin-bottom:10px"><label>الاسم بالكامل *</label>' +
-                '<input type="text" value="' + esc(f.name) + '" placeholder="مثال: أحمد السيد" oninput="proCheckoutSet(\'name\',this.value)"></div>' +
+                '<input type="text" value="' + esc(f.name) + '" placeholder="مثال: أحمد السيد" ' + pAct("proCheckoutSet", ["name", pAct.VALUE], "input") + '></div>' +
             '<div class="form-group" style="margin-bottom:0"><label>رقم الموبايل *</label>' +
                 '<div class="pro-phone-wrap"><span class="pro-phone-pfx">🇪🇬 +20</span>' +
-                '<input type="tel" inputmode="numeric" maxlength="11" value="' + esc(f.phone) + '" placeholder="01012345678" oninput="proCheckoutSet(\'phone\',this.value)"></div>' +
+                '<input type="tel" inputmode="numeric" maxlength="11" value="' + esc(f.phone) + '" placeholder="01012345678" ' + pAct("proCheckoutSet", ["phone", pAct.VALUE], "input") + '></div>' +
                 '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700;margin-top:5px">سنستخدمه للتواصل وتأكيد الطلب فقط.</div></div>' +
         '</div>' +
 
@@ -221,13 +227,13 @@ function proRenderCheckout() {
             '</div>' +
             (f.fulfillment === 'delivery'
                 ? '<div class="pro-choice-grid">' +
-                    '<div class="form-group"><label>المحافظة</label><select onchange="proCheckoutSet(\'city\',this.value)">' + catOpts + '</select></div>' +
-                    '<div class="form-group"><label>المنطقة / الحي</label><input type="text" value="' + esc(f.area) + '" placeholder="مثال: المشاية السفلية" oninput="proCheckoutSet(\'area\',this.value)"></div>' +
+                    '<div class="form-group"><label>المحافظة</label><select ' + pAct("proCheckoutSet", ["city", pAct.VALUE], "change") + '>' + catOpts + '</select></div>' +
+                    '<div class="form-group"><label>المنطقة / الحي</label><input type="text" value="' + esc(f.area) + '" placeholder="مثال: المشاية السفلية" ' + pAct("proCheckoutSet", ["area", pAct.VALUE], "input") + '></div>' +
                   '</div>' +
-                  '<div class="form-group"><label>العنوان بالتفصيل *</label><textarea rows="2" placeholder="اسم الشارع · رقم العمارة · الدور · علامة مميزة" oninput="proCheckoutSet(\'address\',this.value)" style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(f.address) + '</textarea></div>'
+                  '<div class="form-group"><label>العنوان بالتفصيل *</label><textarea rows="2" placeholder="اسم الشارع · رقم العمارة · الدور · علامة مميزة" ' + pAct("proCheckoutSet", ["address", pAct.VALUE], "input") + ' style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:600;resize:vertical">' + esc(f.address) + '</textarea></div>'
                 : '<div style="font-size:.82rem;font-weight:700;background:var(--bg-soft);padding:11px 13px;border-radius:11px;line-height:1.9">🏬 يمكنك استلام طلبك من: <b>' + esc(settings.address || settings.store || 'المحل') + '</b>' + (settings.phone ? '<br>📞 ' + esc(settings.phone) : '') + '</div>') +
             '<div class="form-group" style="margin-top:10px;margin-bottom:0"><label>ملاحظات (اختياري)</label>' +
-                '<input type="text" value="' + esc(f.notes) + '" placeholder="مثال: اتصل قبل الوصول" oninput="proCheckoutSet(\'notes\',this.value)"></div>' +
+                '<input type="text" value="' + esc(f.notes) + '" placeholder="مثال: اتصل قبل الوصول" ' + pAct("proCheckoutSet", ["notes", pAct.VALUE], "input") + '></div>' +
         '</div>' +
 
         // ── الخطوة 3 ──
@@ -254,7 +260,7 @@ function proRenderCheckout() {
                     '<div style="font-weight:900;font-size:.82rem">' + fmt(x.price * x.qty) + ' ج</div>' +
                 '</div>').join('') +
             '<div style="display:flex;gap:7px;margin-top:11px">' +
-                '<input type="text" value="' + esc(f.coupon) + '" placeholder="كود الخصم' + (settings.couponCode ? ' (' + esc(settings.couponCode) + ')' : '') + '" oninput="proCheckoutSet(\'coupon\',this.value)" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:800;text-align:center">' +
+                '<input type="text" value="' + esc(f.coupon) + '" placeholder="كود الخصم' + (settings.couponCode ? ' (' + esc(settings.couponCode) + ')' : '') + '" ' + pAct("proCheckoutSet", ["coupon", pAct.VALUE], "input") + ' style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-body);font-family:inherit;font-weight:800;text-align:center">' +
             '</div>' +
             (t.couponApplied ? '<div style="font-size:.76rem;font-weight:800;color:var(--success);margin-top:6px">✅ تم تطبيق خصم ' + proNum(settings.couponPct) + '%</div>' : '') +
             '<div id="proCheckoutTotals" style="margin-top:10px">' + proCheckoutTotalsHtml(t) + '</div>' +
@@ -269,7 +275,7 @@ function proRenderCheckout() {
         '<div style="max-width:680px;margin:0 auto;display:flex;align-items:center;gap:10px">' +
             '<div style="min-width:0"><div style="font-size:.68rem;color:var(--text-muted);font-weight:800">الإجمالي</div>' +
             '<div style="font-weight:900;font-size:1.05rem">' + fmt(t.total) + ' ج.م</div></div>' +
-            '<button class="btn btn-primary" style="flex:1;padding:14px;font-size:.95rem" ' + (proCheckoutBusy ? 'disabled' : '') + ' onclick="proSubmitOrder()">' +
+            '<button class="btn btn-primary" style="flex:1;padding:14px;font-size:.95rem" ' + (proCheckoutBusy ? 'disabled' : '') + ' ' + pAct("proSubmitOrder", [], "click") + '>' +
                 (proCheckoutBusy ? '⏳ جاري إرسال الطلب...' : '✅ تأكيد الطلب') + '</button>' +
         '</div>' +
     '</div>';
@@ -478,11 +484,11 @@ function proAfterOrderSuccess(res, t, isLocal) {
             '</div>' +
             (isLocal ? '<div style="background:#fff7e6;border:1px solid #f5b62c;color:#7a5200;border-radius:12px;padding:11px;font-size:.78rem;font-weight:800;line-height:1.8;margin-bottom:12px">📲 طلبك محفوظ على جهازك — اضغط «إرسال على واتساب» ليصل للمحل فورًا.</div>' : '') +
             '<div style="display:flex;flex-direction:column;gap:9px">' +
-                '<button class="btn btn-primary" style="padding:13px" onclick="proTrackByToken(\'' + esc(token) + '\')">🔍 تتبّع طلبك الآن</button>' +
+                '<button class="btn btn-primary" style="padding:13px" ' + pAct("proTrackByToken", [('' + esc(token) + '')], "click") + '>🔍 تتبّع طلبك الآن</button>' +
                 (!isLocal && token ? '<a class="btn" style="padding:13px;background:#229ED9;color:#fff;text-decoration:none;text-align:center" target="_blank" rel="noopener" href="' + proTelegramFollowUrl(token) + '">🔔 تابع طلبك على تيليجرام</a>' : '') +
-                '<button class="btn btn-outline" style="padding:13px" onclick="proCopyTrackLink(\'' + esc(token) + '\')">🔗 نسخ رابط التتبّع</button>' +
+                '<button class="btn btn-outline" style="padding:13px" ' + pAct("proCopyTrackLink", [('' + esc(token) + '')], "click") + '>🔗 نسخ رابط التتبّع</button>' +
                 (wa ? '<a class="btn" style="padding:13px;background:var(--pro-whatsapp);color:#fff;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + wa + '?text=' + waText + '">💬 إرسال الطلب على واتساب</a>' : '') +
-                '<button class="btn btn-ghost" style="padding:13px" onclick="proCloseCheckout();setView(\'shop\')">🏪 متابعة التسوّق</button>' +
+                '<button class="btn btn-ghost" style="padding:13px" ' + pAct("proCloseCheckoutShop", []) + '>🏪 متابعة التسوّق</button>' +
             '</div>' +
             (inv ? '' : '<div style="font-size:.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">احفظ رابط التتبّع — ستحتاجه لمعرفة حالة طلبك بدون حساب.</div>') +
         '</div>';
@@ -533,7 +539,7 @@ function proRenderTracking(token, data) {
     const el = document.getElementById('proCheckout');
     if (!el) return;
     const back = '<div style="position:sticky;top:0;z-index:5;background:var(--bg-card);border-bottom:1px solid var(--border);padding:13px 16px;display:flex;align-items:center;gap:10px">' +
-        '<button onclick="proCloseCheckout()" style="background:var(--bg-soft);border:1px solid var(--border);width:38px;height:38px;border-radius:50%;cursor:pointer">✕</button>' +
+        '<button ' + pAct("proCloseCheckout", [], "click") + ' style="background:var(--bg-soft);border:1px solid var(--border);width:38px;height:38px;border-radius:50%;cursor:pointer">✕</button>' +
         '<div style="flex:1"><div style="font-weight:900;font-size:.96rem">تتبّع الطلب</div>' +
         '<div style="font-size:.7rem;color:var(--text-muted);font-weight:700;direction:ltr;text-align:right">' + esc(token) + '</div></div></div>';
 

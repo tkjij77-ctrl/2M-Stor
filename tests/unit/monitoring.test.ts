@@ -97,7 +97,9 @@ describe("T5.3 — المراقبة داخل التطبيق نفسه", () => {
     const ops = read("web/ops.js");
     const admin = read("web/admin.js");
     expect(ops).toMatch(/function showErrorsModal[\s\S]{0,120}can\('dash'\)/);
-    expect(admin).toContain("showErrorsModal()");
+    // T7.4: الزر انتقل من onclick="showErrorsModal()" إلى data-act — الشرط
+    // هو وجود الزر في لوحة التحكم (لا الصيغة النصّية القديمة).
+    expect(admin).toMatch(/pAct\("showErrorsModal"|data-act="showErrorsModal"|showErrorsModal\(\)/);
   });
 
   it("لا يُسجَّل أي محتوى حسّاس في السجل", () => {
