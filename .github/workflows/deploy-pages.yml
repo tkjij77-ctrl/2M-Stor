@@ -48,7 +48,7 @@ jobs:
         run: |
           mkdir -p _site
           cp -v index.html sw.js manifest.json _headers _site/
-          cp -v icon-192.png icon-512.png apple-touch-icon.png _site/ 2>/dev/null || true
+          cp -v favicon.ico icon-192.png icon-512.png apple-touch-icon.png _site/ 2>/dev/null || true
           cp -rv web vendor _site/
           echo "── حجم ما سيُنشر:"
           du -sh _site
