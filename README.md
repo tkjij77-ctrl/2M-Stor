@@ -135,6 +135,11 @@ supabase/migrations/
   20261026120000_telegram_notify.sql       ← إشعارات تيليجرام من القاعدة (pg_net)
   20261107090000_items_stock_projection.sql ← 🔒 SEC-1: أرقام المخزون لا تُرسل للزائر
   20261107100000_items_write_rpc.sql       ← 🔒 SEC-2: الكتابة عبر upsert_item · الجدول مقفل
+  20261109054446_t76a_items_public_views.sql ← ✅ T7.6/أ: طُبِّق على الإنتاج (الإسقاطان + سحب كتابة الزائر)
+  20261109054458_t76a2_views_grants_tighten.sql ← ✅ T7.6/أ-٢: صلاحيات الإسقاطين (SELECT فقط)
+  20261109054510_t76a3_items_write_rpc.sql   ← ✅ T7.6/أ-٣: upsert_item/archive_all_items على الإنتاج
+  supabase/post_deploy/20261109120000_t76b_close_raw_items_read.sql
+                                            ← ⏳ T7.6/ب: الإغلاق النهائي — **بعد** نشر الواجهة الجديدة فقط
 ```
 
 نفّذها **بالترتيب** في SQL Editor. كلها آمنة للتشغيل المتكرر (idempotent).
