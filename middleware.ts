@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { decideAdminAccess } from "./lib/auth/admin-access";
+import { buildCsp } from "./lib/security/csp";
 
 /**
  * 🔒 حماية /admin — وُلدت بعد ثغرة «الفشل المفتوح» (T7.2):
@@ -17,13 +18,40 @@ const HOME = "/";
 function deny(req: NextRequest) {
   const res = NextResponse.redirect(new URL(HOME, req.url));
   res.headers.set("Cache-Control", "no-store");
+  applyCsp(res, nonceOf(req));
   return res;
 }
 
+/**
+ * 🔒 T7.5 — nonce لكل طلب: يسمح لكتل Next المضمّنة وحدها، ويُغني عن
+ * 'unsafe-inline'. يُقرأ من ترويسة الطلب ليعيد Next استخدامه في وسوم script.
+ */
+function nonceOf(req: NextRequest): string {
+  const existing = req.headers.get("x-nonce");
+  if (existing) return existing;
+  const raw = new Uint8Array(16);
+  crypto.getRandomValues(raw);
+  return btoa(String.fromCharCode(...raw));
+}
+
+function applyCsp(res: NextResponse, nonce: string): void {
+  res.headers.set("Content-Security-Policy", buildCsp(nonce));
+}
+
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next({ request: req });
-  // لا تُخزَّن صفحات الإدارة مؤقتًا في أي وسيط
+  // nonce واحد لكل طلب: يُمرَّر إلى Next عبر ترويسة الطلب (ليضعها على وسومه)
+  const nonce = nonceOf(req);
+  const reqHeaders = new Headers(req.headers);
+  reqHeaders.set("x-nonce", nonce);
+  reqHeaders.set("Content-Security-Policy", buildCsp(nonce));
+
+  const res = NextResponse.next({ request: { headers: reqHeaders } });
+  applyCsp(res, nonce);
+  // لا تُخزَّن صفحات أي مسار مؤقتًا في وسيط (اللوحة تفرض ذلك أدناه)
   res.headers.set("Cache-Control", "no-store");
+
+  // حماية /admin كما هي — أما بقية المسارات فتحتاج السياسة فقط
+  if (!req.nextUrl.pathname.startsWith("/admin")) return res;
 
   let user: { id: string } | null = null;
   let profile: { role?: string | null } | null = null;
@@ -62,4 +90,7 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/admin/:path*"] };
+export const config = {
+  // كل المسارات: السياسة تُطبَّق على كل صفحة، والفحص الأمني يبقى لـ/admin فقط
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|json|txt|woff2?)$).*)"],
+};

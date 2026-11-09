@@ -17,6 +17,11 @@ const ROOT = path.resolve(__dirname, '..');
 // ── فروق معتمدة بين السطحين (بأقل صلاحية، لا بتساوي أعمى) ─────────────
 // كل استثناء يجب أن يكون (1) مبرَّرًا هنا، و(2) مُستخدَمًا فعلًا في index.html
 // — وإلا فشل الفحص: لا استثناء «احتياطي» يبقى للأبد.
+// T7.5: انحراف موثَّق — سطح Next يحقن Next.js كتل <script> مضمّنة في صفحاته
+// المُولَّدة مسبقًا، وnonce لا يعمل فيها (يُختبر: 7 انتهاكات + صفحة فارغة).
+// لذلك يُسمح له بـ'unsafe-inline' في script-src **وحده**، ويُمنع على السطح الثابت.
+const NEXT_ONLY_EXTRA = { 'script-src': ["'unsafe-inline'"] };
+
 const STATIC_ONLY_EXTRA = {
   // index.html يحمّل Telegram WebApp SDK؛ تطبيق Next لا يستخدمه إطلاقًا
   'script-src': ['https://telegram.org'],
@@ -43,12 +48,22 @@ function parseHeadersFile(src) {
   return blocks;
 }
 
-// ── 2) قراءة CSP من next.config.js ──
+// ── 2) قراءة CSP للسطح المبني على Next ──
+//  T7.5: انتقلت السياسة من next.config.js إلى lib/security/csp.ts لأنها تحتاج
+//  nonce متغيّرًا لكل طلب (ترويسات next.config تُجمَّد وقت البناء). الملف نفسه
+//  هو مصدرها الوحيد، وهذا الفحص يقرأه نصًّا كما كان يقرأ next.config.
 function nextCsp() {
-  const src = read('next.config.js');
-  const m = src.match(/Content-Security-Policy['"]\s*,\s*value:\s*"([^"]+)"/);
+  const src = read('lib/security/csp.ts');
+  const m = src.match(/export const CSP_BASE = \[([\s\S]*?)\]\.join/);
   if (!m) return null;
-  return m[1].replace(/\\"/g, '"');
+  const parts = [...m[1].matchAll(/"([^"]+)"/g)].map(x => x[1]);
+  if (!parts.length) return null;
+  return parts.join('; ') + ';';
+}
+
+/** يُزيل رموز nonce (متحوّلة لكل طلب) قبل مقارنة السطحين. */
+function withoutNonce(tokens) {
+  return (tokens || []).filter(t => !/^'nonce-/.test(t));
 }
 
 // CSP ← { directive: [values] }
@@ -81,14 +96,15 @@ check('X-Content-Type-Options = nosniff', (all['x-content-type-options'] || '').
 check('Referrer-Policy موجودة', !!all['referrer-policy'], all['referrer-policy'] || 'غائبة');
 
 console.log('\n【2】 تطابق السطحين (لا محمي ومكشوف معًا)');
-check('next.config.js يحوي CSP', !!cspNextRaw, cspNextRaw ? cspNextRaw.slice(0, 40) + '…' : 'غائبة');
+check('lib/security/csp.ts يحوي CSP', !!cspNextRaw, cspNextRaw ? cspNextRaw.slice(0, 40) + '…' : 'غائبة');
 if (cspNextRaw && staticCsp) {
   const a = parseCsp(staticCsp), b = parseCsp(cspNextRaw);
-  const core = ['default-src', 'script-src', 'style-src', 'font-src', 'img-src', 'connect-src', 'frame-ancestors'];
+  const core = ['default-src', 'script-src', 'style-src', 'font-src', 'img-src', 'connect-src', 'frame-ancestors', 'base-uri', 'form-action'];
   for (const d of core) {
     const extras = STATIC_ONLY_EXTRA[d] || [];
     const avArr = (a[d] || []).filter(v => !extras.includes(v)).slice().sort();
-    const bvArr = (b[d] || []).slice().sort();
+    const nextExtras = NEXT_ONLY_EXTRA[d] || [];
+    const bvArr = withoutNonce(b[d]).filter(v => !nextExtras.includes(v)).slice().sort();
     const same = avArr.join(' ') === bvArr.join(' ');
     const extraList = (a[d] || []).filter(v => extras.includes(v));
     check(
@@ -112,11 +128,22 @@ if (cspNextRaw && staticCsp) {
   function ffA(v) { return v; }
 }
 
+console.log('\n【2ب】 السطح العام الثابت: صفر unsafe-inline في script-src');
+const staticScript = (parseCsp(staticCsp)['script-src'] || []).join(' ');
+const nextScript = withoutNonce((parseCsp(cspNextRaw || '')['script-src']) || []).join(' ');
+check("_headers: script-src بلا 'unsafe-inline'", !/unsafe-inline/.test(staticScript), staticScript);
+check("meta في index.html: script-src بلا 'unsafe-inline'", !/unsafe-inline/.test((htmlRaw.match(/script-src[^;]*/) || [''])[0]), (htmlRaw.match(/script-src[^;]*/) || [''])[0]);
+check("الانحراف في Next محصور في script-src", /unsafe-inline/.test(nextScript) && !/unsafe-eval/.test(cspNextRaw || ''), nextScript);
+for (const d of ['default-src', 'style-src', 'img-src', 'connect-src', 'frame-ancestors', 'base-uri', 'form-action']) {
+  const nv = withoutNonce((parseCsp(cspNextRaw || '')[d]) || []).join(' ');
+  check(`لا unsafe-inline في ${d} (سطح Next)`, !/unsafe-inline/.test(nv) || d === 'style-src', nv.slice(0, 40) || '—');
+}
+
 console.log('\n【3】 لا تراخٍ صارخ في CSP');
-for (const [label, csp] of [['_headers', staticCsp], ['next.config.js', cspNextRaw || '']]) {
+for (const [label, csp] of [['_headers', staticCsp], ['lib/security/csp.ts', cspNextRaw || '']]) {
   check(`${label}: بلا 'unsafe-eval'`, !/unsafe-eval/.test(csp));
   check(`${label}: script-src بلا * أو https: مفتوحة`, !/script-src[^;]*(\s\*|\shttps:(?!\/\/))/.test(csp));
-  check(`${label}: base-uri أو form-action مقيّدة`, /base-uri/.test(csp) || /form-action/.test(csp) || label === 'next.config.js');
+  check(`${label}: base-uri أو form-action مقيّدة`, /base-uri/.test(csp) || /form-action/.test(csp));
 }
 
 console.log('\n【4】 CSP لا تكسر التطبيق الحقيقي (المضيفون المستخدمون في index.html)');

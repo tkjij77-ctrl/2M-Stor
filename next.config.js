@@ -24,7 +24,9 @@ const nextConfig = {
     {
       source: '/(.*)',
       headers: [
-        { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none';" },
+        // 🔒 T7.5: CSP انتقلت إلى middleware.ts (تحتاج nonce متغيّرًا لكل طلب،
+        //     وترويسات next.config ثابتة تُجمَّد وقت البناء فلا تصلح لـnonce).
+        //     السياسة نفسها في lib/security/csp.ts — مصدر واحد يفحصه CI.
         { key: 'X-Frame-Options', value: 'DENY' },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
