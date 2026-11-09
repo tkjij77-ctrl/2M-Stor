@@ -71,7 +71,11 @@ async function mock(page, { failPublic, failRpc }) {
   return { seen, calls };
 }
 
-const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/${name}.png`, fullPage: false }); };
+// مسار اللقطات: قابل للتغيير عبر SHOTS_DIR، والافتراضي مجلد مؤقت —
+// لأن مسارًا مطلقًا مثل /home/user/shots لا يوجد على عدّاء CI (يفشل بـENOENT).
+const SHOTS = process.env.SHOTS_DIR || require('path').join(require('os').tmpdir(), 'shots');
+require('fs').mkdirSync(SHOTS, { recursive: true });
+const shot = async (p, name) => { await p.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: false }); };
 
 (async () => {
   const browser = await chromium.launch();
@@ -111,7 +115,7 @@ const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/$
   ok('لا يظهر رقم الجرد (40) ولا الإجمالي (400) في الشاشة', !/\b40\b/.test(grid) && !/\b400\b/.test(grid));
   ok('لا يظهر عدّاد «متاح: N» لغير الموظف', !/متاح:\s*\d+/.test(grid));
   await shot(page, 'main-app-guest');
-  console.log('     📸 /home/user/shots/main-app-guest.png');
+  console.log(`     📸 ${SHOTS}/main-app-guest.png`);
 
   console.log('\n【3】 محاولة تجاوز من المتصفح (الزائر يقرأ الجدول الخام)');
   const rawProbe = await page.evaluate(async () => {
@@ -137,7 +141,7 @@ const shot = async (p, name) => { await p.screenshot({ path: `/home/user/shots/$
   const grid2 = await page2.evaluate(() => document.querySelector('.shop-grid')?.innerText || '');
   ok('المتجر ما زال يعرض منتجاته بعد السقوط', /لمبة ليد متوفرة/.test(grid2), grid2.slice(0, 60));
   await shot(page2, 'main-app-legacy-fallback');
-  console.log('     📸 /home/user/shots/main-app-legacy-fallback.png');
+  console.log(`     📸 ${SHOTS}/main-app-legacy-fallback.png`);
 
   console.log('\n【5】 🔒 SEC-2 — كتابة الموظف عبر الدوال المحصورة (لا كتابة مباشرة)');
   const page3 = await ctx.newPage();
