@@ -18,3 +18,6 @@ public/sw.js
 public/workbox-*.js
 public/fallback-*.js
 __pycache__/
+
+# مخرجات حزمة النشر (تُبنى في الـworkflow — لا تُرفع)
+_site/

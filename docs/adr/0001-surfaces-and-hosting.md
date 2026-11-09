@@ -130,6 +130,24 @@ prerender : static [ / , /cart , /privacy , /returns , /stock , /terms , /_not-f
 
 ---
 
+## تعديل مُلحَق (2026‑11‑09) — التطبيق الفعلي: Workers Static Assets لا Pages
+
+**ما حدث:** عند الرفع الفعلي من لوحة Cloudflare، صار خيار «Upload your static files» يُنشئ **Worker بموارد ثابتة** لا مشروع Pages (وصار Pages مسمّى «legacy workflow» في اللوحة نفسها).
+
+**ما تحقّقناه على النشر الحيّ قبل تثبيت القرار:**
+- ملف `_headers` **يُقرأ ويُطبَّق** على Workers Static Assets أيضًا ⇒ الـCSP و`X-Frame-Options: DENY` و`nosniff` و`permissions-policy` تصل كترويسات حقيقية (٦ ترويسات، مقابل صفر على GitHub Pages).
+- ٢٣ من ٢٥ مسارًا بحالة 200 (`_headers` يُستهلك كإعداد، و`index.html` يحوّل 307 إلى `/` — سلوك طبيعي).
+- في متصفح حقيقي: ٣٧ بطاقة، صفر خطأ JS، وصفر استجابة فاشلة، ونداءات `items_public`/`categories`/`settings`/`banners`/`invoices` كلها 200.
+- TTFB 57–76 مللي، HTTP/2 مع إعلان HTTP/3.
+
+**القرار المعدَّل:** يبقى الهدف **Cloudflare**، لكن التنفيذ عبر **Worker Static Assets** + `wrangler.jsonc` بدل `wrangler pages deploy`.
+- الـworkflow صار `.github/workflows/deploy-cloudflare.yml` ونفّذ `wrangler deploy --config wrangler.jsonc`.
+- `_site/` أُضيف إلى `.gitignore` (مخرج بناء لا يُرفع).
+- لا تغيير في كود التطبيق إطلاقًا: المجلد والملفات المنشورة هي نفسها حرفيًا.
+- سبب تفضيل Workers على العودة إلى Pages: هو ما أنشأه الرفع فعلًا، وبلا حدّ نشر شهري، والطلبات الثابتة تُخدَم بلا تكلفة، وهو المسار الذي يتبنّاه المزوّد حاليًا.
+
+---
+
 ## المراجع
 
 1. GitHub — About GitHub Pages (قيود الاستخدام التجاري): https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages
