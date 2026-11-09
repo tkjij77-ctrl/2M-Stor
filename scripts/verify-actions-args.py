@@ -11,6 +11,9 @@
   1) لا حجج pAct على هيئة نصّ فيه + في الطرفين  (لا بقايا " + x + ")
   2) كل اسم في data-act / pAct("…") معرّف فعلًا (function / window.x / let|const)
   3) لا eval ولا new Function داخل web/ (شرط CSP الصارم)
+  4) عنصر واحد = فعل واحد: لا سمتا data-act/pAct على الوسم نفسه.
+     المتصفح يهمل السمة المكرّرة **بهدوء**، فيصير نصف السلوك مفقودًا بلا خطأ
+     (وقع فعلًا: Enter في حقول الدخول، ومنطقة إسقاط الصورة).
 """
 import re
 import sys
@@ -89,6 +92,17 @@ for p in FILES:
         stats['names'].add(m.group(1))
     for m in re.finditer(r"' \+ pAct\(\"([A-Za-z_$][\w$]*)\"", src):
         stats['names'].add(m.group(1))
+
+# ─── 4) عنصر واحد = فعل واحد ────────────────────────────────────────────────
+# نُقسّم المصدر على '>' (نهاية الوسم) ونعدّ الأفعال داخل كل مقطع.
+for p in FILES:
+    src = strip_comments(p.read_text(encoding='utf-8'))
+    for seg in src.split('>'):
+        n_pact = len(re.findall(r'\bpAct\(\s*"', seg))
+        n_attr = len(re.findall(r'data-act="', seg))
+        if n_pact > 1 or n_attr > 1 or (n_pact and n_attr):
+            snip = ' '.join(seg.split())[:70]
+            fails.append(f'{p.name}: أكثر من فعل على عنصر واحد ← «{snip}»')
 
 for name in sorted(stats['names']):
     pat = re.escape(name)

@@ -1477,6 +1477,12 @@ function proInitPreviewMode() {
 // ═══════════════════════════════════════════════════════════════════════════
 //  12) التهيئة
 // ═══════════════════════════════════════════════════════════════════════════
+/** T7.4/و: زر «لوحة التحكم» في قائمة الهامبرجر — كان onclick يُحقن نصًّا. */
+function actProOpenFromBurger() {
+    proOpenAdmin('overview');
+    closeBurger();
+}
+
 function proInitAdmin() {
     try {
         proAdminSidebarCollapsed = localStorage.getItem('al_sayed_admin_collapsed') === '1';
@@ -1485,7 +1491,10 @@ function proInitAdmin() {
     const burgerDash = document.getElementById('burger-dash');
     if (burgerDash) {
         burgerDash.textContent = '🖥️ لوحة التحكم الاحترافية';
-        burgerDash.setAttribute('onclick', 'proOpenAdmin(\'overview\');closeBurger()');
+        // T7.4/و: كان setAttribute('onclick', …) — أي معالج مضمّن يُنشأ وقت التشغيل
+        // فيظل CSP مضطرًّا للسماح بـ 'unsafe-inline' للجميع. الفعل صار مسمًّى
+        // والوسم في index.html يحمله (data-act="actProOpenFromBurger").
+        burgerDash.setAttribute('data-act', 'actProOpenFromBurger');
     }
     proSyncHeaderAdminBtn();
     setInterval(proRefreshNewOrdersBadge, 20000);

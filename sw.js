@@ -1,5 +1,5 @@
 // Service Worker — 2M-Stor v36 (SEC-1: إسقاط المخزون · SEC-2: كتابة عبر دوال محصورة)
-const CACHE = 'al-sayed-v38';   // 🔒 T7.4 (2026-11-08): موزّع الأحداث — رفع الإصدار يوصل التحديث للأجهزة   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
+const CACHE = 'al-sayed-v39';   // 🔒 T7.4/هـ-و (2026-11-08): صفر معالج مضمّن + CSP بلا unsafe-inline   // 🔒 T5.1 — الكود مفكوك في web/*.js (تُخزَّن مسبقًا)
 const URLS = [
   'index.html',
   'manifest.json',

@@ -1,3 +1,76 @@
+/* ── T7.4/هـ: أفعال كانت معالجات مضمّنة في web/ui.js ──────────────────────
+   pAct لا ينفّذ نصًّا (لا eval عمدًا)، فكل عبارة مركّبة صارت دالة مسمّاة.
+   الموقّع (ev, el) يصل تلقائيًا من الموزّع في آخر الحجج. */
+
+/** يفتح منتقي الملفات بالمعرّف — بديل document.getElementById(x).click() */
+function openFilePicker(id) {
+    const el = document.getElementById(id);
+    if (el) el.click();
+}
+
+/** كان onclick="closeModal();openSettingsModal()" */
+function closeModalOpenSettings() { closeModal(); openSettingsModal(); }
+
+/** كان onclick="retryFailedOps();openSyncStatus()" */
+function retryFailedOpsSync() { retryFailedOps(); openSyncStatus(); }
+
+/** كان onclick="clearFailedOps();openSyncStatus()" */
+function clearFailedOpsSync() { clearFailedOps(); openSyncStatus(); }
+
+/** كان onclick="flushOutbox();setTimeout(openSyncStatus,600)" */
+function flushOutboxNow() { flushOutbox(); setTimeout(openSyncStatus, 600); }
+
+/** كان oninput="this.dataset.manual='1'" — يمنع الكتابة فوق السعر الرقمي */
+function markManual(ev, el) { if (el) el.dataset.manual = '1'; }
+
+/** منطقة إسقاط الصورة — عنصر واحد بأربعة أحداث (click/dragover/dragleave/drop).
+    كان لكل حدث سمة onclick/ondragover/… مضمّنة؛ ولا يمكن لواحد data-act أن
+    يغطيها، ولا يجوز تكرار السمة (المتصفح يهمل الثانية بهدوء) → فعل واحد يفرّع. */
+function imgDropZone(ev, el) {
+    if (!el) return;
+    if (ev.type === 'click') { openFilePicker('modal-image'); return; }
+    if (ev.type === 'dragover') {
+        ev.preventDefault();                       // يسمح بالإضافة
+        el.style.borderColor = 'var(--primary)';
+        el.style.background = 'var(--primary-light)';
+        return;
+    }
+    if (ev.type === 'dragleave') {
+        el.style.borderColor = 'var(--border)';
+        el.style.background = 'var(--bg-soft)';
+        return;
+    }
+    if (ev.type === 'drop') { handleDrop(ev); }
+}
+
+/** رابط الصورة: Enter يمنع السلوك الافتراضي، وblur لا يعمل على حقل فارغ. */
+function imgUrlCommit(ev, el) {
+    if (!el) return;
+    const raw = String(el.value == null ? '' : el.value);
+    if (ev.type === 'keydown') {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        if (!raw.trim()) return;
+        loadImageFromUrl(raw);
+        return;
+    }
+    if (ev.type === 'blur' && raw.trim()) loadImageFromUrl(raw.trim());
+}
+
+/** كان ondragover="event.preventDefault(); …تلوين…" (prevent من data-prevent) */
+function dragHighlight(ev, el) {
+    if (!el) return;
+    el.style.borderColor = 'var(--primary)';
+    el.style.background = 'var(--primary-light)';
+}
+
+/** كان ondragleave="…إرجاع اللون…" */
+function dragReset(ev, el) {
+    if (!el) return;
+    el.style.borderColor = 'var(--border)';
+    el.style.background = 'var(--bg-soft)';
+}
+
     // ===== PERSISTENCE (مع IndexedDB fallback) =====
     function save() {
         const str=JSON.stringify(db);
@@ -52,29 +125,29 @@
                     '<label>القسم</label>' +
                     '<div style="display:flex;gap:8px">' +
                         '<select id="modal-cat" style="flex:1">' + catOpts + '</select>' +
-                        '<button class="btn-scan" onclick="addCategory()" title="إضافة قسم جديد" style="background:var(--success);font-size:1.2rem">＋</button>' +
+                        '<button class="btn-scan" ' + pAct("addCategory") + ' title="إضافة قسم جديد" style="background:var(--success);font-size:1.2rem">＋</button>' +
                     '</div>' +
                 '</div>' +
                 '<div class="modal-section">📝 بيانات الصنف</div>' +
                 '<div class="form-group"><label>اسم الصنف</label>' +
                     '<div class="scan-group">' +
                         '<input type="text" id="modal-name" placeholder="اسم الصنف...">' +
-                        '<button class="btn-scan" onclick="document.getElementById(\'scanInput\').click()">📷</button>' +
-                        '<button class="btn-scan" onclick="startCameraScan()">🎥</button>' +
+                        '<button class="btn-scan" ' + pAct("openFilePicker", ["scanInput"]) + '>📷</button>' +
+                        '<button class="btn-scan" ' + pAct("startCameraScan") + '>🎥</button>' +
                     '</div>' +
                 '</div>' +
                 '<div class="form-group"><label>📷 صورة الصنف — اسحب أو التقط (اختياري)</label>' +
-                    '<div class="img-drop" id="img-drop" onclick="document.getElementById(\'modal-image\').click()" ondragover="event.preventDefault(); this.style.borderColor=\'var(--primary)\'; this.style.background=\'var(--primary-light)\'" ondragleave="this.style.borderColor=\'var(--border)\'; this.style.background=\'var(--bg-soft)\'" ondrop="handleDrop(event)" style="border:2px dashed var(--border);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;background:var(--bg-soft);transition:.2s">' +
+                    '<div class="img-drop" id="img-drop" ' + pAct("imgDropZone", [], "click dragover dragleave drop") + ' style="border:2px dashed var(--border);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;background:var(--bg-soft);transition:.2s">' +
                         '<div class="img-preview" id="img-preview" style="width:92px;height:92px;border-radius:12px;border:none;background:var(--bg-card);box-shadow:var(--shadow-sm);flex-shrink:0">' + imgPrev + '</div>' +
-                        '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.9rem">اسحب الصورة هنا أو اضغط للاختيار</div><div style="font-size:.75rem;color:var(--text-muted);font-weight:700;margin-top:2px">JPG/PNG — تُضغط تلقائياً • الصق (Ctrl+V) أو التقط بالكاميرا</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();document.getElementById(\'modal-image\').click()">🖼️ اختر</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();captureProductPhoto()">📷 التقط</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();clearImage()">🗑 إزالة</button></div></div>' +
+                        '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.9rem">اسحب الصورة هنا أو اضغط للاختيار</div><div style="font-size:.75rem;color:var(--text-muted);font-weight:700;margin-top:2px">JPG/PNG — تُضغط تلقائياً • الصق (Ctrl+V) أو التقط بالكاميرا</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" style="padding:8px 14px;font-size:.8rem" ' + pAct("openFilePicker", ["modal-image"], "click", "stop") + '>🖼️ اختر</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" ' + pAct("captureProductPhoto", [], "click", "stop") + '>📷 التقط</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" ' + pAct("clearImage", [], "click", "stop") + '>🗑 إزالة</button></div></div>' +
                     '</div>' +
-                    '<input type="file" id="modal-image" accept="image/*" style="display:none" onchange="handleImageFile(event)">' +
-                    '<input type="text" id="modal-image-url" placeholder="أو الصق رابط صورة https://..." style="margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;width:100%;background:var(--bg-card);color:var(--text-main);font-size:.85rem" onkeydown="if(event.key===\'Enter\'){event.preventDefault();loadImageFromUrl(this.value)}" onblur="if(this.value.trim()) loadImageFromUrl(this.value.trim())">' +
+                    '<input type="file" id="modal-image" accept="image/*" style="display:none" ' + pAct("handleImageFile", [pAct.EVENT], "change") + '>' +
+                    '<input type="text" id="modal-image-url" placeholder="أو الصق رابط صورة https://..." style="margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;width:100%;background:var(--bg-card);color:var(--text-main);font-size:.85rem" ' + pAct("imgUrlCommit", [], "keydown blur") + '>' +
                 '</div>' +
                 '<div class="modal-section">💰 الأسعار</div>' +
                 '<div class="form-grid-2">' +
-                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" placeholder="مثال: 50 أو 100 - 150" oninput="syncNumericPrice()"></div>' +
-                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" placeholder="تلقائي" min="0" step="0.5" oninput="this.dataset.manual=\'1\'"></div>' +
+                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" placeholder="مثال: 50 أو 100 - 150" ' + pAct("syncNumericPrice", [], "input") + '></div>' +
+                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" placeholder="تلقائي" min="0" step="0.5" ' + pAct("markManual", [], "input") + '></div>' +
                 '</div>' +
                 '<div class="modal-section">📦 الكميات</div>' +
                 '<div class="form-grid-2">' +
@@ -86,8 +159,8 @@
                     '<div class="form-group"><label>🔳 رمز QR</label><input type="text" id="modal-barcode" placeholder="تلقائي" style="direction:ltr"></div>' +
                 '</div>' +
                 '<div class="modal-actions">' +
-                    '<button class="btn btn-outline" onclick="closeModal()">إلغاء</button>' +
-                    '<button class="btn btn-primary" onclick="saveItem()">💾 حفظ</button>' +
+                    '<button class="btn btn-outline" ' + pAct("closeModal") + '>إلغاء</button>' +
+                    '<button class="btn btn-primary" ' + pAct("saveItem") + '>💾 حفظ</button>' +
                 '</div>';
         } else if (type === 'edit' && ci >= 0 && ii >= 0) {
             let item = db[ci].items[ii];
@@ -101,29 +174,29 @@
                     '<label>القسم</label>' +
                     '<div style="display:flex;gap:8px">' +
                         '<select id="modal-cat" style="flex:1">' + catOpts + '</select>' +
-                        '<button class="btn-scan" onclick="addCategory()" title="إضافة قسم جديد" style="background:var(--success);font-size:1.2rem">＋</button>' +
+                        '<button class="btn-scan" ' + pAct("addCategory") + ' title="إضافة قسم جديد" style="background:var(--success);font-size:1.2rem">＋</button>' +
                     '</div>' +
                 '</div>' +
                 '<div class="modal-section">📝 بيانات الصنف</div>' +
                 '<div class="form-group"><label>اسم الصنف</label>' +
                     '<div class="scan-group">' +
                         '<input type="text" id="modal-name" value="' + esc(item.n) + '">' +
-                        '<button class="btn-scan" onclick="document.getElementById(\'scanInput\').click()">📷</button>' +
-                        '<button class="btn-scan" onclick="startCameraScan()">🎥</button>' +
+                        '<button class="btn-scan" ' + pAct("openFilePicker", ["scanInput"]) + '>📷</button>' +
+                        '<button class="btn-scan" ' + pAct("startCameraScan") + '>🎥</button>' +
                     '</div>' +
                 '</div>' +
                 '<div class="form-group"><label>📷 صورة الصنف — اسحب أو التقط (اختياري)</label>' +
-                    '<div class="img-drop" id="img-drop" onclick="document.getElementById(\'modal-image\').click()" ondragover="event.preventDefault(); this.style.borderColor=\'var(--primary)\'; this.style.background=\'var(--primary-light)\'" ondragleave="this.style.borderColor=\'var(--border)\'; this.style.background=\'var(--bg-soft)\'" ondrop="handleDrop(event)" style="border:2px dashed var(--border);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;background:var(--bg-soft);transition:.2s">' +
+                    '<div class="img-drop" id="img-drop" ' + pAct("imgDropZone", [], "click dragover dragleave drop") + ' style="border:2px dashed var(--border);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;background:var(--bg-soft);transition:.2s">' +
                         '<div class="img-preview" id="img-preview" style="width:92px;height:92px;border-radius:12px;border:none;background:var(--bg-card);box-shadow:var(--shadow-sm);flex-shrink:0">' + imgPrev + '</div>' +
-                        '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.9rem">اسحب الصورة هنا أو اضغط للاختيار</div><div style="font-size:.75rem;color:var(--text-muted);font-weight:700;margin-top:2px">JPG/PNG — تُضغط تلقائياً • الصق (Ctrl+V) أو التقط بالكاميرا</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();document.getElementById(\'modal-image\').click()">🖼️ اختر</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();captureProductPhoto()">📷 التقط</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" onclick="event.stopPropagation();clearImage()">🗑 إزالة</button></div></div>' +
+                        '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.9rem">اسحب الصورة هنا أو اضغط للاختيار</div><div style="font-size:.75rem;color:var(--text-muted);font-weight:700;margin-top:2px">JPG/PNG — تُضغط تلقائياً • الصق (Ctrl+V) أو التقط بالكاميرا</div><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" style="padding:8px 14px;font-size:.8rem" ' + pAct("openFilePicker", ["modal-image"], "click", "stop") + '>🖼️ اختر</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" ' + pAct("captureProductPhoto", [], "click", "stop") + '>📷 التقط</button><button type="button" class="btn btn-outline" style="padding:8px 14px;font-size:.8rem" ' + pAct("clearImage", [], "click", "stop") + '>🗑 إزالة</button></div></div>' +
                     '</div>' +
-                    '<input type="file" id="modal-image" accept="image/*" style="display:none" onchange="handleImageFile(event)">' +
-                    '<input type="text" id="modal-image-url" placeholder="أو الصق رابط صورة https://..." style="margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;width:100%;background:var(--bg-card);color:var(--text-main);font-size:.85rem" onkeydown="if(event.key===\'Enter\'){event.preventDefault();loadImageFromUrl(this.value)}" onblur="if(this.value.trim()) loadImageFromUrl(this.value.trim())">' +
+                    '<input type="file" id="modal-image" accept="image/*" style="display:none" ' + pAct("handleImageFile", [pAct.EVENT], "change") + '>' +
+                    '<input type="text" id="modal-image-url" placeholder="أو الصق رابط صورة https://..." style="margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;width:100%;background:var(--bg-card);color:var(--text-main);font-size:.85rem" ' + pAct("imgUrlCommit", [], "keydown blur") + '>' +
                 '</div>' +
                 '<div class="modal-section">💰 الأسعار</div>' +
                 '<div class="form-grid-2">' +
-                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" value="' + esc(item.p) + '" oninput="syncNumericPrice()"></div>' +
-                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" value="' + itemPrice(item) + '" min="0" step="0.5" oninput="this.dataset.manual=\'1\'"></div>' +
+                    '<div class="form-group"><label>السعر (يظهر للعميل)</label><input type="text" id="modal-price" value="' + esc(item.p) + '" ' + pAct("syncNumericPrice", [], "input") + '></div>' +
+                    '<div class="form-group"><label>💵 السعر الرقمي (للحسابات)</label><input type="number" id="modal-pn" value="' + itemPrice(item) + '" min="0" step="0.5" ' + pAct("markManual", [], "input") + '></div>' +
                 '</div>' +
                 '<div class="modal-section">📦 الكميات</div>' +
                 '<div class="form-grid-2">' +
@@ -136,12 +209,12 @@
                 '</div>' +
                 '<div class="modal-actions between">' +
                     '<div style="display:flex;gap:8px">' +
-                        '<button class="btn btn-danger" onclick="deleteItem()">🗑️ حذف</button>' +
-                        '<button class="btn btn-outline" onclick="deleteCategory(' + ci + ')" style="color:#e17055;border-color:#e17055" title="حذف هذا القسم">📂 حذف القسم</button>' +
+                        '<button class="btn btn-danger" ' + pAct("deleteItem") + '>🗑️ حذف</button>' +
+                        '<button class="btn btn-outline" ' + pAct("deleteCategory", [ci]) + ' style="color:#e17055;border-color:#e17055" title="حذف هذا القسم">📂 حذف القسم</button>' +
                     '</div>' +
                     '<div style="display:flex;gap:8px">' +
-                        '<button class="btn btn-outline" onclick="closeModal()">إلغاء</button>' +
-                        '<button class="btn btn-primary" onclick="saveItem()">💾 حفظ</button>' +
+                        '<button class="btn btn-outline" ' + pAct("closeModal") + '>إلغاء</button>' +
+                        '<button class="btn btn-primary" ' + pAct("saveItem") + '>💾 حفظ</button>' +
                     '</div>' +
                 '</div>';
         }
@@ -210,7 +283,7 @@
     async function captureProductPhoto(){
         if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('⚠️ الكاميرا غير مدعومة');
         const box=document.createElement('div'); box.className='cam-box'; box.id='photoBox';
-        box.innerHTML='<video id="photoVideo" autoplay playsinline muted style="width:100%;max-width:420px;border-radius:16px"></video><div class="cam-hint">ضع المنتج في المنتصف ثم اضغط التقاط</div><div style="display:flex;gap:10px"><button class="btn btn-primary" id="snapBtn">📷 التقاط</button><button class="btn btn-outline cam-close" onclick="closePhotoBox()">✕ إلغاء</button></div>';
+        box.innerHTML='<video id="photoVideo" autoplay playsinline muted style="width:100%;max-width:420px;border-radius:16px"></video><div class="cam-hint">ضع المنتج في المنتصف ثم اضغط التقاط</div><div style="display:flex;gap:10px"><button class="btn btn-primary" id="snapBtn">📷 التقاط</button><button class="btn btn-outline cam-close" ' + pAct("closePhotoBox") + '>✕ إلغاء</button></div>';
         document.body.appendChild(box);
         let stream=null;
         try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }catch{ box.remove(); return toast('⚠️ تعذر فتح الكاميرا'); }
@@ -307,7 +380,7 @@
         try { backups = JSON.parse(localStorage.getItem('al_sayed_backups') || '[]'); } catch (e) {}
         let backupRows = backups.map((b, i) =>
             '<div class="user-row"><div><div class="user-name">💾 ' + new Date(b.date).toLocaleString('ar-EG') + '</div><div class="user-meta">' + b.db.reduce((a, c) => a + c.items.length, 0) + ' منتج · ' + b.invoices.length + ' فاتورة</div></div>' +
-            '<button class="btn btn-outline" style="padding:5px 10px;font-size:0.72rem" onclick="restoreBackup(' + i + ')">استعادة</button></div>'
+            '<button class="btn btn-outline" style="padding:5px 10px;font-size:0.72rem" ' + pAct("restoreBackup", [i]) + '>استعادة</button></div>'
         ).join('') || '<div style="font-size:0.8rem;color:var(--text-muted);font-weight:700;padding:8px">لا توجد نسخ بعد — أول نسخة تلقائية بتتعمل دلوقتي</div>';
         body.innerHTML =
             '<h2>⚙️ <span class="accent">الإعدادات</span></h2>' +
@@ -345,13 +418,13 @@
             '<div class="form-group"><label>🗄️ النسخ الاحتياطية (تلقائية يومياً — آخر 7)</label><div class="user-list">' + backupRows + '</div></div>' +
             '<div class="modal-actions between">' +
                 '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-                    '<button class="btn btn-outline" onclick="openSyncStatus()">🔄 حالة المزامنة' + ((outbox.length || outboxFailed.length) ? ' (' + (outbox.length + outboxFailed.length) + ')' : '') + '</button>' +
-                    '<button class="btn btn-outline" onclick="openTrash()">🗑️ سلة المحذوفات</button>' +
-                    '<button class="btn btn-outline" onclick="manualBackup()">💾 نسخة الآن</button>' +
+                    '<button class="btn btn-outline" ' + pAct("openSyncStatus") + '>🔄 حالة المزامنة' + ((outbox.length || outboxFailed.length) ? ' (' + (outbox.length + outboxFailed.length) + ')' : '') + '</button>' +
+                    '<button class="btn btn-outline" ' + pAct("openTrash") + '>🗑️ سلة المحذوفات</button>' +
+                    '<button class="btn btn-outline" ' + pAct("manualBackup") + '>💾 نسخة الآن</button>' +
                 '</div>' +
                 '<div style="display:flex;gap:8px">' +
-                    '<button class="btn btn-outline" onclick="closeModal()">إغلاق</button>' +
-                    '<button class="btn btn-primary" onclick="saveSettingsForm()">💾 حفظ</button>' +
+                    '<button class="btn btn-outline" ' + pAct("closeModal") + '>إغلاق</button>' +
+                    '<button class="btn btn-primary" ' + pAct("saveSettingsForm") + '>💾 حفظ</button>' +
                 '</div>' +
             '</div>';
         document.getElementById('modal').style.display = 'flex';
@@ -435,13 +508,13 @@
             '<div class="user-list">' + (failRows || '<div style="padding:10px;font-size:.8rem;color:var(--text-muted);font-weight:700">✅ لا عمليات فاشلة</div>') + '</div>' +
             '<p style="font-size:.72rem;color:var(--text-muted);font-weight:700;margin-top:6px">العمليات الفاشلة لا تُرفع تلقائيًا — راجع السبب ثم «أعد المحاولة»، أو تجاهلها إن كانت قديمة.</p>' +
             (outboxFailed.length ? '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">' +
-                '<button class="btn btn-primary" onclick="retryFailedOps();openSyncStatus()">🔄 أعد المحاولة</button>' +
-                '<button class="btn btn-outline" onclick="clearFailedOps();openSyncStatus()">🗑️ تجاهل الكل</button></div>' : '') +
+                '<button class="btn btn-primary" ' + pAct("retryFailedOpsSync") + '>🔄 أعد المحاولة</button>' +
+                '<button class="btn btn-outline" ' + pAct("clearFailedOpsSync") + '>🗑️ تجاهل الكل</button></div>' : '') +
             '</div>' +
 
             '<div class="modal-actions between">' +
-              '<button class="btn btn-outline" onclick="flushOutbox();setTimeout(openSyncStatus,600)">⬆️ ارفع الآن</button>' +
-              '<button class="btn btn-outline" onclick="closeModal();openSettingsModal()">🔙 الإعدادات</button>' +
+              '<button class="btn btn-outline" ' + pAct("flushOutboxNow") + '>⬆️ ارفع الآن</button>' +
+              '<button class="btn btn-outline" ' + pAct("closeModalOpenSettings") + '>🔙 الإعدادات</button>' +
             '</div>';
     }
 
@@ -475,20 +548,20 @@
         cloud.cats.forEach(c => {
             rows += '<div class="user-row"><div><div class="user-name">📂 ' + esc(c.name) + '</div>' +
                 '<div class="user-meta">قسم سحابي · حُذف ' + esc(fmtD(c.deleted_at)) + '</div></div>' +
-                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" onclick="restoreCloudTrash(\'cat\',' + c.id + ')">↩️ استعادة</button></div>';
+                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" ' + pAct("restoreCloudTrash", ["cat", c.id]) + '>↩️ استعادة</button></div>';
         });
         cloud.items.forEach(i => {
             rows += '<div class="user-row"><div><div class="user-name">📦 ' + esc(i.name) + '</div>' +
                 '<div class="user-meta">صنف سحابي · حُذف ' + esc(fmtD(i.deleted_at)) + '</div></div>' +
-                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" onclick="restoreCloudTrash(\'item\',' + i.id + ')">↩️ استعادة</button></div>';
+                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" ' + pAct("restoreCloudTrash", ["item", i.id]) + '>↩️ استعادة</button></div>';
         });
         local.forEach(t => {
             const isCat = t.type === 'cat';
             rows += '<div class="user-row"><div><div class="user-name">' + (isCat ? '📂 ' : '📦 ') + esc(t.name || '—') + '</div>' +
                 '<div class="user-meta">' + (isCat ? 'قسم محلي' : 'صنف محلي') + ' · حُذف ' + esc(fmtD(t.deletedAt)) + (isCat && t.itemsCount ? (' · ' + t.itemsCount + ' صنف') : '') + '</div></div>' +
                 '<div style="display:flex;gap:6px">' +
-                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" onclick="restoreLocalTrash(\'' + t.lid + '\')">↩️ استعادة</button>' +
-                '<button class="btn btn-danger" style="padding:6px 12px;font-size:.75rem" onclick="purgeLocalTrash(\'' + t.lid + '\')">🗑️ نهائي</button>' +
+                '<button class="btn btn-outline" style="padding:6px 12px;font-size:.75rem" ' + pAct("restoreLocalTrash", [t.lid]) + '>↩️ استعادة</button>' +
+                '<button class="btn btn-danger" style="padding:6px 12px;font-size:.75rem" ' + pAct("purgeLocalTrash", [t.lid]) + '>🗑️ نهائي</button>' +
                 '</div></div>';
         });
 
@@ -497,7 +570,7 @@
             '<p style="font-size:.78rem;color:var(--text-muted);font-weight:700;margin-bottom:10px">' +
             'الحذف الآن <b>ناعم</b> — أي عنصر محذوف يمكن استعادته من هنا بدل أن يضيع نهائيًا.</p>' +
             (rows ? '<div class="user-list">' + rows + '</div>' : '<div class="empty-state"><div class="icon">✨</div>السلة فارغة — لا يوجد محذوفات</div>') +
-            '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal();openSettingsModal()">🔙 الإعدادات</button></div>';
+            '<div class="modal-actions"><button class="btn btn-outline" ' + pAct("closeModalOpenSettings") + '>🔙 الإعدادات</button></div>';
     }
 
     async function restoreCloudTrash(kind, id) {

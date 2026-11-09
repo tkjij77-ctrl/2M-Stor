@@ -184,6 +184,10 @@ jobs:
           node scripts/verify-actions-dispatch.js
           # T7.4: لوحة الإدارة (104 معالجًا حُوِّل) تُستعمل فعلًا في المتصفح
           node scripts/verify-pro-admin-ui.js
+          # T7.4/هـ: نوافذ الإضافة/التعديل والمزامنة (سحب وإفلات، Enter، blur)
+          node scripts/verify-ui-modals.js
+          # T7.4/و: البرهان النهائي — التطبيق يعمل تحت CSP بلا 'unsafe-inline'
+          node scripts/verify-csp-strict.js
       - name: بناء Next.js (بلا أسرار — قيم بديلة)
         run: npm run build
         env:

@@ -389,6 +389,8 @@ data-act="addToCart" data-json="[3,5]" data-stop
 | **T7.4/ب** | `pro-admin.js` (104) — أكبر مستودع للمعالجات، وبفحص متصفح كامل للوحة | 291 → 187 |
 | **T7.4/ج** | `index.html` (56) — بنية الصفحة كلها: تنقّل · شريط علوي · نوافذ · تذييل | **187 → 131** |
 | **T7.4/د** | `views.js` (65) + `cloud.js` (20) · `pro-checkout.js` (16) · `admin.js` (10) · `core.js` (5) · `ops.js` (5) = **121** — وكلها الآن صفر | **131 → 10** |
+| **T7.4/هـ** | `ui.js` (آخر 10 + معالجات السحب/الإفلات/الحقول) — الملف الأخير | **10 → 0** |
+| **T7.4/و** | إزالة `'unsafe-inline'` من `script-src` في `index.html` · `_headers` · `next.config.js` + برهان متصفح | **CSP صارم** |
 | التالية | `views.js` (65) · `cloud.js` (20) · `pro-checkout.js` (16) · `ui.js` (10) · `admin.js` (10) | تنازليًا |
 
 > عند وصول العدّ إلى **صفر**: تُحذف `'unsafe-inline'` من `script-src` في `_headers`
@@ -426,8 +428,10 @@ data-act="addToCart" data-json="[3,5]" data-stop
 | `verify-grant-role.sh` | **15/15** | ترقية حسابك إلى مدير بلا كسر الأدوار |
 | `verify-ci-config.py` | **41/41** | CI/Dependabot/CodeQL + **بوابة قاعدة البيانات/المتصفح** (ومنها: `secrets` داخل `if` يُبطل الـworkflow كله) |
 | `verify-static-headers.js` | **37/37** | تطابق ترويسات الأمان بين `_headers` (السطح الثابت) و`next.config.js` — لا سطح محمي وسطح مكشوف |
-| `verify-inline-handlers.js` | **10/325** | سقف المعالجات المضمّنة (`onclick` → `data-act`) — لا يزيد أبدًا |
-| `verify-actions-args.py` | **✅** | حجج `pAct` أنواعها صحيحة + كل اسم فعل معرّف + بلا `eval` |
+| `verify-inline-handlers.js` | **0/325** | سقف المعالجات المضمّنة (`onclick` → `data-act`) — لا يزيد أبدًا |
+| `verify-actions-args.py` | **✅** | حجج `pAct` أنواعها صحيحة + كل اسم معرّف + فعل واحد لكل عنصر + بلا `eval` |
+| `verify-ui-modals.js` | **20/20** | نوافذ `ui.js`: سحب وإفلات · Enter · blur · مزامنة |
+| `verify-csp-strict.js` | **16/16** | التطبيق يعمل تحت CSP صارم · صفر انتهاك · صفر معالج مضمّن |
 | `verify-actions-dispatch.js` | **15/15** · `verify-pro-admin-ui.js` **12/12** | موزّع الأحداث في متصفح حقيقي: نقر فعلي · حجج JSON · رفض الأسماء الخطرة · `stopPropagation` |
 | `vitest` | **172/172** | منطق السلة · الطابور · الفواتير · الانحراف · **إسقاط المخزون (SEC-1)** · **الكتابة المحصورة (SEC-2)** · **قرار /admin وmiddleware (T7.2)** |
 | `verify-security.sh` | **58/0/1** | الثغرات وسلامة البيانات |

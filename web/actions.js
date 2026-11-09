@@ -70,6 +70,7 @@
     var attrs = ' data-act="' + name + '" data-tok="' + key + '"' + (evt === 'click' ? '' : ' data-on="' + evt + '"');
     if (fl.indexOf('stop') >= 0) attrs += ' data-stop=""';
     if (fl.indexOf('prevent') >= 0) attrs += ' data-prevent=""';
+    if (fl.indexOf('nonempty') >= 0) attrs += ' data-nonempty=""';
     var km = /(?:^|\s)key=([^\s]+)/.exec(fl);
     if (km) attrs += ' data-key="' + km[1] + '"';
     return attrs;
@@ -115,7 +116,8 @@
     var tokEl = el.getAttribute('data-tok');
     var entryEl = tokEl ? registry[tokEl] : null;
     var want = el.getAttribute('data-on') || (entryEl && entryEl.on) || 'click';
-    if (want !== ev.type) return;
+    // عنصر واحد قد يحتاج عدة أحداث (منطقة السحب: click + dragover + dragleave + drop)
+    if (want !== ev.type && want.split(/\s+/).indexOf(ev.type) < 0) return;
 
     // شروط مسبقة بلا كود: مفتاح محدّد، أو قيمة حقل غير فارغة
     var key = el.getAttribute('data-key');

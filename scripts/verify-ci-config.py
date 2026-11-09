@@ -307,6 +307,16 @@ check(
     "" if "verify-pro-admin-ui.js" in ci_text else "اللوحة قد تتعطّل بلا إنذار",
 )
 check(
+    "T7.4/و: فحص CSP الصارم مربوط بـCI",
+    "verify-csp-strict.js" in ci_text,
+    "" if "verify-csp-strict.js" in ci_text else "إزالة unsafe-inline بلا برهان = تعطيل صامت للواجهة",
+)
+check(
+    "T7.4: فحص نوافذ ui.js مربوط بـCI",
+    "verify-ui-modals.js" in ci_text,
+    "" if "verify-ui-modals.js" in ci_text else "نوافذ الإضافة/التعديل قد تتعطّل بلا إنذار",
+)
+check(
     "T7.4: فحص سلامة الحجج/الأسماء موجود",
     (ROOT / "scripts" / "verify-actions-args.py").exists(),
 )

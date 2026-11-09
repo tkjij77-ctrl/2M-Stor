@@ -14,7 +14,7 @@
          · لا حاجة لـ 'unsafe-eval' — الكود لا يستخدم eval أو new Function (تم التحقق)
          · img-src يسمح بأي https للحفاظ على توافق صور المنتجات القديمة
          · frame-ancestors غير مدعومة في meta (تحتاج رأس HTTP — Cloudflare Pages) -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self';">
     <meta name="description" content="نظام متكامل لإدارة المخزون والفواتير والمبيعات">
     <title>2M-Stor - إدارة المخزون والمبيعات</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1182,7 +1182,7 @@
     <div class="burger-item" id="burger-shop" data-act="setView" data-json='["shop"]'>🏪 صفحة العرض</div>
     <div class="burger-item" id="burger-account" data-act="setView" data-json='["account"]'>👤 حسابي</div>
     <div class="burger-divider">⚙️ الأدوات</div>
-    <div class="burger-item" id="burger-dash" data-act="toggleDashboard">📊 لوحة التحكم</div>
+    <div class="burger-item" id="burger-dash" data-act="actProOpenFromBurger">📊 لوحة التحكم</div>
     <div class="burger-item" id="burger-invoices" data-act="actInvoicesFromBurger">🧾 الفواتير</div>
     <div class="burger-item" id="burger-export" data-act="exportData">📥 تصدير البيانات</div>
     <div class="burger-item" id="burger-import" data-act="actPickImportInput">📤 استيراد البيانات</div>

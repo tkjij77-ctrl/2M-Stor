@@ -1,5 +1,18 @@
 /* ── T7.4/د: أفعال كانت سمات مضمّنة في نصوص الواجهة ─────────────────────
    pAct لا يقبل تعبيرًا (لا eval عمدًا)، فكل تعبير مركّب صار دالة مسمّاة. */
+/* ── T7.4/هـ: حقول الدخول/التسجيل — عنصر واحد بحدثين (input + keydown) ─────
+   كان: oninput="hideLoginNote()" onkeydown="if(event.key==='Enter')cloudDoLogin()"
+   وسمتان → data-act مرتين على عنصر واحد، والمتصفح يهمل الثانية بهدوء فلا يعمل
+   Enter إطلاقًا. فعل واحد يفرّع على نوع الحدث. */
+function cloudLoginField(ev, el) {
+    if (ev.type === 'input') { hideLoginNote(); return; }
+    if (ev.type === 'keydown' && ev.key === 'Enter') { ev.preventDefault(); cloudDoLogin(); }
+}
+function cloudRegisterField(ev, el) {
+    if (ev.type === 'input') { hideLoginNote(); return; }
+    if (ev.type === 'keydown' && ev.key === 'Enter') { ev.preventDefault(); cloudDoRegister(); }
+}
+
 function vChangeUserRole(id, role) { return changeUserRole(id, role); }
 
     // ═══════════════════════════════════════════════════════
@@ -907,8 +920,8 @@ function vChangeUserRole(id, role) { return changeUserRole(id, role); }
         '<div class="login-error" id="loginError" style="display:none"></div>' +
         '<div class="login-ok" id="loginOk" style="display:none"></div>' +
         '<div id="paneLogin" style="display:block">' +
-          '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" autocomplete="email" inputmode="email" style="direction:ltr;text-align:left" ' + pAct("hideLoginNote", [], "input") + ' ' + pAct("cloudDoLogin", [], "keydown", "key=Enter") + '></div>' +
-          '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" autocomplete="current-password" ' + pAct("hideLoginNote", [], "input") + ' ' + pAct("cloudDoLogin", [], "keydown", "key=Enter") + '></div>' +
+          '<div class="form-group"><label>الإيميل</label><input type="email" id="cl-email" placeholder="you@example.com" autocomplete="email" inputmode="email" style="direction:ltr;text-align:left" ' + pAct("cloudLoginField", [], "input keydown") + '></div>' +
+          '<div class="form-group"><label>كلمة المرور</label><input type="password" id="cl-pass" placeholder="••••••" autocomplete="current-password" ' + pAct("cloudLoginField", [], "input keydown") + '></div>' +
           '<button class="btn btn-primary" id="btnCloudLogin" style="width:100%" ' + pAct("cloudDoLogin", [], "click") + '>🔓 تسجيل الدخول</button>' +
           '<button class="btn btn-ghost" style="width:100%;margin-top:8px" ' + pAct("hideLogin", [], "click") + '>🛍️ تصفّح المتجر بدون حساب</button>' +
         '</div>' +
@@ -916,7 +929,7 @@ function vChangeUserRole(id, role) { return changeUserRole(id, role); }
           '<div class="form-group"><label>اسم المستخدم (بيظهر للناس)</label><input type="text" id="reg-username" placeholder="اسم المستخدم" style="direction:ltr;text-align:left" ' + pAct("hideLoginNote", [], "input") + '></div>' +
           '<div class="form-group"><label>الاسم الكامل</label><input type="text" id="reg-name2" placeholder="مثال: أحمد السيد" ' + pAct("hideLoginNote", [], "input") + '></div>' +
           '<div class="form-group"><label>الإيميل</label><input type="email" id="reg-email" placeholder="you@example.com" inputmode="email" style="direction:ltr;text-align:left" ' + pAct("hideLoginNote", [], "input") + '></div>' +
-          '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="reg-pass2" placeholder="••••••" autocomplete="new-password" ' + pAct("hideLoginNote", [], "input") + ' ' + pAct("cloudDoRegister", [], "keydown", "key=Enter") + '></div>' +
+          '<div class="form-group"><label>كلمة المرور (6+ أحرف)</label><input type="password" id="reg-pass2" placeholder="••••••" autocomplete="new-password" ' + pAct("cloudRegisterField", [], "input keydown") + '></div>' +
           '<button class="btn btn-primary" id="btnCloudRegister" style="width:100%" ' + pAct("cloudDoRegister", [], "click") + '>✅ إنشاء الحساب والدخول</button>' +
         '</div>' +
         '<p style="font-size:0.72rem;color:var(--text-muted);font-weight:700;margin-top:14px">☁️ حساب سحابي واحد يفتح على كل أجهزتك · الحسابات الجديدة تكون عميل · العاملون والمدير يدخلون بإيميلهم وكلمة مرورهم</p>';
